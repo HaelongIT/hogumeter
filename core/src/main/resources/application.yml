@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: core
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:hogumeter}
+    username: ${DB_USER:hogumeter}
+    password: ${DB_PASSWORD:hogumeter}
+  jpa:
+    hibernate:
+      ddl-auto: validate   # 스키마 주인은 Flyway — JPA는 검증만
+    open-in-view: false
+  flyway:
+    enabled: true
