@@ -3,6 +3,7 @@ package dev.hogumeter.core.domain.benchmark;
 import static dev.hogumeter.core.domain.deal.DealEventBuilder.aDealEvent;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import java.time.Clock;
 import java.time.Instant;

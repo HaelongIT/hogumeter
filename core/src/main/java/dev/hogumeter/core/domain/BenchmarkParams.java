@@ -1,9 +1,10 @@
-package dev.hogumeter.core.domain.benchmark;
+package dev.hogumeter.core.domain;
 
 import java.math.BigDecimal;
 
 /**
- * 기준가 엔진의 유일한 기명상수 seam(docs/benchmark/01 line 25) — 수치 파라미터를 한 곳에 격리.
+ * 기준가 엔진 전역의 유일한 기명상수 seam(docs/benchmark/01 line 25) — 수치 파라미터를 한 곳에 격리.
+ * benchmark·deal·matching 하위 도메인이 공통으로 참조하는 공유 커널이라 domain 루트에 둔다(패키지 순환 방지).
  * 도메인 로직은 하드코딩 대신 주입받은 이 객체만 참조한다(테스트는 명시 주입, docs/91 Q-1).
  * K_FILL은 파생 불변식(시스템 고정). 값 근거는 docs/31-detailed-params.md(2026-07-04 승인).
  *

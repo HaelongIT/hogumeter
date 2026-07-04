@@ -1,5 +1,6 @@
 package dev.hogumeter.core.domain.benchmark;
 
+import dev.hogumeter.core.domain.BenchmarkParams;
 import java.math.BigDecimal;
 
 /**
