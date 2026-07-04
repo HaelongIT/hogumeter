@@ -6,6 +6,8 @@
 ## 프로젝트 한 줄 정의
 핫딜 커뮤니티 데이터로 "핫딜 기준가"를 산출하고, 현재가와의 갭으로 "지금 사도 호구가 아닌지"를 알려주는 **1인용** 구매 의사결정 보조 시스템.
 
+> **현재 개발 대상 = `benchmark`(기준가 엔진) 모듈 — 정본은 `docs/benchmark/00~07`.** 선행 작업은 M0(스캐폴딩·수치 확정·스파이크, `docs/30-roadmap.md`). 최신 상태·한계는 항상 코드·git·`docs/91-open-questions.md`가 정본.
+
 ## 절대 원칙 (모든 코드 결정의 잣대)
 1. **정직성**: 표본 빈약 시 통계 용어 금지. 기준가는 항상 "n건(교차 m건)" 동반.
 2. **판단은 사람, 시스템은 근거**: 사기/최종 판단 로직을 만들지 않는다. 원문 링크·신호를 모아줄 뿐.
@@ -15,13 +17,13 @@
 6. **과대약속 금지**: 자동으로 못 잡는 것은 솔직히 경계 긋고 원문 링크로 넘긴다.
 
 ## 스택 & 컴포넌트 (확정, 변경 금지)
-- **core**: Spring Boot 3.x (Java 21) — 기준가 엔진·매칭·알림·REST API. 상시 가동.
-- **collector**: Python 3.12 별도 컨테이너 — 핫딜 3사(뽐뿌/루리웹/펨코) + 번개장터 폴링. krepe90/user-hotdeal-bot 골격 최대 재활용.
-- **DB**: PostgreSQL 16 단일. Flyway 마이그레이션. JSONB는 크롤링 원본 보관 전용.
+- **core**: Spring Boot 3.x (Java 21) — 기준가 엔진·매칭·알림·REST API. 상시 가동. 빌드: Gradle(Kotlin DSL) + JUnit 5 + Testcontainers.
+- **collector**: Python 3.12 별도 컨테이너 — 핫딜 3사(뽐뿌/루리웹/펨코) + 번개장터 폴링. krepe90/user-hotdeal-bot 골격 최대 재활용. 도구: uv + pytest.
+- **DB**: PostgreSQL 16 단일. Flyway 마이그레이션(core 단독 소유). JSONB는 크롤링 원본 보관 전용.
 - **알림**: 텔레그램 봇 (+ 인라인 버튼 승격 액션).
-- **web**: React — 최소 슬라이스(등록+설정) 선개발, 나머지 후순위.
+- **web**: React — 최소 슬라이스(등록+설정) 선개발, 나머지 후순위. 빌드: Vite + TypeScript.
 - **extension**: 크롬 확장(쿠팡 리더) — 기능4 단계에서만.
-- **배포**: Docker Compose, AWS EC2. AWS 종속 관리형 서비스에 코어 로직 금지(이식성).
+- **배포**: Docker Compose, AWS EC2. AWS 종속 관리형 서비스에 코어 로직 금지(이식성). CI: GitHub Actions(테스트 실행).
 
 ## TDD 규율 (필수)
 - **Red → Green → Refactor.** 실패하는 테스트 없이 프로덕션 코드를 작성하지 않는다.
@@ -40,8 +42,49 @@
 
 ## 작업 방식
 - 기능 단위 브랜치, 커밋 메시지에 docs 요구 ID 참조(예: `BM-03`).
-- 결정이 필요한 모호함을 발견하면 임의 구현하지 말고, `docs/91-open-questions.md`에 기록 후 가장 보수적인(되돌리기 쉬운) 선택으로 진행하고 표시한다.
-- 기획 확정본과 충돌하는 구현 유혹이 생기면 멈추고 open-questions에 기록한다. 확정본 임의 변경 금지.
+- **loose-end 라우팅(기록강제)**: 열린 것은 "말로 끝내지 않고" 성격별로 정확히 **한 보드**에 즉시 적는다 —
+
+  | 생긴 것 | 어디에 |
+  |---|---|
+  | 사람이 **정해야** 할 기획·정책·되돌리기 어려운 선택(기획 확정본과의 충돌 포함) | `working-area/decisions-needed.md` — **임의 확정 금지**, 확정본 임의 변경 금지 |
+  | 잠정값으로 **진행 가능**한 기술 보류 | `docs/91-open-questions.md` — 잠정값+**재개 트리거** 명시, 가장 보수적(되돌리기 쉬운) 선택으로 진행하고 표시 |
+  | **운영 배포** 시 사람이 할 것(시크릿·인프라·설정) | `working-area/pre-deploy-checklist.md` — `[필수]/[권장]/[완료]` |
+  | **확정된** 결정(무엇을 왜) | `working-area/decision-log.md` |
+  | 재사용 **교훈** | `docs/99-lessons.md` (위 교훈 축적 프로토콜) |
+  | 외부 사이트 **실측** 발견 | `docs/98-field-notes.md` |
+
+- **refactor seam**: 미확정·잠정 결정은 "한 곳만 바꾸면 되는" 지점(인터페이스·상수·설정)에 격리해 나중에 최소 변경으로 뒤집을 수 있게 한다.
+- 문서가 정답은 아니다 — 비합리적이거나 더 나은 방식이 보이면 임의로 바꾸지 말고 근거·대안을 제시해 확인받는다(Autonomous 모드 대상은 자율 반영+기록).
+- 세션 시작 시 `docs/91-open-questions.md`와 `working-area/decisions-needed.md`도 함께 읽어 열린 항목을 인식한다(99/98은 교훈 프로토콜 참조).
+
+## Git & 커밋 규칙
+- **커밋 타이밍**: 작업(기능) 단위가 끝날 때마다, **테스트 GREEN 확인 후** 커밋.
+- **푸시는 사용자 직접.** 에이전트는 커밋까지만 — `main` 강제 push·임의 브랜치 전환/머지 금지.
+- `.gitignore` 필수: `.env*`(텔레그램 봇 토큰·네이버 API 키 등 로컬 시크릿)·빌드 산출물·의존성 디렉토리.
+
+## 빌드·테스트 명령 (M0 스캐폴딩 후 유효)
+```bash
+# core (Spring Boot)
+./gradlew test          # 단위·통합 테스트
+./gradlew bootRun       # 로컬 실행
+# collector (Python)
+uv run pytest           # 파서·파이프라인 테스트
+# web (React)
+npm test                # 단위 테스트
+npm run build           # 타입체크 + 빌드
+# 전체 기동
+docker compose up -d
+```
+- 테스트 DB: **Testcontainers(PostgreSQL 16)** — 통합 테스트 전용. 순수 도메인은 DB 없이 단위 테스트로 검증.
+- 로컬 시크릿: 루트 `.env`(gitignore) — 텔레그램 봇 토큰·네이버 쇼핑 API 키·DB 비밀번호.
+
+## Autonomous(무중단) 모드 — 범위 한정
+> **적용 범위: 테스트로 검증 가능한 전 구현** — 순수 도메인·어댑터·파서·마이그레이션 등 GREEN으로 확인되는 코드 전체.
+
+무중단은 "구현 실행"의 자율이다 — **"기획/설계 결정"은 대상이 아니다.** 데이터 모델·정책·표현 방식 같은 기획 선택은 임의 확정하지 말고 묻는다. 사소하고 되돌릴 수 있는 것만 잠정값+기록으로 진행한다.
+- **멈추지 않는 것**: 기능 단위 커밋 자율 / 잠정 기본값으로 진행(결정 필요는 `decisions-needed`에 기록만) / 테스트 DB로 완주.
+- **정지하고 묻는 것**: 데이터 파괴 / 외부 실발송·실행(텔레그램 실전송, 실사이트 크롤링·외부 API 실호출) / 비용 발생 / 보안 정책 / 기획 확정본과 충돌.
+- **그래도 지키는 것**: 테스트 GREEN 후에만 커밋 / 기록 의무(`decisions-needed`·`docs/91`·`docs/99`) 유지.
 
 ## 문서 지도
 - `docs/00-overview.md` 용어집·개념
@@ -52,4 +95,6 @@
 - `docs/21-tdd-guidelines.md` TDD·테스트 전략
 - `docs/30-roadmap.md` 개발 순서·마일스톤·스파이크
 - `docs/90-planning-final-v1.2.md` 기획 확정본 (최종 권위)
-- `docs/91-open-questions.md` / `98-field-notes.md` / `99-lessons.md` (작업 중 생성·갱신)
+- `docs/benchmark/00~07` 기준가 엔진 모듈 상세 — 개요·아키텍처·데이터모델·API·**04 인수조건(=TDD 기준)**·비기능·TDD·에러코드
+- `docs/91-open-questions.md` 기술 보류 보드(잠정값+재개 트리거) / `docs/98-field-notes.md` 사이트별 실측 / `docs/99-lessons.md` 교훈 누적
+- `working-area/` 작업 보드 — `decisions-needed`(정할 것)·`decision-log`(정한 것)·`pre-deploy-checklist`(운영 배포 갭)·`review-template/`(코드리뷰 틀, 복사해서 사용)
