@@ -15,10 +15,7 @@
 
 ---
 
-## [열림] Q-1. 기준가 수치 파라미터 미확정 — 기명 상수로 진행
-- **맥락**: 기준가 엔진(BM)의 수치 파라미터(±α 병합 허용폭, 병합 윈도 24 vs 48h, IQR 이상치 배수, 콜드스타트 대박가 임계 30%, reactionScore 정규화, K_display/K_fill)는 M0 산출물 `docs/31-detailed-params.md`에서 확정한다(`docs/30-roadmap.md` M0-2). 모듈 문서(`docs/benchmark/`)와 향후 도메인 코드는 값이 아니라 이름으로 참조한다.
-- **잠정값**: 문서·코드 모두 기명 상수(예: `MERGE_PRICE_TOLERANCE`, `MERGE_WINDOW_HOURS`, `OUTLIER_IQR_MULTIPLIER`, `K_DISPLAY`)로만 참조. seam = 도메인 파라미터 객체 1곳.
-- **재개 트리거**: M0-2 완료(스파이크 실측 + 운영자 승인) → `docs/31-detailed-params.md` 작성 → 상수값 채움 → 이 항목을 decision-log로 이관.
+_(Q-1. 기준가 수치 파라미터 — **해소됨 2026-07-04**: docs/31 6값 운영자 승인 → `BenchmarkParams.defaults()` 상수화. decision-log 참조. reactionScore 정규화는 알림 가중 전용이라 M1 지연 무방(docs/31 하단), 여기서 제거.)_
 
 ## [열림] Q-2. 전역 API 컨벤션(응답 봉투·에러 형식) 미확정
 - **맥락**: core REST 표면이 아직 작아(기준가 조회 1본) 전역 컨벤션 문서를 만들지 않았다. `docs/benchmark/03`·`07`은 봉투 없는 리소스 직접 반환 + `{code, message}` 에러를 "제안(미적용)"으로 시드해 둔 상태.
@@ -39,3 +36,33 @@
 - **맥락**: M0-4 스파이크에서 뽐뿌가 커스텀 UA에 정상 리스트 마크업을 주지 않아(`docs/98` 뽐뿌 항목) 현재 `tests/fixtures/ppomppu/list_normal.html`이 골든으로 부적합.
 - **잠정값**: 루리웹·펨코·번개장터 fixture로 먼저 파서 TDD 진행. 뽐뿌 파서는 재채취 후.
 - **재개 트리거**: M1 collector 파서 착수 시 — 실제 브라우저(개인용·차단 없는 공개 페이지)로 뽐뿌 리스트 재채취 → fixture 교체 → 오픈소스 셀렉터(`revolution_main_table`) 대조.
+
+## [열림] Q-6. 분위수 방식 = R-7 선형보간 (BM-06 median·P25)
+- **맥락**: `docs/benchmark/04` BM-06은 median·P25(goodDealLine)를 요구하나 분위수 산출 방식은 미명시. 방식에 따라 AC-1/AC-7 기대값이 달라진다.
+- **잠정값**: **R-7(선형보간, Excel PERCENTILE.INC/R 기본)** 채택 — `Quantiles`(순수 헬퍼) 1곳에 격리, BM-05 Tukey Q1/Q3도 재사용. 대안: nearest-rank(goodDealLine을 실관측가로) — 정직성 측면 이점.
+- **재개 트리거**: 1차 검증(아이폰 17 256GB)에서 goodDealLine 표시가 운영자 직관과 어긋나면 `Quantiles`에서 방식 교체(테스트 기대값 동반 갱신).
+
+## [열림] Q-7. SUFFICIENT인데 교차검증 m=0
+- **맥락**: n ≥ K_DISPLAY(SUFFICIENT)이나 교차검증 딜이 0건이면 goodDealLine(P25)·periodLowest의 표본(교차만)이 빈다. AC 미커버.
+- **잠정값**: `goodDealLine`·`periodLowest` = null, `benchmarkPrice`는 전체 n으로 정상 산출(`BenchmarkCalculator`의 `crossVerified.isEmpty()` 분기). 정직성 우선.
+- **재개 트리거**: 실데이터에서 단일사이트만으로 SUFFICIENT가 잦아 goodDealLine 부재가 문제되면 정책 재검토(decisions-needed 승격).
+
+## [열림] Q-8. SPARSE 잣대는 cases[] 최저가로 도출
+- **맥락**: `docs/benchmark/03` line 17은 periodLowest=교차 min, AC-3(`04` line 178)은 SPARSE 알림 잣대=보유 사례 중 최저가. SPARSE에서 어느 필드가 무엇을 담는지 충돌.
+- **잠정값**: SPARSE에서 통계필드(benchmarkPrice·goodDealLine·periodLowest) 전부 null 유지, 알림 잣대는 소비자(AL 모듈)가 `cases[]`에서 min 도출. 04(TDD 정본)가 03(제안·미적용)에 우선.
+- **재개 트리거**: AL 모듈(기능3) 착수 시 SPARSE 알림 판정 구현 — cases 기반 최저가 잣대 확정, 필요 시 03 문서 정합.
+
+## [열림] Q-9. 자동확장 월 연산·expandedToMonths 의미
+- **맥락**: 자동확장(AC-5)의 월 경계 연산과 `expandedToMonths` 표기 의미가 미명시. `Instant`엔 월 개념이 없다.
+- **잠정값**: 월 연산은 Clock의 `ZoneId` 기준 `ZonedDateTime.minusMonths`. `expandedToMonths` = **실제로 딜이 추가된 최원거리 개월**(데이터 확보 span). 과거 딜이 없어 표본이 안 늘면 미발동(null) — 경계 테스트가 이를 no-op으로 격리. 12개월 상한 밖 딜은 절대 미포함.
+- **재개 트리거**: 표시 계층에서 "최근 N개월 기준" 문구가 필요하거나 월 경계(캘린더 vs 30일)가 실데이터와 어긋나면 재정의.
+
+## [열림] Q-10. 콜드스타트 잭팟은 BenchmarkView 필드 아님 (독립 술어)
+- **맥락**: `docs/benchmark/03` 응답 계약에 잭팟 필드가 없고, AC-4는 잭팟을 "알림 대상"으로 규정. 뷰에 넣을지 별도로 뺄지.
+- **잠정값**: `BenchmarkCalculator.qualifiesAsColdStartJackpot(dealPriceFirst, currentPrice, params)` 순수 술어로 분리 — 뷰는 tier=NONE만 표기. seam = 이 메서드 1곳.
+- **재개 트리거**: AL 모듈(기능3)이 NONE 구간 알림을 배선할 때 이 술어를 호출 — 시그니처·소비 지점 확정.
+
+## [열림] Q-11. includeOutliers 토글은 계산 진실 밖
+- **맥락**: `docs/benchmark/03` line 9의 `includeOutliers`(기본 false)는 표시 손잡이 — "계산 진실은 불변". 순수 계산기는 항상 이상치를 제외한다.
+- **잠정값**: `compute()`의 진실 경로엔 미진입(이상치 항상 제외). 토글은 표시용 별도 목록(향후 web 어댑터 관심사)로 이번 증분 범위 밖.
+- **재개 트리거**: M1 web 슬라이스에서 기준가 화면 구현 시 — 이상치 목록 표시 경로를 계산 진실과 분리해 배선.
