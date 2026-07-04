@@ -1,0 +1,49 @@
+# OPS-01: `docker compose up -d` 단일 명령 기동. 시크릿은 루트 .env(gitignore) — .env.example 참조.
+# OPS-02: 이식성 — 상대경로·명명 볼륨만 사용(관리형 서비스 의존 없음).
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${DB_NAME:-hogumeter}
+      POSTGRES_USER: ${DB_USER:-hogumeter}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?루트 .env에 DB_PASSWORD를 설정하세요}
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # 재생성 시 데이터 유실 방지
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-hogumeter} -d ${DB_NAME:-hogumeter}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:5432:5432"             # 로컬 개발 편의 — 외부 미개방
+
+  core:
+    build: ./core
+    environment:
+      DB_HOST: postgres
+      DB_NAME: ${DB_NAME:-hogumeter}
+      DB_USER: ${DB_USER:-hogumeter}
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
+      NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  collector:
+    build: ./collector
+    environment:
+      DB_HOST: postgres
+      DB_NAME: ${DB_NAME:-hogumeter}
+      DB_USER: ${DB_USER:-hogumeter}
+      DB_PASSWORD: ${DB_PASSWORD:?}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
