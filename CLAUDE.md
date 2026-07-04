@@ -17,7 +17,7 @@
 6. **과대약속 금지**: 자동으로 못 잡는 것은 솔직히 경계 긋고 원문 링크로 넘긴다.
 
 ## 스택 & 컴포넌트 (확정, 변경 금지)
-- **core**: Spring Boot 3.x (Java 21) — 기준가 엔진·매칭·알림·REST API. 상시 가동. 빌드: Gradle(Kotlin DSL) + JUnit 5 + Testcontainers.
+- **core**: Spring Boot 4.x (Java 21) — 기준가 엔진·매칭·알림·REST API. 상시 가동. 빌드: Gradle(Kotlin DSL) + JUnit 5 + Testcontainers. (D-2: 3.5.x OSS 지원 종료 임박 → 4.1.0 이관, decision-log 참조)
 - **collector**: Python 3.12 별도 컨테이너 — 핫딜 3사(뽐뿌/루리웹/펨코) + 번개장터 폴링. krepe90/user-hotdeal-bot 골격 최대 재활용. 도구: uv + pytest.
 - **DB**: PostgreSQL 16 단일. Flyway 마이그레이션(core 단독 소유). JSONB는 크롤링 원본 보관 전용.
 - **알림**: 텔레그램 봇 (+ 인라인 버튼 승격 액션).

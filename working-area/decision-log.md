@@ -15,3 +15,5 @@
 | 2026-07-04 | M0 빌드 도구 실체화 — Boot 3.5.16/Gradle 8.14.5(KTS)/Java 21, collector uv+pytest, compose postgres16, CI GitHub Actions | M0-1 스캐폴딩 | core/, collector/, docker-compose.yml, .github/ |
 | 2026-07-04 | Flyway V1 = 신품 코어 루프 11테이블만. used(중고)는 M2 V2 이월 | M0-3 + docs/91 Q-4 | core V1__init.sql |
 | 2026-07-04 | Claude Code 권한 = acceptEdits + 프로젝트 배시 허용목록(.claude/settings.local.json, gitignore). 파괴적 명령(rm 등)은 계속 승인 요구 — autonomous 정지조건과 정렬 | 사용자 요청(승인 팝업 과다) | .claude/settings.local.json |
+| 2026-07-04 | **(D-2) Spring Boot 3.5.16 → 4.1.0 이관.** 스택 확정본의 "Boot 3.x 변경 금지"를 개정. **4.0.x가 아니라 4.1.0 채택** — 4.0.x는 2026-12-31 OSS EOL이라 D-2의 목적(임박 EOL 회피)과 모순, 4.1.0이 최신 안정판·최장 지원. M0 스캐폴드 저표면적 시점에 이관 | 사용자 결정(D-2, "최신 지원 확보 + 문서 반영") | core/build.gradle.kts, docs/90 §7, CLAUDE.md 스택, docs/99 |
+| 2026-07-04 | Boot 4.1 이관 fallout 확정: web→webmvc 스타터 리네임, flyway는 spring-boot-starter-flyway(+flyway-database-postgresql 별도 유지), Testcontainers 2.0(아티팩트 testcontainers-* 접두사·패키지 org.testcontainers.postgresql·self-type 제네릭 제거) | Boot 4.1 BOM 실측(./gradlew test GREEN) | core/build.gradle.kts, TestcontainersConfiguration.java |
