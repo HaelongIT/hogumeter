@@ -19,3 +19,8 @@
 - **맥락**: 기준가 엔진(BM)의 수치 파라미터(±α 병합 허용폭, 병합 윈도 24 vs 48h, IQR 이상치 배수, 콜드스타트 대박가 임계 30%, reactionScore 정규화, K_display/K_fill)는 M0 산출물 `docs/31-detailed-params.md`에서 확정한다(`docs/30-roadmap.md` M0-2). 모듈 문서(`docs/benchmark/`)와 향후 도메인 코드는 값이 아니라 이름으로 참조한다.
 - **잠정값**: 문서·코드 모두 기명 상수(예: `MERGE_PRICE_TOLERANCE`, `MERGE_WINDOW_HOURS`, `OUTLIER_IQR_MULTIPLIER`, `K_DISPLAY`)로만 참조. seam = 도메인 파라미터 객체 1곳.
 - **재개 트리거**: M0-2 완료(스파이크 실측 + 운영자 승인) → `docs/31-detailed-params.md` 작성 → 상수값 채움 → 이 항목을 decision-log로 이관.
+
+## [열림] Q-2. 전역 API 컨벤션(응답 봉투·에러 형식) 미확정
+- **맥락**: core REST 표면이 아직 작아(기준가 조회 1본) 전역 컨벤션 문서를 만들지 않았다. `docs/benchmark/03`·`07`은 봉투 없는 리소스 직접 반환 + `{code, message}` 에러를 "제안(미적용)"으로 시드해 둔 상태.
+- **잠정값**: 리소스 직접 반환, 에러 `{code, message}`. seam = core web adapter의 응답 매핑 1곳(@ControllerAdvice 등가).
+- **재개 트리거**: M1 web 최소 슬라이스(등록+설정) 착수 시 엔드포인트가 늘어나는 시점 — 확정 후 benchmark/03·07의 "제안(미적용)" 표기 제거.
