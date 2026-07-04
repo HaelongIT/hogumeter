@@ -57,3 +57,4 @@
 | `reactionScore` 사이트 간 정규화 | **미정** | 뽐뿌 추천/조회, 루리웹 recomd/hit, 펨코 pc_voted_count/comment — 스케일 상이. 3사 분포 실측 후 정규화식 결정. 현재 raw 저장만, 정규화는 알림 가중에만 쓰고 기준가엔 미사용이라 M1 지연 무방 |
 | 백필 가능 깊이 (사이트별) | **미정** | 리스트 페이지네이션 깊이·검색 지원 여부 실측 필요. 루리웹은 `page=N` 지원 확인. 뽐뿌 재채취(Q-5) 후 |
 | `POLL_INTERVAL` (게시판당) | **1req/min 확정** | docs/90·collector 원본 골격. 번개장터는 10분(사용자 손잡이) |
+| `SPARSE_ABSURDITY_RATIO` (BM-05 폴백 컷) | **미승인 잠정 0.5** | BM-05 AC-5 구현 중 신규 등장(docs/91 Q-14). SPARSE 구간 현재가 대비 ±50% 밖=비상식. 승인 시 이 표 상단 6개에 편입해 `BenchmarkParams`로 이관. 현재는 detector에 주입 |

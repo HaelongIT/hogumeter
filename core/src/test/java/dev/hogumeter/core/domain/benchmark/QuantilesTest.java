@@ -2,6 +2,7 @@ package dev.hogumeter.core.domain.benchmark;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.hogumeter.core.domain.Quantiles;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

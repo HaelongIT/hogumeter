@@ -76,3 +76,13 @@ _(Q-1. 기준가 수치 파라미터 — **해소됨 2026-07-04**: docs/31 6값 
 - **맥락**: AC-3 "확정 시 소급 알림 없음", AC-4 "흡수 글은 새 첫 알림 금지"는 **알림 발화 규칙**. BM-04(순수 병합)는 병합 판정·상태 전이까지만 책임진다.
 - **잠정값**: BM-04는 `canMerge`/`merge` + 상태 전이(흡수 시 NEW 리셋 없음, ACTIVE→VERIFIED)만 보장. 실제 첫 알림 억제·소급 방지는 AL 모듈이 상태기계 이벤트를 구독해 처리(docs/02 알림 매핑).
 - **재개 트리거**: AL(기능3) 착수 시 상태 전이 이벤트 → 알림 판정 배선.
+
+## [열림] Q-14. SPARSE 폴백 컷 밴드폭(absurdityRatio) — 미승인 잠정 파라미터
+- **맥락**: BM-05 AC-5 SPARSE 구간 폴백 컷은 "현재가 대비 비상식 가격"을 걸러야 하나, 그 밴드 폭이 docs/31 승인 6개 파라미터에 없다(신규 정책 수치).
+- **잠정값**: `absurdityRatio` = 0.5(±50%). `OutlierDetector.isAbsurdVsCurrent`에 **주입**(테스트/앱 레이어). BenchmarkParams(승인 seam)엔 아직 미편입 — 승인값과 미승인값을 섞지 않기 위함.
+- **재개 트리거**: 운영자 승인 요청(docs/31에 7번째 행) → 승인 시 `BenchmarkParams`로 이관 + `defaults()` 편입 + decision-log. 1차 검증에서 오염 사례 관측해 폭 재조정.
+
+## [열림] Q-15. BM-05 🔥 최우선 알림·리뷰 큐 영속화는 AL/어댑터 관심사
+- **맥락**: AC-2 "🔥 최우선 알림", AC-3 승격/기각 UI는 알림·큐 처리 영역. BM-05(순수)는 outlierFlag 판정 + `ReviewQueueItem` 값 생성 + DealEvent 전이(promote/reject)까지만.
+- **잠정값**: BM-05는 `OutlierDetector.classify/reviewItemFor` + `DealEvent.promoteFromOutlier/reject`만 보장. 큐 영속화·🔥 우선순위 발화는 AL 모듈이 OUTLIER_LOWER 타입으로 처리.
+- **재개 트리거**: AL(기능3) 착수 시 reviewQueue 처리·알림 우선순위 배선.

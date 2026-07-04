@@ -67,6 +67,23 @@ public record DealEvent(
 				origin, sourceSites, outlierFlag, permanentlyExcluded, status, firstSeen, lastSeen, site, sourceUrl);
 	}
 
+	/** 이상치 판정 결과 플래그 부여(BM-05). */
+	public DealEvent flagOutlier(OutlierFlag flag) {
+		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, priceMin, priceMax, priceLast,
+				origin, sourceSites, flag, permanentlyExcluded, status, firstSeen, lastSeen, site, sourceUrl);
+	}
+
+	/** 사람이 "진짜였다" 확정 → 이상치 해제, 표본 복귀(BM-05 AC-3). */
+	public DealEvent promoteFromOutlier() {
+		return flagOutlier(OutlierFlag.NONE);
+	}
+
+	/** 사람이 "사기·낚시" 기각 → 영구 제외(재수집돼도 표본 복귀 없음, BM-05 AC-3). */
+	public DealEvent reject() {
+		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, priceMin, priceMax, priceLast,
+				origin, sourceSites, outlierFlag, true, status, firstSeen, lastSeen, site, sourceUrl);
+	}
+
 	private DealEvent withStatus(DealStatus newStatus) {
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, priceMin, priceMax, priceLast,
 				origin, sourceSites, outlierFlag, permanentlyExcluded, newStatus, firstSeen, lastSeen, site, sourceUrl);

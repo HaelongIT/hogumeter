@@ -1,4 +1,4 @@
-package dev.hogumeter.core.domain.benchmark;
+package dev.hogumeter.core.domain;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -6,14 +6,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 분위수 R-7(선형보간, Excel PERCENTILE.INC / R 기본). BM-06 median·P25 계약(docs/91 Q-6).
+ * 분위수 R-7(선형보간, Excel PERCENTILE.INC / R 기본). 엔진 전역 공유 수학(domain 루트, 패키지 순환 방지).
+ * BM-06 median·P25, BM-05 Tukey Q1/Q3가 공통 사용(docs/91 Q-6).
  * 정렬 오름차순 x[0..N-1], p∈[0,1]: h=(N-1)·p, Q = x[⌊h⌋] + (h−⌊h⌋)(x[⌈h⌉]−x[⌊h⌋]).
- * 원화 결과는 BigDecimal 중간계산 후 HALF_UP로 정수 원 반올림. BM-05 Tukey Q1/Q3도 이 헬퍼를 재사용.
+ * 원화 결과는 BigDecimal 중간계산 후 HALF_UP로 정수 원 반올림.
  */
 public final class Quantiles {
 
 	public static final BigDecimal P25 = new BigDecimal("0.25");
 	public static final BigDecimal P50 = new BigDecimal("0.5");
+	public static final BigDecimal P75 = new BigDecimal("0.75");
 
 	private Quantiles() {
 	}

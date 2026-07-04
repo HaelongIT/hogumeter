@@ -145,6 +145,22 @@ class BenchmarkCalculatorTest {
 		assertThat(view.benchmarkPrice()).isEqualTo(850_000L); // 이상치 미포함 median
 	}
 
+	// ---- BM-05 AC-3 연동: 영구 제외(사기 기각) 딜은 outlierFlag NONE이어도 표본 배제 ----
+	@Test
+	void excludesPermanentlyRejectedDealsFromSample() {
+		List<DealEvent> deals = List.of(
+				single(800_000L, "2026-07-01"), single(820_000L, "2026-06-20"),
+				single(850_000L, "2026-06-10"), single(900_000L, "2026-06-05"),
+				single(950_000L, "2026-05-15"),
+				aDealEvent().withPriceFirst(10_000L).singleSite().permanentlyExcluded()
+						.firstSeen("2026-07-02T00:00:00Z").build());
+
+		BenchmarkView view = compute(deals, 990_000L);
+
+		assertThat(view.n()).isEqualTo(5);
+		assertThat(view.benchmarkPrice()).isEqualTo(850_000L);
+	}
+
 	// ---- AC-5/BM-04 AC-5: BACKFILL 단일사이트는 n엔 포함, m·P25·최저엔 미포함 ----
 	@Test
 	void backfillCountsInNButNotInCrossVerifiedStats() {

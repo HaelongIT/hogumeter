@@ -1,6 +1,7 @@
 package dev.hogumeter.core.domain.benchmark;
 
 import dev.hogumeter.core.domain.BenchmarkParams;
+import dev.hogumeter.core.domain.Quantiles;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import java.math.BigDecimal;
@@ -31,9 +32,10 @@ public class BenchmarkCalculator {
 		Instant now = clock.instant();
 		ZoneId zone = clock.getZone();
 
-		// 2. 이상치 선제외 (tier·median보다 항상 먼저)
+		// 2. 이상치·영구제외 선제외 (tier·median보다 항상 먼저; BM-05 사기 기각 딜 복귀 금지)
 		List<DealEvent> outlierFree = candidates.stream()
 				.filter(d -> d.outlierFlag() == OutlierFlag.NONE)
+				.filter(d -> !d.permanentlyExcluded())
 				.toList();
 
 		// 3. 기간 윈도우 + K_FILL 자동확장 (과거 딜이 실제로 추가될 때만 확장 표기)
