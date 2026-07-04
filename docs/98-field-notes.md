@@ -37,6 +37,12 @@
 - **가격/배송이 리스트에 구조화되어 있음**(`.hotdeal_info`) — BM-02 정규화 입력으로 바로 쓸 수 있는 유일 사이트.
 - **실측**: 85KB 응답에 `fm_best_widget` 1건, `hotdeal_info` **20건**. **Cloudflare 챌린지 징후 0**(이번 프로브 한정 — fmkorea는 시점에 따라 CF가 붙는 것으로 알려짐, 재확인 여지). golden 적합 → `tests/fixtures/fmkorea/list_normal.html`.
 
+### 2026-07-04 파서 구현 완료(BM-01) — golden row0 실측값
+- **루리웹** row0: post_id `105373`, 제목 `[롯데온]빙그레 더단백…`, url `…/read/105373…`, 추천(reaction) `3`, 조회 `3686`. 제목 앵커 = `.title_wrapper a`(카테고리 `[음식]`은 앞 텍스트노드로 별개). 가격은 제목에 있어 BM-02로 정규화.
+- **펨코** row0: post_id `10041875674`(href `/{id}` 끝), 제목 `더미식 국물요리 350g X 5개 골라담기`, `.hotdeal_info a` = [`지마켓`,`13,800원`,`무료`] → 가격 13,800. `.pc_voted_count .count` 없으면 추천 0. author는 `/ ` 접두 붙음.
+- **번개** item0: `pid 417956893`, `name 아이폰15pro 256 S급`, `price "800000"`(문자열), `update_time 1783167297`(epoch초), `num_faved "0"`, `ad/bizseller false`. url = `m.bunjang.co.kr/products/{pid}`.
+- **관련 테스트**: `collector/tests/test_parsers.py`(bs4). 상태변화 케이스 fixture는 미확보(docs/91 Q-19).
+
 ## 번개장터
 ### 2026-07-04 비공식 검색 API 확보 (JSON, HTML 파싱 불요)
 - **엔드포인트**: `https://api.bunjang.co.kr/api/1/find_v2.json?q={검색어}&order=date&page={n}&n={건수}`. 200 OK, 깔끔한 JSON.

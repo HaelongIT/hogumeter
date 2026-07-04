@@ -3,7 +3,9 @@ name = "collector"
 version = "0.1.0"
 description = "호구미터 수집기 — 핫딜 3사(뽐뿌/루리웹/펨코) + 번개장터 폴링"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+]
 
 [dependency-groups]
 dev = ["pytest>=8"]
