@@ -11,3 +11,7 @@
 | 2026-07-04 | Autonomous(무중단) 범위 = 테스트로 검증 가능한 전 구현. 정지 조건: 데이터 파괴·외부 실발송(텔레그램 실전송·실사이트 크롤링)·비용·보안 정책·기획 확정본 충돌 | 사용자 결정(셋업 인터뷰) | CLAUDE.md §Autonomous |
 | 2026-07-04 | 운영 DB는 자체 호스팅 Postgres 직접 관리 → 템플릿 §8(관리형 DB 규칙)·schema-change-queue.md 미이식 | docs/01-architecture(RDS 금지·이식성 원칙) | working-area/, CLAUDE.md |
 | 2026-07-04 | loose-end 라우팅 번호 매핑 — 기술 보류 보드=docs/91-open-questions(90번은 기획 확정본 선점), 교훈=docs/99-lessons, 실측=docs/98-field-notes | 기존 문서 체계 우선 원칙 | CLAUDE.md §작업 방식 |
+| 2026-07-04 | (D-1) 디렉토리명 끝 공백 리네임 = **세션 종료 후 사용자가 직접**. 세션 중엔 절대경로 따옴표 처리, 스캐폴딩은 전부 상대경로라 리네임 비용 0 | 사용자 결정(인터뷰) | docker-compose·CI 상대경로 |
+| 2026-07-04 | M0 빌드 도구 실체화 — Boot 3.5.16/Gradle 8.14.5(KTS)/Java 21, collector uv+pytest, compose postgres16, CI GitHub Actions | M0-1 스캐폴딩 | core/, collector/, docker-compose.yml, .github/ |
+| 2026-07-04 | Flyway V1 = 신품 코어 루프 11테이블만. used(중고)는 M2 V2 이월 | M0-3 + docs/91 Q-4 | core V1__init.sql |
+| 2026-07-04 | Claude Code 권한 = acceptEdits + 프로젝트 배시 허용목록(.claude/settings.local.json, gitignore). 파괴적 명령(rm 등)은 계속 승인 요구 — autonomous 정지조건과 정렬 | 사용자 요청(승인 팝업 과다) | .claude/settings.local.json |

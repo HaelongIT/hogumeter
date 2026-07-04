@@ -1,6 +1,7 @@
 # benchmark · 02. 데이터 모델
 
-> **전체가 "제안(미적용)"** — 실제 DDL·ERD는 M0 산출물(Flyway V1)에서 확정한다(`docs/30-roadmap.md` M0-3). 개체 방향의 정본은 `docs/02-domain-model.md`. 확정 시 이 문서를 실제 스키마로 갱신한다.
+> **상태: M0-3 Flyway V1 적용됨.** 아래 테이블은 `core/src/main/resources/db/migration/V1__init.sql`이 정본이며 이 문서와 일치한다(변경 시 V2 마이그레이션 + 이 문서 동시 갱신). 개체 방향의 정본은 `docs/02-domain-model.md`. used(중고) 테이블은 V1 제외 — M2 V2 이월(`docs/91` Q-4).
+> 컬럼 세부(제약·인덱스·체크)는 V1 SQL을 직접 볼 것 — 아래 표는 요약이다.
 
 ## 테이블 (제안 · 미적용)
 
@@ -28,4 +29,4 @@
 4. 미상(unclassified) DealEvent는 사람 분류 시 variant 확정·병합 재평가(소급 알림 없음).
 
 ## DDL
-M0 Flyway `V1__init.sql`에서 확정 예정 — 마이그레이션마다 롤백 스크립트 동반(REL-05). 확정 후 이 절에 실제 DDL을 반영하고 "제안(미적용)" 표기를 제거한다.
+정본 = `core/src/main/resources/db/migration/V1__init.sql` (롤백 `db/rollback/R1__init_rollback.sql` 동반, REL-05). `FlywayMigrationTest`가 Testcontainers로 11테이블 생성·`raw_deal_post` 자연키 UNIQUE를 검증한다. ERD는 이 SQL의 FK(`product`→`variant`→`alert_policy`/`price_history`, `deal_event`↔`deal_event_source`↔`raw_deal_post`) 그대로.
