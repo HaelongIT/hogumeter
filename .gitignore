@@ -1,0 +1,17 @@
+# 로컬 시크릿 — 절대 커밋 금지 (텔레그램 봇 토큰·네이버 API 키 등)
+.env
+.env.*
+
+# 빌드 산출물·의존성
+build/
+dist/
+node_modules/
+.gradle/
+.venv/
+__pycache__/
+*.pyc
+
+# IDE·OS
+.idea/
+.vscode/
+.DS_Store
