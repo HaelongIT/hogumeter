@@ -1,0 +1,43 @@
+package dev.hogumeter.core.application;
+
+import dev.hogumeter.core.application.port.out.AlertMessage;
+import dev.hogumeter.core.application.port.out.AlertSender;
+import dev.hogumeter.core.domain.BenchmarkParams;
+import dev.hogumeter.core.domain.alert.AlertDecision;
+import dev.hogumeter.core.domain.alert.AlertEvaluator;
+import dev.hogumeter.core.domain.alert.AlertGate;
+import dev.hogumeter.core.domain.alert.AlertPolicy;
+import dev.hogumeter.core.domain.alert.GateDecision;
+import dev.hogumeter.core.domain.benchmark.BenchmarkView;
+import dev.hogumeter.core.domain.deal.DealEvent;
+import java.time.Clock;
+
+/**
+ * 신규 딜 → 알림 판정 → 게이트 → 발송을 잇는 유스케이스. 순수 도메인(평가·게이트)을 조립하고
+ * 아웃 포트(AlertSender)로만 발송한다. HOLD는 보류(플러시는 스케줄러가 종료 시 재디스패치).
+ */
+public class AlertDispatcher {
+
+	private final AlertEvaluator evaluator;
+	private final AlertGate gate;
+	private final AlertSender sender;
+
+	public AlertDispatcher(AlertEvaluator evaluator, AlertGate gate, AlertSender sender) {
+		this.evaluator = evaluator;
+		this.gate = gate;
+		this.sender = sender;
+	}
+
+	public DispatchOutcome dispatch(DealEvent deal, BenchmarkView view, AlertPolicy policy,
+			BenchmarkParams params, Clock clock) {
+		AlertDecision decision = evaluator.evaluate(deal, view, policy, params);
+		if (!decision.shouldAlert()) {
+			return DispatchOutcome.NO_ALERT;
+		}
+		if (gate.decide(decision, policy, clock) == GateDecision.SEND_NOW) {
+			sender.send(new AlertMessage(deal, view, decision));
+			return DispatchOutcome.SENT;
+		}
+		return DispatchOutcome.HELD;
+	}
+}
