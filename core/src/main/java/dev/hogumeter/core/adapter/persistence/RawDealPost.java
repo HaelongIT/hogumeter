@@ -33,6 +33,12 @@ public class RawDealPost {
 	@Column(nullable = false)
 	private String title;
 
+	@Column(name = "headline_price")
+	private Long headlinePrice;
+
+	@Column(name = "posted_at")
+	private Instant postedAt;
+
 	@Column(name = "captured_at", nullable = false)
 	private Instant capturedAt;
 
@@ -43,10 +49,17 @@ public class RawDealPost {
 	}
 
 	public RawDealPost(String site, String postId, String url, String title, Instant capturedAt, String status) {
+		this(site, postId, url, title, null, null, capturedAt, status);
+	}
+
+	public RawDealPost(String site, String postId, String url, String title, Long headlinePrice, Instant postedAt,
+			Instant capturedAt, String status) {
 		this.site = site;
 		this.postId = postId;
 		this.url = url;
 		this.title = title;
+		this.headlinePrice = headlinePrice;
+		this.postedAt = postedAt;
 		this.capturedAt = capturedAt;
 		this.status = status;
 	}
@@ -69,6 +82,18 @@ public class RawDealPost {
 
 	public String getTitle() {
 		return title;
+	}
+
+	public Long getHeadlinePrice() {
+		return headlinePrice;
+	}
+
+	public Instant getPostedAt() {
+		return postedAt;
+	}
+
+	public Instant getCapturedAt() {
+		return capturedAt;
 	}
 
 	public String getStatus() {

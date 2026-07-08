@@ -149,4 +149,21 @@ public class DealEventEntity {
 	public Instant getLastSeen() {
 		return lastSeen;
 	}
+
+	/** 병합 결과(도메인 merge 산출)를 반영. 이상치 플래그·영구제외는 유지(C-4: 유입 1회 판정). */
+	public void applyMerge(long priceFirst, long priceMin, long priceMax, long priceLast,
+			boolean crossVerified, DealStatus status, Instant firstSeen, Instant lastSeen) {
+		this.priceFirst = priceFirst;
+		this.priceMin = priceMin;
+		this.priceMax = priceMax;
+		this.priceLast = priceLast;
+		this.crossVerified = crossVerified;
+		this.status = status;
+		this.firstSeen = firstSeen;
+		this.lastSeen = lastSeen;
+	}
+
+	public void setOutlierFlag(OutlierFlag outlierFlag) {
+		this.outlierFlag = outlierFlag;
+	}
 }
