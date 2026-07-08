@@ -90,7 +90,9 @@ docker compose up -d
 - `docs/00-overview.md` 용어집·개념
 - `docs/01-architecture.md` 모듈 구조·경계 (TDD 이음새)
 - `docs/02-domain-model.md` 개체·스키마 방향·DealEvent 상태기계
+- `docs/03-deal-sets-and-time.md` **(2차 기반)** 딜 집합 명명(pricingSet/occurrenceSet/signalSet)·시간 좌표계·as-of 규약
 - `docs/10~14-*.md` 기능 요구사항 (등록/기준가/감시알림/구매비교/중고)
+- `docs/15~19-*.md` **(2차 기능)** 구매·성적표(15)/신호등·주기(16)/보관함〔유보〕(17)/다이제스트(18)/우선순위〔계류〕(19). 정본 델타는 `working-area/2nd-plan-intake.md`
 - `docs/20-non-functional.md` 보안·성능·신뢰성·관측성
 - `docs/21-tdd-guidelines.md` TDD·테스트 전략
 - `docs/30-roadmap.md` 개발 순서·마일스톤·스파이크

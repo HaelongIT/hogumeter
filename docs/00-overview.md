@@ -24,6 +24,24 @@
 | 매물 | Listing | 중고 개별 매물 (1점물) |
 | 스냅샷 | marketSnapshot | 현재 활성 매물 가격의 무가공 나열 (통계 합성 아님) |
 | 백필 | backfill | 등록 시점 과거 딜 소급 수집. origin=backfill |
+| — 이하 2차 기획 용어(`docs/03`·`15`·`16`·`18`) — | | |
+| 가격 집합 | pricingSet | 값의 통계(기준가·P25·성적표) 자격 딜 집합. `docs/03` |
+| 발생 집합 | occurrenceSet | 시간의 통계(딜 주기) 자격 집합. 정체성 축만 |
+| 신호 집합 | signalSet | "지금" 단정(신호·상시 표시) 자격 집합. 트리거 무관 |
+| 발생 시각 | firstSeen | 딜 발생 시각(postedAt 우선). 생성 시 1회 확정·불변. **[잠정 DN-C2]** |
+| 수집 시각 | capturedAt | 우리가 관측한 시각(firstSeen과 별도 보존) |
+| 최신 증거 시각 | lastEvidenceAt | 살아있음의 적극 증거 max(최신 병합 firstSeen, 마지막 PRICE_CHANGED) |
+| 관측 시작 | observedFrom | variant별 관측 개시 시점. 유효 창 = 창 ∩ [observedFrom, now] |
+| 신선도 | staleness | (소스 마지막 성공 폴링) − lastEvidenceAt. 수집 공백 시 시계 정지 |
+| 가격 역할 | priceFirst/Last/Min | 발생·분포 / "지금" / "지나간 기회" 3분법. priceMax 역할 없음 |
+| 구매 | Purchase | (2차) 독립 관찰 상태. paidPrice·관찰기간·성적표 |
+| 성적표 | report | 관찰 종료 시 발급하는 사후 percentile+최저기회 |
+| 신호등 | signal | 🟢🟡🔴⚪ "지금 잡을 딜" 압축 표시(표시 전용) |
+| 딜 주기 | cadence | occurrenceSet 기반 발생 빈도·간격(예측 금지) |
+| 다이제스트 | digest | 주간 요약 리포트(제3계열, 스케줄 구동) |
+| 핀 | WatchItem | (2차·[유보]) 보관함에 고정한 DealEvent + 메모 |
+| 우선순위 | priority | (2차·[계류]) Product 단위 대기열 순번 |
+| as-of 재구성 | as-of | 과거 시점 분포를 순수 함수로 재계산(확정물 인용/라이브 계산) |
 
 ## 핵심 수치 (확정)
 - K_display: 사용자 설정 3~10, 기본 5 ("기준가" 라벨 최소 표본)

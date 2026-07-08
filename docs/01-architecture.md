@@ -21,7 +21,13 @@ core/
 │   ├── benchmark/             # 기준가 엔진: 정규화, 이상치 판정, median/P25, 3단 표본 판정
 │   ├── matching/              # 문자열 정규화·토큰화·별칭사전 매칭, 3단 판정(확정/후보/기각)
 │   ├── alert/                 # 알림 판정: 트리거 평가, 최고강도 1발, 방해금지 보류, 후속 알림 규칙
-│   └── used/                  # 3계층 필터(AND/OR그룹 A·B모드/NOT), 매물 생애주기, 스냅샷
+│   ├── used/                  # 3계층 필터(AND/OR그룹 A·B모드/NOT), 매물 생애주기, 스냅샷
+│   ├── purchase/              # (2차) Purchase 상태기계, 상태×트리거 판정, 스냅샷·성적표 as-of. docs/15
+│   ├── digest/                # (2차) 다이제스트 창·귀속·섹션 합성(순수). docs/18
+│   ├── watch/                 # (2차·[WATCH-유보]) 핀 자격·결말 전이·회고. docs/17
+│   └── priority/              # (2차·[PRI-계류]) 대기 술어·발화 판정. docs/19
+│   #  신호·주기(SIG/CAD, docs/16)는 신규 수집 0 read-model — benchmark 위 순수 함수(색 판정·주기)로 배치, 모듈 승격은 구현 시 판단
+│   #  집합 술어·시간 좌표계(docs/03)는 deal/benchmark의 공유 순수 규칙
 ├── application/               # 유스케이스 오케스트레이션. port 인터페이스 정의
 │   └── port/ (out: repository, naverClient, telegramSender, clock / in: usecase)
 └── adapter/

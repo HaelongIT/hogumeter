@@ -22,10 +22,15 @@
 ## BM-05 이상치 (양방향)
 - 판정: median/IQR 기반(수치 M0). UPPER → 기준가 제외·무알림. LOWER → 기준가 제외 + 🔥 최우선 알림 + reviewQueue(진짜→표본 포함 / 사기→영구 제외).
 - SPARSE/NONE 구간 폴백 컷: 현재가 기준 비상식 구간은 사례 나열·최저가 잣대에서 잠정 제외 + reviewQueue.
-- 제외 키워드 매칭 글은 정책에 따라 배제 또는 ⚠️라벨.
+- 제외 키워드 매칭 글은 정책에 따라 배제 또는 ⚠️라벨. **⚠️라벨도 통계 미산입(v1.3, DN-C5) — 차이는 표시 가시성뿐.**
+- **판정 생애주기(v1.3, DN-C4)**: outlierFlag는 **유입 시 1회 평가 후 영속** — 분포 드리프트로 재평가하지 않는다(화면 간 모순·크롤링 순서 의존 방지). **전 시스템 단일 판정 원천**(신호·알림·기준가·성적 동일 플래그). 변경 서열 **사람 > 배치 > 잠정**(사람 플래그 불가침).
+- **배치 판정(v1.3, DN-C4)**: 백필 딜 = `PENDING_BATCH`(판정 유보·occurrenceSet만 포함) → 배치 완료 이벤트에 **완전 분포로 일괄 판정**(그것이 "1회 확정 시점"). 백필 중 라이브 딜 = `PROVISIONAL`(폴백 컷 잠정) → 완료 시 최종. PROVISIONAL 해소 4경로: 현재가 조회 / 배치 완료 / tier 승격 / 사람.
+- LOWER 3상태: 미확정(pricingSet 제외·occurrenceSet 포함·🔥) / 승격(전 집합 포함) / 기각(전 집합·공시 제외, 이력 열람만). → `docs/03` 3-1.
 
 ## BM-06 기준가 산출
-- 02 문서의 BenchmarkView 계약 그대로. n 판정 / m 표시 / K_fill=max(7,K_display+2) 자동확장(상한 12개월, 확장 사실 표기) / 시간 가중 없음 / benchmarkPrice는 n 전체 median, goodDealLine·periodLowest는 교차검증 딜만.
+- 02 문서의 BenchmarkView 계약 그대로. n 판정 / m 표시 / K_fill=max(7,K_display+2) 자동확장 / 시간 가중 없음 / benchmarkPrice는 n 전체 median, goodDealLine·periodLowest는 교차검증 딜만.
+- **자동확장 상한(v1.3, DN-C3)**: `min(12개월, observedFrom)` — 관측 범위(observedFrom) 이전으로는 확장하지 않는다(데이터 없어 표본 안 늘고 "관측 범위 N개월" 정직 표기). 확장 사실 표기 유지.
+- **유효 창(v1.3, `docs/03` 3-2)**: 모든 시간 기반 통계 = 대상 창 ∩ [observedFrom, now]. 창이 짧으면 "관측 범위 N개월" 병기. firstSeen(발생 시각)을 기간 필터 축으로 사용.
 
 ## BM-07 사후학습 키워드 제안
 - 오알림 "무시" 시 해당 글 빈출 토큰에서 제외 키워드 후보 추출 → reviewQueue(KEYWORD_SUGGEST) → 수락 시 정책 반영.
