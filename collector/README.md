@@ -20,8 +20,9 @@ src/collector/
 ├── parsers/         # 사이트별 파서. 순수 함수: html/json → DTO (네트워크 분리)
 │   ├── ruliweb.py / fmkorea.py / bunjang.py   # 뽐뿌는 재채취 대기(docs/91 Q-5)
 │   └── models.py    # DTO
-├── pipeline/        # 정규화(가격 추출)·적재
-│   └── price.py     # 실결제가+배송비 규칙 기반 파싱 (as-posted, 카드 역산 금지)
+├── pipeline/        # 정규화(가격 추출)·적재 준비
+│   ├── price.py     # 실결제가+배송비 규칙 기반 파싱 (as-posted, 카드 역산 금지)
+│   └── ingest.py    # ParsedDeal → raw_deal_post 레코드 + 배치 멱등(자연키 dedup)
 ├── scheduler/       # 폴링 루프 (게시판당 1req/min, 백오프)
 └── __main__.py
 tests/
