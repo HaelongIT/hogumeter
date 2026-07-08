@@ -50,3 +50,9 @@
 - 원인: @SpringBootTest는 컨텍스트(=컨테이너 postgres)를 공유하고 기본은 롤백 없음(@BeforeEach deleteAll로만 격리). 전역 개수를 단정하는 테스트는 다른 테스트가 남긴 커밋 데이터에 오염된다.
 - 규칙화된 교훈 (원인→해결): DB 통합 테스트는 **① 특정 variantId 등으로 스코프**해 자연 격리하거나, **② `@Transactional`(테스트 메서드 tx 롤백)로 커밋 누수 차단**. MockMvc도 동일 스레드라 @Transactional tx가 컨트롤러 리드까지 전파됨. 전역 count 단정은 피하거나 @Transactional 필수. (기존 `RawDealPostUpsertTest`는 @BeforeEach deleteAll 방식 유지 — 혼용 가능.)
 - 관련 테스트: `RegisterProductUseCaseTest`·`RegistrationControllerTest`·`GetBenchmarkUseCaseTest`·`BenchmarkControllerTest`.
+
+### 2026-07-08 ddl-auto=validate — smallint 컬럼을 Integer로 매핑하면 검증 실패
+- 맥락: alert_policy 엔티티 추가 후 컨텍스트 로드 전부 실패(`SchemaManagementException`). 메시지: `column [quiet_hours_end] found [int2 (SMALLINT)], but expecting [integer (INTEGER)]`.
+- 원인: 스키마 컬럼이 `smallint`(int2)인데 JPA 필드를 `Integer`로 매핑 → validate가 INTEGER를 기대해 불일치. (한 엔티티 매핑 오류가 EntityManagerFactory 생성을 막아 모든 @SpringBootTest가 컨텍스트 로드 실패로 무더기 FAIL — 22건.)
+- 규칙화된 교훈 (원인→해결): DDL 타입과 JPA 필드 타입을 정확히 맞춘다. Java `Integer`를 유지하려면 **`@JdbcTypeCode(SqlTypes.SMALLINT)`**로 컬럼 JDBC 타입을 명시(또는 필드를 `Short`로). 컨텍스트 로드 대량 실패 = 스키마 검증 불일치 의심 → 리포트에서 `Schema-validation` 라인 확인.
+- 관련 테스트: `EvaluateAlertOnDealUseCaseTest`(alert_policy) 외 전 @SpringBootTest.

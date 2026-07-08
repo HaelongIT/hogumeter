@@ -1,5 +1,9 @@
 package dev.hogumeter.core;
 
+import dev.hogumeter.core.application.AlertDispatcher;
+import dev.hogumeter.core.application.port.out.AlertSender;
+import dev.hogumeter.core.domain.alert.AlertEvaluator;
+import dev.hogumeter.core.domain.alert.AlertGate;
 import java.time.Clock;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -16,6 +20,12 @@ public class CoreApplication {
 	@Bean
 	Clock clock() {
 		return Clock.systemDefaultZone();
+	}
+
+	/** 순수 도메인(evaluator/gate)은 Spring 비의존이라 여기서 조립. 발송은 주입된 out-port(스텁). */
+	@Bean
+	AlertDispatcher alertDispatcher(AlertSender alertSender) {
+		return new AlertDispatcher(new AlertEvaluator(), new AlertGate(), alertSender);
 	}
 
 }

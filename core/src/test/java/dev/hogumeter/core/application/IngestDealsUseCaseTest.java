@@ -16,6 +16,7 @@ import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
 import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
 import dev.hogumeter.core.domain.deal.DealStatus;
+import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.time.Duration;
@@ -112,5 +113,22 @@ class IngestDealsUseCaseTest {
 
 		assertThat(dealEvents.findByVariantId(variantId)).isEmpty();
 		assertThat(reviewQueue.findByType(ReviewQueueType.UNCLASSIFIED)).hasSize(1);
+	}
+
+	@Test
+	void lowerOutlierIsFlaggedAndQueued() {
+		// 병합 안 되는 5건(30k 간격 > 허용폭) + 1건 대박(이상치)
+		for (long price : new long[] { 800_000, 830_000, 860_000, 890_000, 920_000 }) {
+			savePost("ppomppu", "아이폰 17 256기가 특가", price, T);
+		}
+		savePost("ppomppu", "아이폰 17 256기가 특가", 100_000L, T); // 분포 대비 하향 이상치
+
+		useCase.ingestPending();
+
+		List<DealEventEntity> deals = dealEvents.findByVariantId(variantId);
+		assertThat(deals).hasSize(6); // 전부 별개(간격이 허용폭 초과)
+		DealEventEntity low = deals.stream().filter(d -> d.getPriceFirst() == 100_000L).findFirst().orElseThrow();
+		assertThat(low.getOutlierFlag()).isEqualTo(OutlierFlag.LOWER);
+		assertThat(reviewQueue.findByType(ReviewQueueType.OUTLIER_LOWER)).hasSize(1);
 	}
 }

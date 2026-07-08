@@ -14,6 +14,7 @@ import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealMergePolicy;
 import dev.hogumeter.core.domain.deal.DealStatus;
+import dev.hogumeter.core.domain.deal.OutlierDetector;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.deal.Origin;
 import dev.hogumeter.core.domain.matching.AliasDictionary;
@@ -43,19 +44,25 @@ public class IngestDealsUseCase {
 	private final DealEventMapper mapper;
 	private final CatalogProjection catalog;
 	private final ReviewQueueItemRepository reviewQueue;
+	private final EvaluateAlertOnDealUseCase alertEvaluation;
 	private final Matcher matcher = new Matcher();
 	private final DealMergePolicy mergePolicy = new DealMergePolicy();
+	private final OutlierDetector outlierDetector = new OutlierDetector();
 	private final BenchmarkParams params = BenchmarkParams.defaults();
+
+	/** SPARSE(n<5) 구간은 IQR 불안정 → 이상치 판정 보류(폴백 컷은 Q-14 후속). 이 이상에서만 IQR 판정. */
+	private static final int OUTLIER_MIN_DISTRIBUTION = 5;
 
 	public IngestDealsUseCase(RawDealPostRepository rawPosts, DealEventRepository dealEvents,
 			DealEventSourceRepository sources, DealEventMapper mapper, CatalogProjection catalog,
-			ReviewQueueItemRepository reviewQueue) {
+			ReviewQueueItemRepository reviewQueue, EvaluateAlertOnDealUseCase alertEvaluation) {
 		this.rawPosts = rawPosts;
 		this.dealEvents = dealEvents;
 		this.sources = sources;
 		this.mapper = mapper;
 		this.catalog = catalog;
 		this.reviewQueue = reviewQueue;
+		this.alertEvaluation = alertEvaluation;
 	}
 
 	@Transactional
@@ -89,6 +96,7 @@ public class IngestDealsUseCase {
 				existing.applyMerge(merged.priceFirst(), merged.priceMin(), merged.priceMax(), merged.priceLast(),
 						merged.crossVerified(), merged.status(), merged.firstSeen(), merged.lastSeen());
 				sources.save(new DealEventSourceEntity(existing.getId(), post.getId(), post.getSite()));
+				alertEvaluation.evaluate(variantId, mapper.toDomain(existing)); // 흡수 후속 판정(AL이 첫알림 억제)
 				return;
 			}
 		}
@@ -98,6 +106,28 @@ public class IngestDealsUseCase {
 				candidate.origin(), candidate.crossVerified(), candidate.outlierFlag(), false,
 				candidate.status(), candidate.firstSeen(), candidate.lastSeen()));
 		sources.save(new DealEventSourceEntity(created.getId(), post.getId(), post.getSite()));
+		classifyOutlier(created, variantId);
+		alertEvaluation.evaluate(variantId, mapper.toDomain(created));
+	}
+
+	/** BM-05 배선: 신규 딜을 variant 분포에 대해 판정(유입 1회·영속, C-4). LOWER는 reviewQueue(OUTLIER_LOWER). */
+	private void classifyOutlier(DealEventEntity created, long variantId) {
+		List<Long> distribution = dealEvents.findByVariantId(variantId).stream()
+				.map(DealEventEntity::getPriceFirst)
+				.toList();
+		if (distribution.size() < OUTLIER_MIN_DISTRIBUTION) {
+			return;
+		}
+		OutlierFlag flag = outlierDetector.classify(created.getPriceFirst(), distribution, params);
+		if (flag == OutlierFlag.NONE) {
+			return;
+		}
+		created.setOutlierFlag(flag);
+		if (flag == OutlierFlag.LOWER) {
+			reviewQueue.save(new ReviewQueueItemEntity(ReviewQueueType.OUTLIER_LOWER, Map.of(
+					"priceFirst", created.getPriceFirst(),
+					"dealEventId", created.getId())));
+		}
 	}
 
 	private DealEvent candidateFrom(RawDealPost post, long variantId) {
