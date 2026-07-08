@@ -63,6 +63,14 @@ public class RawDealPost {
 		return postId;
 	}
 
+	public String getUrl() {
+		return url;
+	}
+
+	public String getTitle() {
+		return title;
+	}
+
 	public String getStatus() {
 		return status;
 	}

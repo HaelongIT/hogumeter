@@ -15,11 +15,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 슬라이스 1 등록 HTTP 경로 — POST /api/v1/products → 201 + 실제 저장(Testcontainers). */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @AutoConfigureMockMvc
+@Transactional
 class RegistrationControllerTest {
 
 	@Autowired

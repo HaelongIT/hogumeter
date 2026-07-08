@@ -17,10 +17,7 @@
 
 _(Q-1. 기준가 수치 파라미터 — **해소됨 2026-07-04**: docs/31 6값 운영자 승인 → `BenchmarkParams.defaults()` 상수화. decision-log 참조. reactionScore 정규화는 알림 가중 전용이라 M1 지연 무방(docs/31 하단), 여기서 제거.)_
 
-## [열림] Q-2. 전역 API 컨벤션(응답 봉투·에러 형식) 미확정
-- **맥락**: core REST 표면이 아직 작아(기준가 조회 1본) 전역 컨벤션 문서를 만들지 않았다. `docs/benchmark/03`·`07`은 봉투 없는 리소스 직접 반환 + `{code, message}` 에러를 "제안(미적용)"으로 시드해 둔 상태.
-- **잠정값**: 리소스 직접 반환, 에러 `{code, message}`. seam = core web adapter의 응답 매핑 1곳(@ControllerAdvice 등가).
-- **재개 트리거**: M1 web 최소 슬라이스(등록+설정) 착수 시 엔드포인트가 늘어나는 시점 — 확정 후 benchmark/03·07의 "제안(미적용)" 표기 제거.
+_(Q-2. 전역 API 컨벤션 — **해소됨 2026-07-08**: 배선 슬라이스 1·2에서 확정. **봉투 없는 리소스 직접 반환**(RegistrationController·BenchmarkController) + 에러 `{code, message}`(`ApiExceptionHandler` @RestControllerAdvice: BM_VARIANT_NOT_FOUND→404, BM_INVALID_PERIOD→400). decision-log 참조. 여기서 제거.)_
 
 ## [열림] Q-3. 네이버 쇼핑 API 스파이크·연동 보류 (키 미발급)
 - **맥락**: M0-4 스파이크 중 "아이폰 17 256" 응답 품질 확인은 네이버 개발자센터 앱 등록(Client ID/Secret)이 필요한데 미발급 상태(사용자 확인). 현재가(BM-06 currentPrice)·기능1 등록 후보 조회의 데이터 소스.

@@ -1,0 +1,28 @@
+package dev.hogumeter.core.adapter.web;
+
+import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
+import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+/** 도메인 예외 → 에러코드 매핑. 봉투 없는 리소스 반환에 대응해 에러는 {@code {code, message}}(Q-2 잠정 확정). */
+@RestControllerAdvice
+public class ApiExceptionHandler {
+
+	@ExceptionHandler(VariantNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ApiError variantNotFound(VariantNotFoundException e) {
+		return new ApiError(VariantNotFoundException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(InvalidBenchmarkPeriodException.class)
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	public ApiError invalidPeriod(InvalidBenchmarkPeriodException e) {
+		return new ApiError(InvalidBenchmarkPeriodException.CODE, e.getMessage());
+	}
+
+	public record ApiError(String code, String message) {
+	}
+}
