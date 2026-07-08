@@ -9,4 +9,6 @@
 
 _(D-2. Spring Boot 3.x vs 4.x — **해소됨 2026-07-04**: 4.1.0 이관 확정. decision-log.md 참조. 여기서 제거.)_
 
+_(2차 기획 통합 열린 결정 9건(DN-C1~6 확정본 충돌 · DN-W WATCH 유보 · DN-P PRI 존폐 · DN-M 마일스톤) — **해소됨 2026-07-08**: 사용자 일괄 승인(AI 권고 채택). decision-log.md 참조, docs/90 v1.3 반영. 후속 잔류: C-2 postedAt 실측 = docs/91 Q-23 / WATCH 실제 배치 = docs/30 M6.)_
+
 현재 열린 결정: **없음.**

@@ -3,7 +3,7 @@
 ## 목적 / 범위
 기능2(BM) — **수집 → 가격 정규화 → 매칭 → 딜 병합·교차검증 → 이상치 → 기준가 산출**의 전 파이프라인. 시스템의 심장이자 테스트 자산의 핵심. 사용자 = 운영자 1인.
 
-- 이 문서 묶음의 경계: `docs/11-feature-benchmark-engine.md`(BM-01~07)의 상세화. 정책 충돌 시 `docs/90-planning-final-v1.2.md` §2가 최종 권위.
+- 이 문서 묶음의 경계: `docs/11-feature-benchmark-engine.md`(BM-01~07)의 상세화. 정책 충돌 시 `docs/90-planning-final.md` §2가 최종 권위.
 - 걸치는 컴포넌트: collector(BM-01·02 수집·추출)와 core(BM-02~07 정규화·매칭·병합·산출). 알림 발화 자체(AL)와 제품 등록(REG)은 별도 모듈 — 여기서는 이음새만 정의.
 - 수치 파라미터(±α, 병합 윈도, IQR 배수 등)는 **기명 상수로만 참조**(`docs/91-open-questions.md` Q-1). 값 확정 = M0 `docs/31-detailed-params.md`.
 

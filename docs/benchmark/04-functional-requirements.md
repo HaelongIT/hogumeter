@@ -1,6 +1,6 @@
 # benchmark · 04. 기능 요구 — 인수조건 (TDD 기준)
 
-> **이 문서가 M1 TDD의 기준이다.** 각 인수조건(AC)을 테스트로 1:1 변환한 뒤 구현한다(Red → Green → Refactor). 정책 정본: `docs/90-planning-final-v1.2.md` §2. 수치 파라미터는 기명 상수(`docs/benchmark/01` §모듈 로컬 컨벤션, 값은 M0 `docs/31-detailed-params.md`) — 테스트에서는 명시 주입한다.
+> **이 문서가 M1 TDD의 기준이다.** 각 인수조건(AC)을 테스트로 1:1 변환한 뒤 구현한다(Red → Green → Refactor). 정책 정본: `docs/90-planning-final.md` §2. 수치 파라미터는 기명 상수(`docs/benchmark/01` §모듈 로컬 컨벤션, 값은 M0 `docs/31-detailed-params.md`) — 테스트에서는 명시 주입한다.
 
 ---
 

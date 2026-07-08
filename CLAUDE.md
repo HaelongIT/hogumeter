@@ -1,7 +1,7 @@
 # CLAUDE.md — 구매 의사결정 보조 시스템 (핫딜 가격 인텔리전스)
 
 이 파일은 프로젝트의 헌법이다. 모든 세션에서 이 파일을 기준으로 작업한다.
-상세 요구사항은 `/docs`에 있으며, 본 파일과 충돌하면 **docs/90-planning-final-v1.2.md(기획 확정본)가 최종 권위**다.
+상세 요구사항은 `/docs`에 있으며, 본 파일과 충돌하면 **docs/90-planning-final.md(기획 확정본)가 최종 권위**다.
 
 ## 프로젝트 한 줄 정의
 핫딜 커뮤니티 데이터로 "핫딜 기준가"를 산출하고, 현재가와의 갭으로 "지금 사도 호구가 아닌지"를 알려주는 **1인용** 구매 의사결정 보조 시스템.
@@ -90,11 +90,13 @@ docker compose up -d
 - `docs/00-overview.md` 용어집·개념
 - `docs/01-architecture.md` 모듈 구조·경계 (TDD 이음새)
 - `docs/02-domain-model.md` 개체·스키마 방향·DealEvent 상태기계
+- `docs/03-deal-sets-and-time.md` **(2차 기반)** 딜 집합 명명(pricingSet/occurrenceSet/signalSet)·시간 좌표계·as-of 규약
 - `docs/10~14-*.md` 기능 요구사항 (등록/기준가/감시알림/구매비교/중고)
+- `docs/15~19-*.md` **(2차 기능)** 구매·성적표(15)/신호등·주기(16)/보관함〔유보〕(17)/다이제스트(18)/우선순위〔계류〕(19). 정본 델타는 `working-area/2nd-plan-intake.md`
 - `docs/20-non-functional.md` 보안·성능·신뢰성·관측성
 - `docs/21-tdd-guidelines.md` TDD·테스트 전략
 - `docs/30-roadmap.md` 개발 순서·마일스톤·스파이크
-- `docs/90-planning-final-v1.2.md` 기획 확정본 (최종 권위)
+- `docs/90-planning-final.md` 기획 확정본 (최종 권위)
 - `docs/benchmark/00~07` 기준가 엔진 모듈 상세 — 개요·아키텍처·데이터모델·API·**04 인수조건(=TDD 기준)**·비기능·TDD·에러코드
 - `docs/91-open-questions.md` 기술 보류 보드(잠정값+재개 트리거) / `docs/98-field-notes.md` 사이트별 실측 / `docs/99-lessons.md` 교훈 누적
 - `working-area/` 작업 보드 — `decisions-needed`(정할 것)·`decision-log`(정한 것)·`pre-deploy-checklist`(운영 배포 갭)·`review-template/`(코드리뷰 틀, 복사해서 사용)

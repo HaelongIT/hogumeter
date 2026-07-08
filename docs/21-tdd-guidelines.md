@@ -43,3 +43,14 @@
 - deal: 병합 성립/불성립(±α·윈도우), 미상 잠정 병합→확정, 상태 전이 전수(NEW→ACTIVE→VERIFIED→ENDED + PRICE_CHANGED)
 - alert: 트리거 매트릭스, 1발 원칙, quiet 보류·플러시·🔥관통, 후속 자격
 - used: 3계층 조합, SORT/TRIGGER 분기, 목록 diff 4종(신규/변동/SOLD/끌올)
+
+## 2차 기능 테스트 매트릭스 (종결 장치 표 = 테스트 원천)
+> 출처: `working-area/2nd-plan-intake.md` B-13. 2차 기획의 **"종결 장치 표"가 곧 테스트 매트릭스**다 — 각 표의 셀이 파라미터라이즈드 케이스가 된다. 관련 순수 도메인 모듈: purchase/signal·cadence/digest(+ watch/priority 조건부, `docs/01`).
+- **집합 술어**(`docs/03` 3-1): pricingSet/occurrenceSet/signalSet 각 자격 술어 × (CONFIRMED/CANDIDATE·키워드 히트·UPPER/LOWER 미확정/승격/기각·배치유보·⚠️라벨·신선도) — 동일 딜이 집합마다 다르게 분류되는지.
+- **시간 좌표**(`docs/03` 3-2): firstSeen 불변(재분류·후행 postedAt 후에도), 유효 창 ∩ observedFrom, 관측시계 정지(수집 공백).
+- **가격 역할 3분법**(priceFirst/Last/Min): 소비처별 올바른 역할 선택(percentile=priceFirst, 신호/비교=priceLast, 회고/최저기회=priceMin), priceMax 참조 금지.
+- **PUR 상태×트리거 표**(`docs/15` PUR-03): 4트리거 × 4상태, paidPrice "<" 경계, 복수 관찰 OR, 성적표 발급 전제 게이트.
+- **이상치 생애주기·배치**(`docs/11` BM-05, DN-C4): 유입 1회 판정 영속·드리프트 재평가 없음, 백필 PENDING_BATCH→완료 일괄 판정, PROVISIONAL 해소 4경로, 변경 서열(사람>배치>잠정).
+- **알림 계열 표**(`docs/12` B-5): 발송 단위(상태 사건당 1통·병기), 계열 서열(트리거>후속), 라이브 재평가(플러시 시 갱신·제거 O/신규 X).
+- **DIGEST 창·귀속**(`docs/18`): 반개구간 ∩ 관측 가동, 플로우 귀속=가시화 시각, 저장물 발송 성공 후 갱신(원자성).
+- 확정본 충돌 대기 항목(DN-C*)은 승인 후 기대값 확정 — 그 전엔 잠정 표기.
