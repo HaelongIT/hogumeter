@@ -30,7 +30,13 @@ public class AlertDispatcher {
 
 	public DispatchOutcome dispatch(DealEvent deal, BenchmarkView view, AlertPolicy policy,
 			BenchmarkParams params, Clock clock) {
-		AlertDecision decision = evaluator.evaluate(deal, view, policy, params);
+		return dispatch(deal, view, policy, params, clock, false);
+	}
+
+	/** PUR-03 paidPrice 하회 트리거(활성 관찰)를 함께 반영해 판정한다. */
+	public DispatchOutcome dispatch(DealEvent deal, BenchmarkView view, AlertPolicy policy,
+			BenchmarkParams params, Clock clock, boolean paidPriceTriggerFires) {
+		AlertDecision decision = evaluator.evaluate(deal, view, policy, params, paidPriceTriggerFires);
 		if (!decision.shouldAlert()) {
 			return DispatchOutcome.NO_ALERT;
 		}

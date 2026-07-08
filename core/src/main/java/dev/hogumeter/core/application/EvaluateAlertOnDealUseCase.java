@@ -4,12 +4,15 @@ import dev.hogumeter.core.adapter.persistence.AlertPolicyEntity;
 import dev.hogumeter.core.adapter.persistence.AlertPolicyRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventMapper;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
+import dev.hogumeter.core.adapter.persistence.PurchaseRepository;
 import dev.hogumeter.core.application.port.out.CurrentPriceProvider;
 import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.alert.AlertPolicy;
 import dev.hogumeter.core.domain.benchmark.BenchmarkCalculator;
 import dev.hogumeter.core.domain.benchmark.BenchmarkView;
 import dev.hogumeter.core.domain.deal.DealEvent;
+import dev.hogumeter.core.domain.purchase.Purchase;
+import dev.hogumeter.core.domain.purchase.PurchaseTriggers;
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +30,7 @@ public class EvaluateAlertOnDealUseCase {
 	private final DealEventRepository dealEvents;
 	private final DealEventMapper mapper;
 	private final AlertPolicyRepository policies;
+	private final PurchaseRepository purchases;
 	private final CurrentPriceProvider currentPrice;
 	private final AlertDispatcher dispatcher;
 	private final Clock clock;
@@ -34,10 +38,12 @@ public class EvaluateAlertOnDealUseCase {
 	private final BenchmarkParams params = BenchmarkParams.defaults();
 
 	public EvaluateAlertOnDealUseCase(DealEventRepository dealEvents, DealEventMapper mapper,
-			AlertPolicyRepository policies, CurrentPriceProvider currentPrice, AlertDispatcher dispatcher, Clock clock) {
+			AlertPolicyRepository policies, PurchaseRepository purchases, CurrentPriceProvider currentPrice,
+			AlertDispatcher dispatcher, Clock clock) {
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.policies = policies;
+		this.purchases = purchases;
 		this.currentPrice = currentPrice;
 		this.dispatcher = dispatcher;
 		this.clock = clock;
@@ -56,6 +62,11 @@ public class EvaluateAlertOnDealUseCase {
 		long current = currentPrice.currentPriceFor(variantId);
 		BenchmarkView view = calculator.compute(deals, current, periodMonths, params, clock);
 
-		return dispatcher.dispatch(deal, view, alertPolicy, params, clock);
+		List<Purchase> activePurchases = purchases.findByVariantId(variantId).stream()
+				.map(p -> p.toDomain())
+				.toList();
+		boolean paidPriceFires = PurchaseTriggers.paidPriceTriggerFires(deal.priceFirst(), activePurchases);
+
+		return dispatcher.dispatch(deal, view, alertPolicy, params, clock, paidPriceFires);
 	}
 }

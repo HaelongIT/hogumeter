@@ -12,6 +12,8 @@ import dev.hogumeter.core.adapter.persistence.DealEventSourceEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventSourceRepository;
 import dev.hogumeter.core.adapter.persistence.ProductEntity;
 import dev.hogumeter.core.adapter.persistence.ProductRepository;
+import dev.hogumeter.core.adapter.persistence.PurchaseEntity;
+import dev.hogumeter.core.adapter.persistence.PurchaseRepository;
 import dev.hogumeter.core.adapter.persistence.RawDealPost;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.VariantEntity;
@@ -20,6 +22,8 @@ import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.deal.Origin;
 import dev.hogumeter.core.domain.product.DemandAxisMode;
+import dev.hogumeter.core.domain.purchase.Purchase;
+import dev.hogumeter.core.domain.purchase.Snapshot;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -50,6 +54,8 @@ class EvaluateAlertOnDealUseCaseTest {
 	RawDealPostRepository rawPosts;
 	@Autowired
 	AlertPolicyRepository policies;
+	@Autowired
+	PurchaseRepository purchases;
 
 	private long variantId;
 	private int seq;
@@ -93,6 +99,20 @@ class EvaluateAlertOnDealUseCaseTest {
 		DispatchOutcome outcome = useCase.evaluate(variantId, aDealEvent().withPriceFirst(950_000L).build());
 
 		assertThat(outcome).isEqualTo(DispatchOutcome.NO_ALERT); // 950k > 기준가 890k, 목표가 없음
+	}
+
+	@Test
+	void dealBelowActivePurchasePaidPriceFiresPostBuyAlert() {
+		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null)); // 목표가 없음
+		// 활성(OBSERVING) 관찰: 900k에 구매
+		purchases.save(new PurchaseEntity(
+				Purchase.observing(variantId, "256GB", 900_000L, Instant.parse("2026-06-01T00:00:00Z"), 90),
+				Snapshot.unobserved("P=6mo,K=5")));
+
+		// 895k: 기준가 890k보다 높아 평소엔 무알림이나, 내 구매가 900k 하회 → PUR-03 산 뒤 알림
+		DispatchOutcome outcome = useCase.evaluate(variantId, aDealEvent().withPriceFirst(895_000L).build());
+
+		assertThat(outcome).isEqualTo(DispatchOutcome.SENT);
 	}
 
 	@Test

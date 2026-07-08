@@ -17,6 +17,15 @@ import java.util.List;
 public class AlertEvaluator {
 
 	public AlertDecision evaluate(DealEvent deal, BenchmarkView view, AlertPolicy policy, BenchmarkParams params) {
+		return evaluate(deal, view, policy, params, false);
+	}
+
+	/**
+	 * @param paidPriceTriggerFires PUR-03 관찰 트리거 — 활성(OBSERVING) 관찰의 paidPrice를 딜이 하회하면 true.
+	 *     충족 시 서열 최하위 강도 PAID_PRICE를 더한다(다른 트리거와 OR·병기).
+	 */
+	public AlertDecision evaluate(DealEvent deal, BenchmarkView view, AlertPolicy policy, BenchmarkParams params,
+			boolean paidPriceTriggerFires) {
 		long price = deal.priceFirst();
 		EnumSet<AlertIntensity> satisfied = EnumSet.noneOf(AlertIntensity.class);
 
@@ -46,6 +55,10 @@ public class AlertEvaluator {
 					satisfied.add(AlertIntensity.GOOD); // 기준 미확립 폴백
 				}
 			}
+		}
+
+		if (paidPriceTriggerFires) {
+			satisfied.add(AlertIntensity.PAID_PRICE); // PUR-03 산 뒤 알림, 서열 최하위
 		}
 
 		List<String> labels = labels(deal, view);
