@@ -42,6 +42,14 @@ public record DealEvent(
 		return sourceSites.size() >= 2;
 	}
 
+	/**
+	 * docs/03 3-2 lastEvidenceAt — "살아있음의 적극 증거" = max(최신 병합 firstSeen, 마지막 PRICE_CHANGED).
+	 * 병합(lastSeen=max)·가격변화만 반영, 단순 생존 재확인은 미반영. lastSeen 컬럼이 이 의미를 담는다.
+	 */
+	public Instant lastEvidenceAt() {
+		return lastSeen;
+	}
+
 	/** NEW→ACTIVE(수집 진입, 첫 알림 지점). 비허용 시 거부. */
 	public DealEvent activate() {
 		return withStatus(status.transitionTo(DealStatus.ACTIVE));
@@ -57,14 +65,18 @@ public record DealEvent(
 		return withStatus(status.transitionTo(DealStatus.ENDED));
 	}
 
-	/** PRICE_CHANGED — 본문 가격 변화(상태 아님, 이벤트). 대표가(priceFirst)는 불변, 극값·최근가만 갱신. */
-	public DealEvent recordPriceChange(long newPrice) {
+	/**
+	 * PRICE_CHANGED — 본문 가격 변화(상태 아님, 이벤트). 대표가(priceFirst)·발생시각(firstSeen)은 불변,
+	 * 극값·최근가 갱신 + lastEvidenceAt(적극 증거) 전진(at ≥ 기존일 때). docs/03 3-2.
+	 */
+	public DealEvent recordPriceChange(long newPrice, Instant at) {
 		if (status == DealStatus.ENDED) {
 			throw new IllegalStateException("cannot record price change on ENDED deal");
 		}
+		Instant evidence = at.isAfter(lastSeen) ? at : lastSeen;
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst,
 				Math.min(priceMin, newPrice), Math.max(priceMax, newPrice), newPrice,
-				origin, sourceSites, outlierFlag, permanentlyExcluded, status, firstSeen, lastSeen, site, sourceUrl);
+				origin, sourceSites, outlierFlag, permanentlyExcluded, status, firstSeen, evidence, site, sourceUrl);
 	}
 
 	/** 이상치 판정 결과 플래그 부여(BM-05). */

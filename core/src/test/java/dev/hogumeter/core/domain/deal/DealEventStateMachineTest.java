@@ -56,21 +56,36 @@ class DealEventStateMachineTest {
 
 	@Test
 	void priceChangeKeepsStatusAndUpdatesPriceExtremes() {
-		DealEvent deal = aDealEvent().status(DealStatus.VERIFIED)
+		DealEvent deal = aDealEvent().status(DealStatus.VERIFIED).firstSeen("2026-07-01T00:00:00Z")
 				.withPriceFirst(900_000L).withPrices(900_000L, 900_000L, 900_000L).build();
 
-		DealEvent changed = deal.recordPriceChange(850_000L);
+		DealEvent changed = deal.recordPriceChange(850_000L, java.time.Instant.parse("2026-07-05T00:00:00Z"));
 
 		assertThat(changed.status()).isEqualTo(DealStatus.VERIFIED); // 이벤트일 뿐, 상태 불변
 		assertThat(changed.priceLast()).isEqualTo(850_000L);
 		assertThat(changed.priceMin()).isEqualTo(850_000L);
 		assertThat(changed.priceMax()).isEqualTo(900_000L);
 		assertThat(changed.priceFirst()).isEqualTo(900_000L); // 대표가는 불변
+		assertThat(changed.firstSeen()).isEqualTo(java.time.Instant.parse("2026-07-01T00:00:00Z")); // 발생시각 불변
+		assertThat(changed.lastEvidenceAt()).isEqualTo(java.time.Instant.parse("2026-07-05T00:00:00Z")); // 적극 증거 전진
 	}
 
 	@Test
 	void priceChangeOnEndedDealIsRejected() {
-		assertThatThrownBy(() -> aDealEvent().status(DealStatus.ENDED).build().recordPriceChange(800_000L))
+		assertThatThrownBy(() -> aDealEvent().status(DealStatus.ENDED).build()
+				.recordPriceChange(800_000L, java.time.Instant.parse("2026-07-05T00:00:00Z")))
 				.isInstanceOf(IllegalStateException.class);
+	}
+
+	@Test
+	void firstSeenIsInvariantAcrossTransitions() {
+		java.time.Instant occurred = java.time.Instant.parse("2026-06-01T00:00:00Z");
+		DealEvent deal = aDealEvent().status(DealStatus.NEW).firstSeen(occurred).build();
+
+		assertThat(deal.activate().firstSeen()).isEqualTo(occurred);
+		assertThat(deal.activate().verify().firstSeen()).isEqualTo(occurred);
+		assertThat(deal.activate().end().firstSeen()).isEqualTo(occurred);
+		assertThat(deal.flagOutlier(OutlierFlag.LOWER).firstSeen()).isEqualTo(occurred);
+		assertThat(deal.reject().firstSeen()).isEqualTo(occurred);
 	}
 }
