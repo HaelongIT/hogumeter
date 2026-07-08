@@ -3,7 +3,7 @@ package dev.hogumeter.core.domain.benchmark;
 import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.Quantiles;
 import dev.hogumeter.core.domain.deal.DealEvent;
-import dev.hogumeter.core.domain.deal.OutlierFlag;
+import dev.hogumeter.core.domain.dealset.DealSets;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -32,18 +32,15 @@ public class BenchmarkCalculator {
 		Instant now = clock.instant();
 		ZoneId zone = clock.getZone();
 
-		// 2. 이상치·영구제외 선제외 (tier·median보다 항상 먼저; BM-05 사기 기각 딜 복귀 금지)
-		List<DealEvent> outlierFree = candidates.stream()
-				.filter(d -> d.outlierFlag() == OutlierFlag.NONE)
-				.filter(d -> !d.permanentlyExcluded())
-				.toList();
+		// 2. pricingSet 선필터 (docs/03 3-1: 값 통계 표본 = 이상치·영구제외·미상 제외). tier·median보다 항상 먼저.
+		List<DealEvent> pricingSample = DealSets.pricingSet(candidates);
 
 		// 3. 기간 윈도우 + K_FILL 자동확장 (과거 딜이 실제로 추가될 때만 확장 표기)
-		List<DealEvent> sample = within(outlierFree, now, zone, periodMonths);
+		List<DealEvent> sample = within(pricingSample, now, zone, periodMonths);
 		int effectiveMonths = periodMonths;
 		if (sample.size() < params.kFill()) {
 			for (int months = periodMonths + 1; months <= params.expandLimitMonths(); months++) {
-				List<DealEvent> wider = within(outlierFree, now, zone, months);
+				List<DealEvent> wider = within(pricingSample, now, zone, months);
 				if (wider.size() > sample.size()) {
 					sample = wider;
 					effectiveMonths = months;

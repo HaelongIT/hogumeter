@@ -152,3 +152,8 @@ _(이하 2026-07-08 2차 기획 통합에서 등장한 위임 항목. 출처: `w
 - **맥락**: v1.3 C-5는 제외키워드 LABEL도 전 통계 제외(가시성만 차등). `ExcludeKeywordPolicy` 판정·javadoc은 반영했으나, 기준가/알림 표본 조립이 실제로 키워드 히트 딜을 걸러내는 배선은 미구현(딜 제목 접근 필요).
 - **잠정값**: `BenchmarkCalculator`·`GetBenchmarkUseCase`·`EvaluateAlertOnDealUseCase`는 아직 outlier·permanentlyExcluded만 제외. 키워드 제외(EXCLUDE·LABEL 공통)는 표본 미적용. deal_event에 제목 컬럼 없음 → deal_event_source→raw_deal_post.title 조인 또는 딜 생성 시 판정 결과 보존 필요.
 - **재개 트리거**: 제외키워드 정책(alert_policy.exclude_keywords·global_setting)을 표본 적용할 때 — 딜 생성 시 키워드 히트 여부를 deal_event에 보존(V2 컬럼)하거나 조립 시 제목 로드. 세 집합 분리(B-1, M5)와 함께 정합.
+
+## [열림] Q-29. 세 집합 predicate의 미완 components (keyword-miss·선택축값·배치유보·신선도)
+- **맥락**: docs/03 3-1 세 집합 자격 술어 중 DealEvent 필드로 도출 가능한 부분(classified·outlier 3상태·status)만 `DealSets`에 구현. 나머지 components는 상태/데이터 부재로 미포함.
+- **잠정값**: `DealSets.pricingSet/occurrenceSet/signalSet`는 (분류·이상치·ENDED)만 필터. **keyword-miss(Q-28)·선택 축값(C-6, 미선택=범위외)·배치유보(PENDING_BATCH, C-4)·signalSet 신선도(3-2 관측시계)**는 미적용 — 각기 딜 제목/변형축값/배치상태/시간좌표가 필요. signalSet 신선도는 SIG(증분4)가 시간좌표로 추가 필터.
+- **재개 트리거**: 각 component의 상태가 생기면 순차 편입 — 신선도=증분2 시간좌표 후 SIG, 선택축값=C-6(수요축 모델), 배치유보=백필 배치(C-4), keyword=Q-28. `DealSets` 술어에 `&&` 추가.
