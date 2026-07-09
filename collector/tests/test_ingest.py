@@ -107,3 +107,68 @@ def test_accepts_every_status_the_bunjang_parser_can_emit():
     records = to_raw_records(deals, CAPTURED)  # ValueError가 나면 계약 위반
 
     assert [r.status for r in records] == ["ACTIVE", "SOLD_OUT"]
+
+
+# ── SEC-05 크기 상한 ─────────────────────────────────────────────────
+#
+# 크롤링 텍스트는 전부 비신뢰 입력이다(docs/20 SEC-05). 상한 없이 `text`·`jsonb`로 흘려보내면
+# 페이지 하나가 DB와 메모리를 삼킨다. **자르지 않는다** — 잘린 제목은 정상 제목의 얼굴을 한
+# 거짓말이고, 매칭(BM-03)을 조용히 망친다. 거절하고 그 사실을 남긴다.
+
+from collector.pipeline.ingest import MAX_POST_ID, MAX_RAW_BYTES, MAX_TITLE, MAX_URL, oversized
+
+
+def _deal(**over):
+    base = dict(site="ppomppu", post_id="1", title="정상 제목", url="https://x/1")
+    base.update(over)
+    return ParsedDeal(**base)
+
+
+def test_golden_sized_deals_all_pass():
+    """골든 69건의 실측 최대값(title 62 · url 75 · post_id 11 · raw 57B)은 전부 통과해야 한다."""
+    deal = _deal(title="가" * 62, url="https://ppomppu.co.kr/" + "a" * 53, post_id="12345678901")
+
+    assert oversized([deal]) == []
+    assert len(to_raw_records([deal], CAPTURED)) == 1
+
+
+def test_oversized_title_is_rejected_not_truncated():
+    deal = _deal(title="가" * (MAX_TITLE + 1))
+
+    (rejection,) = oversized([deal])
+    assert (rejection.field, rejection.size, rejection.limit) == ("title", MAX_TITLE + 1, MAX_TITLE)
+    assert (rejection.site, rejection.post_id) == ("ppomppu", "1")
+    # 잘린 제목이 DB로 흘러들지 않는다 — 아예 없다.
+    assert to_raw_records([deal], CAPTURED) == []
+
+
+def test_oversized_url_and_post_id_are_rejected():
+    assert oversized([_deal(url="https://x/" + "a" * MAX_URL)])[0].field == "url"
+    assert oversized([_deal(post_id="9" * (MAX_POST_ID + 1))])[0].field == "post_id"
+
+
+def test_oversized_raw_is_measured_in_bytes_not_characters():
+    """한글은 UTF-8에서 3바이트다. 글자 수로 재면 상한이 3배로 뚫린다."""
+    deal = _deal(raw={"body": "가" * (MAX_RAW_BYTES // 3)})
+
+    (rejection,) = oversized([deal])
+    assert rejection.field == "raw"
+    assert rejection.size > MAX_RAW_BYTES
+
+
+def test_a_single_oversized_deal_does_not_drop_the_whole_batch():
+    """놓침 > 오알림(원칙 3). 한 건이 비대해도 나머지 68건은 들어간다."""
+    good = _deal(post_id="1")
+    bad = _deal(post_id="2", title="가" * (MAX_TITLE + 1))
+
+    records = to_raw_records([good, bad], CAPTURED)
+
+    assert [r.post_id for r in records] == ["1"]
+    assert [r.field for r in oversized([good, bad])] == ["title"]
+
+
+def test_oversized_reports_the_first_offending_field_only():
+    """왜 거절됐는지 한 가지 이유만 있으면 된다 — 사람이 원문을 보면 된다."""
+    deal = _deal(title="가" * (MAX_TITLE + 1), url="https://x/" + "a" * MAX_URL)
+
+    assert len(oversized([deal])) == 1

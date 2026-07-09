@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 
 from .db.raw_deal_sink import RawDealSink, connect_from_env
 from .observability import counters, event
-from .pipeline.ingest import to_raw_records
+from .pipeline.ingest import oversized, to_raw_records
 from .scheduler.drift import DriftHistory, DriftPolicy, observe
 from .scheduler.fetcher import HttpFetcher, RobotsGate, urllib_opener
 from .scheduler.loop import run_cycle
@@ -87,11 +87,18 @@ def main(
         result = run_cycle(specs, states, now, fetch, BACKOFF)
         states = result.states
 
+        # SEC-05: 상한을 넘긴 딜은 적재하지 않는다. 조용히 버리지 않고 무엇을 왜 버렸는지 남긴다.
+        skipped = oversized(result.deals)
+        for violation in skipped:
+            _log("oversized", now, site=violation.site, post_id=violation.post_id,
+                 field=violation.field, size=violation.size, limit=violation.limit)
+
         # sink가 있으면 0도 센다 — "딜이 0건이라 안 썼다"와 "적재를 못 했다"는 다른 사건이고,
         # 후자는 written 부재 + sink_error로 나타난다. 카운터에서 0을 생략하지 않는다(OBS-02).
         written = 0 if sink is not None else None
-        if sink is not None and result.deals:
-            records = to_raw_records(result.deals, now)
+        # 상한에 다 걸려 남은 레코드가 없으면 sink를 부르지 않는다(빈 배치는 DB에 갈 일이 없다).
+        records = to_raw_records(result.deals, now) if sink is not None else []
+        if records:
             try:
                 written = sink.upsert_all(records)
                 sink_failures = 0
@@ -104,7 +111,7 @@ def main(
                      dropped=len(records), consecutive=sink_failures)
 
         # written은 실패 시 부재다. "0건 적재"와 "적재 못 함"은 다른 사건이다.
-        _log("cycle", now, written=written, **counters(result))
+        _log("cycle", now, written=written, skipped=len(skipped), **counters(result))
 
         for alert in result.alerts:
             _log("alert", alert.at, kind="blocked", site=alert.site, reason=alert.reason)

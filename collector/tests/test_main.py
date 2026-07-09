@@ -336,3 +336,57 @@ def test_write_failure_is_distinguishable_from_writing_zero(monkeypatch, capsys)
     cycle = next(e for e in events if e["event"] == "cycle")
     assert "written" not in cycle  # 못 썼다 (0을 썼다가 아니다)
     assert any(e["event"] == "sink_error" for e in events)
+
+
+LONG_TITLE = "가" * 400 + " (1,000원/무료)"  # 파서는 가격 표기까지 제목에 담는다
+
+
+class OversizedDealOpener(RecordingOpener):
+    """뽐뿌 페이지가 비정상적으로 긴 제목을 낸다(SEC-05: 크롤링 텍스트는 비신뢰 입력)."""
+
+    def __call__(self, url: str):
+        self.calls.append(url)
+        if url.endswith("/robots.txt"):
+            return (404, b"")
+        if "ppomppu" in url:
+            long_title = LONG_TITLE
+            row = (
+                '<table><tr class="baseList bbs_new1">'
+                '<td class="baseList-numb">1</td>'
+                f'<td><a class="baseList-title" href="view.php?id=ppomppu&no=1">{long_title}</a></td>'
+                '<td class="baseList-rec">3 - 0</td>'
+                "</tr></table>"
+            )
+            return (200, row.encode("cp949"))
+        return (200, b"<html></html>")
+
+
+def test_oversized_deals_are_skipped_and_the_loss_is_logged(monkeypatch, capsys):
+    """조용히 버리지 않는다 — 무엇을 왜 버렸는지 이벤트로 남긴다(SEC-05)."""
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    sink = FakeSink()
+
+    main(opener=OversizedDealOpener(), sink=sink, sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
+
+    out = capsys.readouterr().out
+    events = _events(out)
+    (skipped,) = [e for e in events if e["event"] == "oversized"]
+    assert skipped["field"] == "title"
+    assert skipped["limit"] == 300 and skipped["size"] == len(LONG_TITLE)
+    assert (skipped["site"], skipped["post_id"]) == ("ppomppu", "1")
+
+    # 잘린 제목이 DB로 흘러들지 않는다 — 배치 자체가 비어 sink를 부르지 않는다.
+    assert sink.batches == []
+    cycle = next(e for e in events if e["event"] == "cycle")
+    assert cycle["deals"] == 1 and cycle["skipped"] == 1 and cycle["written"] == 0
+    _assert_console_safe(out)
+
+
+def test_normal_cycle_reports_zero_skipped(monkeypatch, capsys):
+    """카운터에서 0을 생략하지 않는다(OBS-02)."""
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+
+    main(opener=OneDealOpener(), sink=FakeSink(), sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
+
+    cycle = next(e for e in _events(capsys.readouterr().out) if e["event"] == "cycle")
+    assert cycle["skipped"] == 0 and cycle["written"] == 1
