@@ -166,4 +166,10 @@ public class DealEventEntity {
 	public void setOutlierFlag(OutlierFlag outlierFlag) {
 		this.outlierFlag = outlierFlag;
 	}
+
+	/** Q-27 상태변화 재처리 — status·lastSeen만 갱신(가격·이상치·firstSeen 불변). */
+	public void applyStatusChange(DealStatus status, Instant lastSeen) {
+		this.status = status;
+		this.lastSeen = lastSeen;
+	}
 }
