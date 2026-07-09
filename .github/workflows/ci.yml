@@ -67,6 +67,17 @@ jobs:
       - name: Typecheck + build
         run: npm run build
 
+  # 스크립트는 이제 운영을 떠받친다(백업·복원·롤백·오프사이트·스모크·가드 훅).
+  # `--severity=warning`: style/info는 걸러 신호 대 잡음을 지킨다. CRLF 셰뱅도 여기서 죽는다.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable \
+            --severity=warning --shell=bash scripts/*.sh .claude/hooks/*.sh .githooks/pre-commit
+
   # REL-05: 롤백 스크립트는 사고가 나야 처음 실행된다. 모든 V에 짝이 되는 R이 있는지,
   # 역순 적용이 스키마를 비우는지, 순서를 어기면 실패하는지를 일회용 컨테이너에서 확인한다.
   rollback:

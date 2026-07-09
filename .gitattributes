@@ -1,0 +1,22 @@
+# 줄끝(EOL) 정책. 이 파일이 없으면 `core.autocrlf`(사람마다 다름)가 진실을 정한다.
+#
+# 실측(2026-07-09): autocrlf=true인 Windows 워킹트리에서
+#   - collector/tests/fixtures/bunjang/find_v2_iphone.json : blob 33,439B → 워킹트리 34,422B (+983 CR)
+#   - collector/tests/fixtures/fmkorea/list_normal.html    : blob 85,462B → 워킹트리 85,840B (+378 CR)
+# 즉 "바이트 그대로 보관한 golden"을 Windows와 리눅스 CI가 **서로 다른 바이트로** 읽고 있었다.
+# 파서가 공백에 관대해서 드러나지 않았을 뿐이다.
+
+# 저장소 안(blob)은 언제나 LF. 워킹트리도 LF로 내려준다 — 플랫폼이 사실을 바꾸지 못하게.
+* text=auto eol=lf
+
+# golden fixture는 **바이트 그대로**다. 텍스트로 취급하지 않는다 = 어떤 변환도 하지 않는다.
+# (뽐뿌 응답은 cp949 바이트다. 줄끝을 손대면 그건 우리가 받은 응답이 아니다.)
+collector/tests/fixtures/** -text
+
+# 실행되는 것들은 LF가 강제되어야 한다. CRLF 셰뱅은 리눅스에서 죽는다.
+*.sh text eol=lf
+.githooks/* text eol=lf
+.claude/hooks/* text eol=lf
+
+# DDL·마이그레이션은 컨테이너 안 psql로 그대로 흘러 들어간다.
+*.sql text eol=lf

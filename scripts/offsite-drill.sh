@@ -91,7 +91,7 @@ gzip -t "$back" || fail "gzip 무결성 검사 실패"
 
 echo "--- 3) 스위치가 없으면 조용히 성공하지 않는다 ---"
 # BACKUP_S3_BUCKET을 비우면 업로드를 건너뛰되, "오프사이트 없음"을 말해야 한다.
-skipped=$(BACKUP_S3_BUCKET= bash "$root/scripts/offsite-upload.sh" "$dump")
+skipped=$(BACKUP_S3_BUCKET='' bash "$root/scripts/offsite-upload.sh" "$dump")
 echo "$skipped" | grep -q "미설정" || fail "오프사이트 미설정 사실을 알리지 않는다"
 
 echo "--- 4) 크기 불일치를 실제로 잡아내는가 (검증기 검증) ---"

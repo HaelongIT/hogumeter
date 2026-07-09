@@ -241,3 +241,11 @@
 - 규칙화된 교훈 (원인→해결): **오프셋을 문자열에 박아 넣는다**(`${date}T23:59:00+09:00`). 그러면 어느 머신에서 돌려도 같은 Instant다. 그리고 테스트는 "기대값과 같다"만이 아니라 **"naive 파싱과는 다르다"**를 함께 단언한다(`expect(built).not.toBe(new Date(date).toISOString())`) — 우연히 같아지는 구현을 걸러낸다.
 - 부수: 컴포넌트를 다른 화면에 합성하자 기존 테스트 하나가 깨졌다. `PurchasePanel`이 스텁되지 않은 `listPurchases`를 불러 **두 번째 `role="alert"`**를 만든 것이다. 합성은 부모의 테스트 하네스도 넓힌다 — 자식이 무엇을 부르는지가 계약의 일부다.
 - 관련 테스트: `web/src/purchase/buildPurchaseCommand.test.ts`, `scripts/smoke.sh` 5-2단계(구매 POST → `OBSERVING`·`NO_ACTIVE_DEAL`·`cheaperChanceCount:0` 왕복).
+
+### 2026-07-09 "바이트 그대로"라고 적어둔 golden을 Windows와 CI가 다른 바이트로 읽고 있었다
+- 맥락: `.gitattributes`가 없었고 `core.autocrlf=true`였다. golden fixture 문서에는 "핫딜 사이트의 응답을 **바이트 그대로** 보관한다"라고 적혀 있었다.
+- 증상(실측): 워킹트리 vs blob — `bunjang/find_v2_iphone.json` 34,422B vs 33,439B(**+983 CR**), `fmkorea/list_normal.html` 85,840B vs 85,462B(**+378 CR**). 체크아웃이 LF→CRLF로 부풀린 것이다. 같은 파서 테스트가 **Windows에선 CRLF, 리눅스 CI에선 LF**를 읽고 있었고, 파서가 공백에 관대해 아무도 몰랐다. 뽐뿌·루리웹은 blob에 홑 CR이 섞여 있어(21·777개) git이 변환을 건너뛰었다 — 우연히 살아남은 것이다.
+- 원인: 줄끝은 **저장소가 정하지 않으면 각자의 `core.autocrlf`가 정한다.** 그러면 "저장소가 진실"이라는 전제가 무너진다. 커밋 시 CRLF→LF 정규화도 함께 일어나므로, 원본이 CRLF였다면 골든은 채취 순간 이미 원본이 아니었다(복구 불가 — 지금 blob이 정본).
+- 규칙화된 교훈 (원인→해결): **바이트가 의미인 파일은 `-text`로 못박는다**(`collector/tests/fixtures/** -text`). 나머지는 `* text=auto eol=lf`로 플랫폼이 사실을 바꾸지 못하게 한다. 실행되는 것(`*.sh`, 훅)은 CRLF 셰뱅이 리눅스에서 죽으므로 `eol=lf`가 필수다. 그리고 **그 장치가 도는지 아무도 확인하지 않는다** — golden의 sha256을 테스트로 동결하고, 바이트 하나를 바꿔 실제로 FAIL하는지 봤다.
+- 곁가지: shellcheck를 붙이니 첫 출력이 `SC1017 literal carriage return` 도배였다. 린터가 못 도는 이유가 곧 버그의 증거였다. CRLF를 걷어내자 실질 지적은 `SC1007`(빈 env 접두사) 하나뿐이었고, 이제 CI `lint` 잡이 `--severity=warning`으로 상시 검사한다.
+- 관련 테스트: `collector/tests/test_fixture_bytes.py`(해시 동결 + 미등록 fixture 탐지, 음성 확인 완료), CI `lint` 잡, `.gitattributes`.
