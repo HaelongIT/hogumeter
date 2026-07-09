@@ -249,3 +249,12 @@
 - 규칙화된 교훈 (원인→해결): **바이트가 의미인 파일은 `-text`로 못박는다**(`collector/tests/fixtures/** -text`). 나머지는 `* text=auto eol=lf`로 플랫폼이 사실을 바꾸지 못하게 한다. 실행되는 것(`*.sh`, 훅)은 CRLF 셰뱅이 리눅스에서 죽으므로 `eol=lf`가 필수다. 그리고 **그 장치가 도는지 아무도 확인하지 않는다** — golden의 sha256을 테스트로 동결하고, 바이트 하나를 바꿔 실제로 FAIL하는지 봤다.
 - 곁가지: shellcheck를 붙이니 첫 출력이 `SC1017 literal carriage return` 도배였다. 린터가 못 도는 이유가 곧 버그의 증거였다. CRLF를 걷어내자 실질 지적은 `SC1007`(빈 env 접두사) 하나뿐이었고, 이제 CI `lint` 잡이 `--severity=warning`으로 상시 검사한다.
 - 관련 테스트: `collector/tests/test_fixture_bytes.py`(해시 동결 + 미등록 fixture 탐지, 음성 확인 완료), CI `lint` 잡, `.gitattributes`.
+
+### 2026-07-09 트리 전체에 `tr -d '\r'`를 돌려 gradle-wrapper.jar를 160바이트 깎았다
+- 맥락: `.gitattributes`를 넣어 줄끝을 못박은 뒤, **워킹트리에 이미 남아 있던 CRLF도 지금 걷어내자**고 판단했다. `git ls-files`를 돌며 CR이 있는 파일마다 `tr -d '\r'`을 먹였다. fixture 디렉토리만 제외했다.
+- 증상: 236개 파일이 바뀌었고 그중 `core/gradle/wrapper/gradle-wrapper.jar`가 43,764 → **43,604바이트**가 됐다. 바이너리 안의 `0x0D`는 줄끝이 아니라 데이터다. `core/.gitattributes`가 `*.jar binary`라고 선언해 뒀는데, 내 루프는 그걸 읽지 않았다.
+- 원인 둘: ① **git의 속성 체계를 우회해 파일을 직접 건드렸다.** 텍스트/바이너리 판정은 git이 이미 알고 있고 `.gitattributes`에 적혀 있는데, `tr`은 아무것도 모른다. ② 애초에 **불필요한 작업**이었다. `git diff`는 그 235개 텍스트 파일에 대해 "차이 없음"이라 말했다 — blob은 이미 LF였고 워킹트리 CRLF는 clean 필터가 흡수하고 있었다. 고칠 게 없는데 고치려다 부쉈다.
+- 복구: 손상은 jar 하나뿐임을 `git diff --numstat`으로 확인(나머지는 stat 캐시만 흔들림)하고 그 한 파일만 `git checkout --`으로 되살렸다. 검증은 "바이트가 blob과 같다"에서 멈추지 않고 **zip 엔트리 33개·`GradleWrapperMain` 존재·`./gradlew --version` 실행**까지 봤다. 인덱스는 `git add --renormalize .`로 정리(스테이징된 내용 변화 0).
+- 규칙화된 교훈 (원인→해결): **저장소 전체를 훑는 텍스트 변환을 직접 하지 않는다.** 줄끝은 `.gitattributes` + `git add --renormalize` + 체크아웃에 맡긴다 — git은 무엇이 바이너리인지 안다. 손으로 돌려야 한다면 **대상을 화이트리스트로 열거**하고(`*.sh` 등) 절대 `git ls-files` 전체를 먹이지 않는다. 그리고 파괴적 일괄 작업 전에 **"정말 고칠 게 있는가"를 `git diff`로 먼저 묻는다.**
+- 곁가지: 권한 가드가 `git checkout -- .`과 `git ls-files -m | xargs git checkout --`을 **막았다.** 그 덕에 "복구"라는 이름으로 트리 전체를 덮어쓰는 대신, 실제 손상 파일을 특정하고 한 개만 되돌렸다. 광범위한 되돌리기도 파괴다.
+- 관련 테스트: 없음(작업 절차). `collector/tests/test_fixture_bytes.py`가 golden 쪽 재발은 잡는다.
