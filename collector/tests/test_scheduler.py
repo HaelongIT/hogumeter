@@ -153,6 +153,8 @@ def _spec(name: str = "ruliweb", kind: SiteKind = SiteKind.BOARD) -> SiteSpec:
         name=name,
         kind=kind,
         interval=timedelta(seconds=60),
+        url=f"https://example.test/{name}",
+        encoding="utf-8",
         parse=lambda body: [_deal(name)],
     )
 
@@ -205,7 +207,12 @@ def test_parser_failure_is_isolated_as_transient():
         raise ValueError("셀렉터 불일치")
 
     spec = SiteSpec(
-        name="ruliweb", kind=SiteKind.BOARD, interval=timedelta(seconds=60), parse=exploding_parse
+        name="ruliweb",
+        kind=SiteKind.BOARD,
+        interval=timedelta(seconds=60),
+        url="https://example.test/ruliweb",
+        encoding="utf-8",
+        parse=exploding_parse,
     )
     fetch = FakeFetcher({"ruliweb": FetchResult(status_code=200, body="<html/>")})
 
@@ -250,6 +257,8 @@ def test_configured_interval_below_floor_is_clamped_in_cycle():
         name="ruliweb",
         kind=SiteKind.BOARD,
         interval=timedelta(seconds=1),  # 하한 위반 시도
+        url="https://example.test/ruliweb",
+        encoding="utf-8",
         parse=lambda body: [],
     )
     fetch = FakeFetcher({"ruliweb": FetchResult(status_code=200, body="")})

@@ -32,11 +32,17 @@ class FetchResult:
 
 @dataclass(frozen=True)
 class SiteSpec:
-    """폴링 대상 1개. parse는 순수 파서(html/json → DTO)."""
+    """폴링 대상 1개. parse는 순수 파서(html/json → DTO).
+
+    url·encoding에 기본값을 주지 않는다 — "URL 없는 스펙"이 조용히 만들어지면 fetcher가 빈 주소를 친다.
+    encoding은 사이트마다 다르다(뽐뿌는 cp949, docs/98).
+    """
 
     name: str
     kind: SiteKind
     interval: timedelta
+    url: str
+    encoding: str
     parse: Callable[[str], list[ParsedDeal]]
 
 
