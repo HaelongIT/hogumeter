@@ -106,7 +106,7 @@ def advance(
     interval: timedelta,
     policy: BackoffPolicy,
 ) -> SiteState:
-    """폴링 1회 결과를 상태에 반영. stopped는 종착 상태(사람이 풀기 전까지 — Q-39)."""
+    """폴링 1회 결과를 상태에 반영. stopped는 종착 상태 — 재개 경로는 미결(decisions-needed D-3)."""
     if state.stopped:
         return state
     if outcome is Outcome.OK:
