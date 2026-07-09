@@ -153,6 +153,7 @@ _(이하 2026-07-08 2차 기획 통합에서 등장한 위임 항목. 출처: `w
 - **잠정값**: 슬라이스 3은 `ingestPending()` 1회 처리 기준(테스트도 1회). 스케줄러 반복 실행 시 애매/스킵 글 재처리는 미해결. 이상치 판정(BM-05)·알림(AL) 연결은 **슬라이스 4로 재배치**(소비처와 응집).
 - **재개 트리거**: 스케줄러 배선(반복 폴링) 착수 시 — raw_deal_post에 처리 마커(예: processed_at, V2 컬럼) 추가 또는 처리 이력 테이블로 멱등 보장.
 - **진행(2026-07-09)**: 폴링 루프(`scheduler.loop.run_cycle`)는 생겼으나 **DB 배선이 없어 트리거는 아직 미발동**. 반복 폴링이 실제로 `raw_deal_post`를 쓰기 시작하는 시점(Q-36)에 이 항목을 처리한다 — 그때까지 애매/스킵 글 재처리 문제는 그대로 열려 있다.
+- **⚠️ 트리거 발동(2026-07-09, Q-36 해소)**: collector가 이제 실제로 `raw_deal_post`에 **업서트**한다. 그래서 문제가 하나 커졌다 — 품절·가격변경이 `raw_deal_post`엔 반영되지만, 그 글에 이미 `deal_event_source` 링크가 있으면 **`findUnprocessed()`가 걸러내 core가 재처리하지 않는다.** 즉 **상태변화가 `deal_event`까지 도달하지 못한다**(BM-01 AC-2의 절반이 끊긴다). 애매/스킵 글 재처리 여지와 별개로 이게 더 시급하다. 처리 마커(`processed_at`) 대신 **`captured_at` 갱신을 감지하는 재처리 조건**이 필요할 수 있다(예: `deal_event.last_seen < raw.captured_at`). core 소유 영역이라 상대와 조율 대상.
 
 ## [열림] Q-28. C-5(⚠️라벨=전 통계 제외) 표본 조립 배선은 후속
 - **맥락**: v1.3 C-5는 제외키워드 LABEL도 전 통계 제외(가시성만 차등). `ExcludeKeywordPolicy` 판정·javadoc은 반영했으나, 기준가/알림 표본 조립이 실제로 키워드 히트 딜을 걸러내는 배선은 미구현(딜 제목 접근 필요).
@@ -174,12 +175,19 @@ _(이하 2026-07-08 2차 기획 통합에서 등장한 위임 항목. 출처: `w
 - **잠정값**: `PurchaseTriggers.enabledFor`가 CLOSED에 RELATIVE 포함. 실제 발화 판정(`paidPriceTriggerFires` 같은 술어)은 미구현 — 상대평가는 "관찰 전·CLOSED만"의 의미(구매 전 비교, 종료 후 회고 비교)가 use-case 문맥(다른 활성/종료 관찰 집합)에 의존.
 - **재개 트리거**: PUR 관찰 문맥(PUR-05)·AL 통합 배선 시 — 상대평가 대상(다른 관찰) 정의 확정 후 술어 구현.
 
-## [열림] Q-36. collector DB 적재기(psycopg 어댑터) — 신규 의존·업서트 갱신 정책
+_(Q-36. collector DB 적재기 — **해소됨 2026-07-09**: `db/raw_deal_sink.py`. 신규 의존 승인(런타임 `psycopg[binary]`, 테스트 `testcontainers[postgres]`). **업서트 정책 확정**: `(site, post_id)` 충돌 시 변화 필드 전부 갱신(url·title·captured_at·status·headline_price·reaction_score·raw), `posted_at`만 `COALESCE`로 **불변 + 후채움**(C-2). 통합 테스트는 미러가 아니라 **core의 `V1__init.sql`을 직접 적용**해 계약을 검증한다. decision-log 참조. ⚠️ **커서 영속화는 별건** — D-3 선결. 여기서 제거.)_
+
+<details><summary>Q-36 원문 (해소 전 기록 보존)</summary>
+
+## [해소] Q-36. collector DB 적재기(psycopg 어댑터) — 신규 의존·업서트 갱신 정책
 - **맥락**: `pipeline/ingest.py`가 `RawDealRecord`(계약 형태)까지는 순수하게 만든다. 남은 것은 이를 `raw_deal_post`에 실제로 쓰는 **IO 어댑터**. core의 `RawDealPostUpserter`가 권위 있는 의미를 준다 — (site, post_id) 자연키로 **업서트**(있으면 갱신, 없으면 삽입, 상태변화 기존행 반영). collector는 현재 DB 의존이 **전무**(순수 파서·파이프라인).
 - **잠정값(미착수)**: 아직 안 만듦. 두 가지가 걸려 있어 자율 확정 대신 표시: (1) **신규 의존** psycopg(런타임) + **실 멱등 테스트**용 Testcontainers-python(테스트) — 수집기 첫 DB 발자국. (2) **업서트 갱신 필드 정책**: core 업서터는 충돌 시 url·title·captured_at·status만 refresh하나, collector 레코드는 headline_price·posted_at·reaction_score·raw도 보유 → 이들을 재폴링 때 **갱신할지/삽입 때만 쓸지** 미정(posted_at은 발생시각이라 불변이 자연스러움, C-2). 테스트용 raw_deal_post DDL은 계약 미러(Flyway는 core 단독 소유라 collector는 마이그레이션 금지).
 - **재개 트리거**: psycopg·Testcontainers-python 도입 승인 + 업서트 필드 정책 확정 시 — `INSERT ... ON CONFLICT (site, post_id) DO UPDATE`로 core 업서터 의미와 정렬해 구현, Testcontainers-python 멱등 통합 테스트(재삽입 행 불변·상태전이 반영). 이후 scheduler(폴링 루프·백오프·커서)는 실 네트워크라 fetch는 정지조건, 루프/백오프 로직만 fake fetcher로 테스트.
 - **진행(2026-07-09)**: 위 문장의 **scheduler 부분은 완료**(`collector/src/collector/scheduler/` — 루프·백오프·커서 순수 구현, fake fetcher 테스트 GREEN). 남은 것은 이 항목의 본체인 **적재 IO**(psycopg 의존 + 업서트 필드 정책)와 실 HTTP fetcher. ⚠️ 커서 영속화를 시작하기 전에 **decisions-needed D-3(차단 사이트 재개 경로)을 먼저 결정**해야 한다 — 안 그러면 차단당한 사이트가 디스크에 영구 중지로 남는다.
-- **진행(2026-07-09, 결선 완료)**: **실 HTTP fetcher도 완료**(`scheduler/fetcher.py`, stdlib `urllib` — 신규 의존 0). 레지스트리(`sites.py`)·robots 게이트(Q-38)·종단 스모크(`test_pipeline_smoke.py`)까지 붙어 **fixture 바이트 → fetch → 디코딩 → 파싱 → 정규화 → `RawDealRecord`가 관통**한다. `__main__`은 `COLLECTOR_ALLOW_NETWORK=1` opt-in으로만 실 폴링한다. **이제 남은 건 이 항목 하나 — DB 싱크**(psycopg 승인 + 업서트 필드 정책 + D-3 선결). 그게 붙는 순간 collector가 실제로 수집한다.
+- **진행(2026-07-09, 결선 완료)**: **실 HTTP fetcher도 완료**(`scheduler/fetcher.py`, stdlib `urllib` — 신규 의존 0). 레지스트리(`sites.py`)·robots 게이트(Q-38)·종단 스모크(`test_pipeline_smoke.py`)까지 붙어 **fixture 바이트 → fetch → 디코딩 → 파싱 → 정규화 → `RawDealRecord`가 관통**한다. `__main__`은 `COLLECTOR_ALLOW_NETWORK=1` opt-in으로만 실 폴링한다.
+- **해소(2026-07-09)**: `db/raw_deal_sink.py` 완성. 남은 것은 **커서 영속화(REL-03)뿐이고 그건 D-3 선결**이라 이 항목과 분리한다.
+
+</details>
 
 ## [열림] Q-35. PUR-03 알림 상호작용/게이팅 정책 미확정 (paidPrice 트리거만 배선)
 - **맥락**: `EvaluateAlertOnDealUseCase`가 활성(OBSERVING) 관찰의 `paidPrice` 하회 트리거만 AL에 가산(서열 최하위 PAID_PRICE). PUR-03 표의 나머지 상호작용은 **정책 미확정**이라 손대지 않음: (a) variant 등록 알림(🔥/목표가)이 구매 관찰 상태에 의해 **게이팅되는지**(예: ARCHIVED면 억제), (b) variant 등록 알림과 구매 관찰 알림의 **결합/OR 관계**, (c) 상대평가(Q-31). 현 구현은 등록 알림은 그대로 두고 paidPrice만 순수 가산 — 되돌리기 쉬운 보수적 선택.

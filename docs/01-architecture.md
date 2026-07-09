@@ -56,7 +56,7 @@ collector/
 - 사이트 구조 변경 감지: 파싱 성공률이 임계 이하로 떨어지면 텔레그램 관리 알림 (20 문서).
 
 ## DB 계약 (collector ↔ core)
-- `raw_deal_post`: collector가 insert-only. (site, post_id) UNIQUE로 멱등. core가 소비 후 매칭·병합.
+- `raw_deal_post`: collector가 `(site, post_id)` 자연키로 **업서트**. 재수집에 행 수 불변(REL-01 멱등), **상태·가격·추천수 변화는 기존 행에 반영**(BM-01 AC-2 — insert-only면 품절을 영원히 모른다). `posted_at`은 글의 발생 시각이라 **불변**이되 처음에 못 얻었으면 나중에 채운다(v1.3 C-2). core가 소비 후 매칭·병합. **[2026-07-09 정정]** 이전 서술("insert-only")은 core의 `RawDealPostUpserter`·`RawDealPostUpsertTest`가 단언하는 갱신 의미와 모순이었다.
 - `used_listing_observation`: 번개 폴링 관측 insert-only. core가 생애주기 판정.
 - 스키마 진화는 Flyway 단독 소유(core). collector는 마이그레이션 금지, 계약 테이블만 접근.
 

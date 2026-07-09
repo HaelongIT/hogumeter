@@ -31,8 +31,7 @@ def test_refuses_to_touch_network_without_optin(monkeypatch, capsys):
     assert exit_code == 0
     assert opener.calls == []  # 단 한 번도 나가지 않았다
     out = capsys.readouterr().out
-    assert ALLOW_NETWORK_ENV in out
-    assert "Q-36" in out  # DB 적재 미구현을 숨기지 않는다
+    assert ALLOW_NETWORK_ENV in out  # 켜는 방법을 알려준다
 
 
 def test_wrong_optin_value_is_still_a_refusal(monkeypatch):
@@ -89,6 +88,75 @@ def test_refusal_message_is_console_encodable(monkeypatch, capsys):
     main(opener=RecordingOpener(), sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
 
     _assert_console_safe(capsys.readouterr().out)
+
+
+# ── DB 적재 배선 (실 DB 없이 검증) ──────────────────────────────────────
+
+
+class FakeSink:
+    def __init__(self):
+        self.batches: list[list] = []
+
+    def upsert_all(self, records):
+        self.batches.append(records)
+        return len(records)
+
+
+class OneDealOpener(RecordingOpener):
+    """뽐뿌 페이지만 딜 1건짜리 최소 HTML로 응답한다."""
+
+    _ROW = (
+        '<table><tr class="baseList bbs_new1">'
+        '<td class="baseList-numb">1</td>'
+        '<td><a class="baseList-title" href="view.php?id=ppomppu&no=1">벨트 (1,000원/무료)</a></td>'
+        '<td class="baseList-rec">3 - 0</td>'
+        "</tr></table>"
+    )
+
+    def __call__(self, url: str):
+        self.calls.append(url)
+        if url.endswith("/robots.txt"):
+            return (404, b"")
+        if "ppomppu" in url:
+            return (200, self._ROW.encode("cp949"))
+        return (200, b"<html></html>")
+
+
+def test_deals_are_upserted_when_a_sink_is_configured(monkeypatch):
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    sink = FakeSink()
+
+    main(
+        opener=OneDealOpener(), sink=sink, sleep=lambda _: None, clock=lambda: NOW, max_cycles=1
+    )
+
+    assert len(sink.batches) == 1
+    (record,) = sink.batches[0]
+    assert (record.site, record.post_id) == ("ppomppu", "1")
+    assert record.captured_at == NOW  # 폴링 시각이 그대로 captured_at
+    assert record.headline_price == 1_000
+
+
+def test_no_sink_means_no_upsert_and_the_limitation_is_stated(monkeypatch, capsys):
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    monkeypatch.delenv("DB_HOST", raising=False)
+
+    main(opener=OneDealOpener(), sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
+
+    out = capsys.readouterr().out
+    assert "DB 미설정" in out  # 숨기지 않는다
+    assert "적재:" not in out
+    _assert_console_safe(out)
+
+
+def test_empty_cycle_does_not_touch_the_sink(monkeypatch):
+    """딜이 0건이면 빈 배치를 DB에 보내지 않는다."""
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    sink = FakeSink()
+
+    main(opener=RecordingOpener(), sink=sink, sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
+
+    assert sink.batches == []
 
 
 def test_alert_and_summary_output_are_console_encodable(monkeypatch, capsys):

@@ -1,10 +1,13 @@
-"""컨테이너 엔트리포인트 — 레지스트리·fetcher·스케줄러를 조립한다.
+"""컨테이너 엔트리포인트 — 레지스트리·fetcher·스케줄러·적재기를 조립한다.
 
-**실 네트워크 폴링은 기본 비활성이다.** CLAUDE.md의 정지조건("실사이트 크롤링")을 산문이 아니라
-환경변수 게이트로 강제한다 — `COLLECTOR_ALLOW_NETWORK=1` 없이는 opener를 한 번도 호출하지 않는다.
+두 개의 독립된 스위치가 있다:
 
-**DB 적재는 아직 없다**(docs/91 Q-36: psycopg 의존 승인 + decisions-needed D-3 선결).
-그래서 opt-in해도 수집 결과는 화면 출력뿐이다 — 1차 검증용 스모크로 쓴다.
+1. **실 네트워크 폴링**은 기본 비활성. CLAUDE.md의 정지조건("실사이트 크롤링")을 산문이 아니라
+   환경변수 게이트로 강제한다 — `COLLECTOR_ALLOW_NETWORK=1` 없이는 opener를 한 번도 호출하지 않는다.
+2. **DB 적재**는 `DB_HOST`가 있을 때만. 없으면 수집 결과를 화면에만 출력한다(그 사실을 숨기지 않는다).
+
+커서(사이트별 폴링 상태)는 아직 영속화하지 않는다 — 차단당한 사이트의 재개 경로가 미결이라
+(`decisions-needed` D-3) 지금 디스크에 남기면 영구 중지가 된다. 재시작하면 상태가 초기화된다.
 """
 
 from __future__ import annotations
@@ -13,6 +16,8 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 
+from .db.raw_deal_sink import RawDealSink, connect_from_env
+from .pipeline.ingest import to_raw_records
 from .scheduler.fetcher import HttpFetcher, RobotsGate, urllib_opener
 from .scheduler.loop import CycleResult, run_cycle
 from .scheduler.policy import BackoffPolicy
@@ -31,6 +36,7 @@ TICK_SECONDS = 15
 def main(
     *,
     opener=None,
+    sink=None,
     sleep=time.sleep,
     clock=lambda: datetime.now(timezone.utc),
     max_cycles: int | None = None,
@@ -38,21 +44,28 @@ def main(
     if os.environ.get(ALLOW_NETWORK_ENV) != "1":
         print(
             f"collector: 실 네트워크 폴링은 기본 비활성입니다(정지조건).\n"
-            f"  켜려면 {ALLOW_NETWORK_ENV}=1 로 실행하세요.\n"
-            f"  주의: DB 적재는 아직 구현되지 않았습니다(docs/91 Q-36). 결과는 화면 출력뿐입니다."
+            f"  켜려면 {ALLOW_NETWORK_ENV}=1 로 실행하세요."
         )
         return 0
 
     fetch = _build_fetcher(opener or urllib_opener)
+    sink = sink or _build_sink()
     specs = hotdeal_boards()
     states: dict = {}
     cycles = 0
 
     print(f"collector: {len(specs)}개 게시판 폴링 시작 (게시판당 1req/min 하한, robots 존중)")
+    if sink is None:
+        print("  DB 미설정(DB_HOST 없음): 수집 결과를 적재하지 않고 화면에만 출력합니다.")
+
     while max_cycles is None or cycles < max_cycles:
-        result = run_cycle(specs, states, clock(), fetch, BACKOFF)
+        now = clock()
+        result = run_cycle(specs, states, now, fetch, BACKOFF)
         states = result.states
         _report(result)
+        if sink is not None and result.deals:
+            written = sink.upsert_all(to_raw_records(result.deals, now))
+            print(f"  적재: raw_deal_post {written}건 업서트")
         cycles += 1
         if max_cycles is None or cycles < max_cycles:
             sleep(TICK_SECONDS)
@@ -61,6 +74,11 @@ def main(
 
 def _build_fetcher(opener) -> HttpFetcher:
     return HttpFetcher(opener=opener, robots=RobotsGate(opener=opener))
+
+
+def _build_sink() -> RawDealSink | None:
+    connection = connect_from_env()
+    return RawDealSink(connection) if connection else None
 
 
 def _report(result: CycleResult) -> None:

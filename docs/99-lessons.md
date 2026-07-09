@@ -114,3 +114,11 @@
 - 원인: `capsys`(및 pytest의 캡처)는 **utf-8 텍스트 스트림으로 캡처**한다. 실제 콘솔의 인코더를 타지 않으므로 인코딩 불가 문자를 통과시킨다. "출력 문자열이 맞는가"만 봤지 "출력이 가능한가"는 안 봤다.
 - 규칙화된 교훈 (원인→해결): **엔트리포인트는 테스트가 GREEN이어도 한 번은 실제로 실행해본다.** 그리고 stdout에 나갈 문자열은 `text.encode("cp949")`로 **인코딩 가능성을 직접 단언**한다(로그·알림 문구 포함 — Alert reason도 결국 출력된다). 콘솔 출력엔 em dash·이모지·타이포그래피 문자를 쓰지 않는다. 문서엔 써도 되지만 `print`엔 안 된다.
 - 관련 테스트: `test_main.py::test_refusal_message_is_console_encodable`, `::test_alert_and_summary_output_are_console_encodable`.
+
+### 2026-07-09 문서와 실행 가능한 계약이 모순이면 실행되는 쪽이 진실이다 + 테스트 스키마는 미러 말고 원본을 써라
+- 맥락: collector의 DB 적재기(Q-36)를 짜려고 `raw_deal_post` 쓰기 규약을 확인했다.
+- 증상: `docs/01`과 `collector/README`는 "collector가 **insert-only**"라고 세 곳에서 말한다. 그런데 core의 `RawDealPostUpserter`는 `refreshFrom(url, title, capturedAt, status)`로 **갱신**하고, 그 테스트는 "상태 변화는 기존 행에 반영"(BM-01 AC-2)을 단언한다. insert-only면 품절을 영원히 모른다. 곁가지로 그 업서터는 **프로덕션에서 아무도 호출하지 않는** 명세 전용 코드였다.
+- 원인: 산문은 검증되지 않는다. 문서는 초기 설계 의도("collector는 덮어쓰지 않는다")를 적었고, 이후 AC-2가 갱신을 요구하며 코드가 앞서갔는데 문서만 남았다.
+- 규칙화된 교훈 (원인→해결): **모순을 발견하면 실행되는 쪽(테스트·DDL·CHECK 제약)을 믿고 문서를 고친다.** 산문은 GREEN일 수 없다. 그리고 **테스트용 스키마 미러를 만들지 마라** — 미러는 반드시 드리프트하고, 드리프트한 미러는 **GREEN인 채로 거짓말한다**. collector의 통합 테스트는 core의 `V1__init.sql`을 **그대로 읽어 적용**한다. core가 계약을 바꾸면 collector가 즉시 깨진다. 모듈 경계를 넘는 계약은 한쪽이 소유하고 다른 쪽은 **원본을 참조**한다.
+- 부수: `ON CONFLICT DO UPDATE`에서 "불변이어야 하지만 나중에 알 수도 있는" 컬럼은 `COALESCE(기존, 신규)`로 쓴다(`posted_at` — 발생 시각 불변 + 후채움).
+- 관련 테스트: `collector/tests/test_raw_deal_sink.py`(10건, core V1 스키마 적용), `conftest.py`.

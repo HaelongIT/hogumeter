@@ -41,6 +41,8 @@ services:
       DB_NAME: ${DB_NAME:-hogumeter}
       DB_USER: ${DB_USER:-hogumeter}
       DB_PASSWORD: ${DB_PASSWORD:?}
+      # 실 폴링 스위치. 기본 off — 운영자가 의도적으로 켜야 수집이 시작된다(pre-deploy §F).
+      COLLECTOR_ALLOW_NETWORK: ${COLLECTOR_ALLOW_NETWORK:-0}
     depends_on:
       postgres:
         condition: service_healthy
