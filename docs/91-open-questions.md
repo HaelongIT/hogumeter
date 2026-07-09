@@ -160,7 +160,7 @@ _(이하 2026-07-08 2차 기획 통합에서 등장한 위임 항목. 출처: `w
 - **재개 트리거**: 스케줄러 배선(반복 폴링) 착수 시 — raw_deal_post에 처리 마커(예: processed_at, V2 컬럼) 추가 또는 처리 이력 테이블로 멱등 보장.
 - **진행(2026-07-09)**: 폴링 루프(`scheduler.loop.run_cycle`)는 생겼으나 **DB 배선이 없어 트리거는 아직 미발동**. 반복 폴링이 실제로 `raw_deal_post`를 쓰기 시작하는 시점(Q-36)에 이 항목을 처리한다 — 그때까지 애매/스킵 글 재처리 문제는 그대로 열려 있다.
 - **⚠️ 트리거 발동(2026-07-09, Q-36 해소)**: collector가 이제 실제로 `raw_deal_post`에 **업서트**한다. 그래서 문제가 하나 커졌다 — 품절·가격변경이 `raw_deal_post`엔 반영되지만, 그 글에 이미 `deal_event_source` 링크가 있으면 **`findUnprocessed()`가 걸러내 core가 재처리하지 않는다.** 즉 **상태변화가 `deal_event`까지 도달하지 못한다**(BM-01 AC-2의 절반이 끊긴다). 애매/스킵 글 재처리 여지와 별개로 이게 더 시급하다. 처리 마커(`processed_at`) 대신 **`captured_at` 갱신을 감지하는 재처리 조건**이 필요할 수 있다(예: `deal_event.last_seen < raw.captured_at`). core 소유 영역이라 상대와 조율 대상.
-- **✅ 상태→ENDED 절반 해소(2026-07-09)**: 신규 `ReprocessDealStatusUseCase.reprocessEndedDeals()` — 링크된 **모든** 원문이 SOLD_OUT/DELETED면 `deal_event`를 ENDED로, last_seen을 종료 근거 시각으로 단조 갱신. `findUnprocessed`·`IngestDealsUseCase` **무수정**(additive: `DealEventEntity.applyStatusChange`·`DealEventRepository.findByStatusIn`만). Testcontainers 4케이스(단일 품절·DELETED·다중소스 중 하나 ACTIVE 유지·전부 ACTIVE 무변). **잔여(여전히 열림)**: ① 가격변화 재처리(raw `headline_price` → deal `priceLast`), ② `captured_at>last_seen` 변경 감지기(전수 스캔이라 정확성은 무관, 효율 seam), ③ 최초 수집 시 이미 품절인 원문(ingest가 ACTIVE로 생성 — ingest 관심사), ④ 애매/스킵 글 재처리 중복(원 Q-27), ⑤ 배치 오케스트레이션(스케줄러가 `ingestPending`+`reprocessEndedDeals` 동반 호출 — 프로덕션 스케줄러 부재).
+- **✅ 상태→ENDED 절반 해소(2026-07-09)**: 신규 `ReprocessDealStatusUseCase.reprocessEndedDeals()` — 링크된 **모든** 원문이 SOLD_OUT/DELETED면 `deal_event`를 ENDED로, last_seen을 종료 근거 시각으로 단조 갱신. `findUnprocessed`·`IngestDealsUseCase` **무수정**(additive: `DealEventEntity.applyStatusChange`·`DealEventRepository.findByStatusIn`만). Testcontainers 4케이스(단일 품절·DELETED·다중소스 중 하나 ACTIVE 유지·전부 ACTIVE 무변). **잔여(여전히 열림)**: ① 가격변화 재처리(raw `headline_price` → deal `priceLast`), ② `captured_at>last_seen` 변경 감지기(전수 스캔이라 정확성은 무관, 효율 seam), ③ 최초 수집 시 이미 품절인 원문(ingest가 ACTIVE로 생성 — ingest 관심사), ④ 애매/스킵 글 재처리 중복(원 Q-27), ~~⑤ 배치 오케스트레이션~~ **해소(2026-07-10)**: `adapter/scheduler/PipelineScheduler`가 `ingestPending()` → `reprocessEndedDeals()` 순으로 주기 호출(`core.pipeline.interval-ms`, 기본 60s). `@EnableScheduling`은 신규 `SchedulingConfig`에(기존 core 파일 무수정). 단계별 예외 격리 + `initialDelay=interval`로 `@SpringBootTest` 오염 방지. `scripts/smoke.sh` 5-1b가 `raw_deal_post` → `deal_event` → 기준가 REST 종단을 매번 증명한다.
 
 ## [열림] Q-28. C-5(⚠️라벨=전 통계 제외) 표본 조립 배선은 후속
 - **맥락**: v1.3 C-5는 제외키워드 LABEL도 전 통계 제외(가시성만 차등). `ExcludeKeywordPolicy` 판정·javadoc은 반영했으나, 기준가/알림 표본 조립이 실제로 키워드 히트 딜을 걸러내는 배선은 미구현(딜 제목 접근 필요).
@@ -240,6 +240,12 @@ _(Q-39. BLOCKED 자동 중지의 수동 재개 경로 — **`working-area/decisi
 _(Q-40. REL-06 파싱 드리프트 감지 — **해소됨 2026-07-09**: `scheduler/drift.py`(순수, 이동창). 두 신호를 본다 — ① **조용한 0건**(성공인데 연속 0건 = 구조 변경의 전형. 뽐뿌 셀렉터 체인이 끊겼을 때 예외 없이 0건이었다) ② **성공률 저하**(창 안 TRANSIENT 비율). BLOCKED는 세지 않는다(이미 중지+Alert). 창 미충족 시 미판정, 회복 시 재무장, 같은 증상 반복 알림 억제. `__main__`이 사이클마다 관측을 먹인다. 임계는 **미승인 잠정 주입**(아래 Q-45). 여기서 제거.)_
 
 _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildCommand`가 데카르트 곱을 만든다(용량 2 × 색상 2 → variant 4). 축 이름 중복은 거부(맵에서 덮어쓰기), 빈 축 행은 무시, 화면이 "생성될 variant N개"를 미리 보여준다. 여기서 제거.)_
+
+## [열림] Q-56. 파이프라인 단계 실패가 로그에만 남는다
+- **맥락**: `PipelineScheduler.runStep`은 한 단계(ingest·reprocess)가 던져도 다른 단계와 다음 주기를 살리려고 예외를 잡는다. 잡은 뒤에는 `log.error`로 단계 이름과 함께 남긴다 — 그게 전부다.
+- **왜 위험한가**: DB 스키마 불일치·낙관적 락 충돌 같은 지속적 실패가 나면 **파이프라인은 도는 척하면서 아무것도 처리하지 않는다.** `docker logs`를 보지 않으면 모른다. collector의 `giving_up`(연속 실패 시 프로세스 종료)과 달리 core는 스스로 내려오지도 않는다.
+- **잠정값**: `log.error`만. 연속 실패 카운터도, 관리 알림도 없다. 1인용이고 실 폴링 전이라 지금은 수용.
+- **재개 트리거**: 텔레그램 봇 토큰 발급(Q-20) → 관리 알림 chat(OBS-03)이 생기면 collector의 `giving_up`·`sink_error`와 **함께** 흘린다. 그때 연속 실패 임계도 같이 정한다(collector의 `SINK_FAILURE_LIMIT=3`과 정합). seam = `PipelineScheduler.runStep` 1곳.
 
 ## [열림] Q-55. SEC-05 크기 상한이 없다 — 크롤링 텍스트가 상한 없이 DB로 들어간다
 - **맥락**: `docs/20` SEC-05는 "크롤링 텍스트는 전부 비신뢰 입력 — 파라미터 바인딩(JPA), 웹 출력 시 이스케이프(XSS), **크기 상한**"을 요구한다. 앞의 둘은 지켜지지만(psycopg 파라미터 바인딩, React 자동 이스케이프) **크기 상한은 어디에도 없다.** `pipeline/ingest.py`에 캡이 없고, `V1__init.sql:44~55`의 `url`·`title`·`body_text`는 전부 무제한 `text`, `raw`는 무제한 `jsonb`다.

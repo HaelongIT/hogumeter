@@ -21,6 +21,8 @@ export CORE_PORT="${CORE_PORT:-58080}"
 export WEB_PORT="${WEB_PORT:-53000}"
 # 스모크에서 실 사이트를 긁지 않는다(정지조건). collector는 안내만 출력하고 종료한다.
 export COLLECTOR_ALLOW_NETWORK=0
+# 파이프라인 트리거를 촘촘히 — 스모크가 60초를 기다릴 수는 없다(운영 기본은 60000).
+export CORE_PIPELINE_INTERVAL_MS=2000
 
 WEB="http://127.0.0.1:${WEB_PORT}"
 compose() { docker compose -p "$PROJECT" "$@"; }
@@ -106,8 +108,17 @@ product_id=$(echo "$created" | sed 's/.*"productId"[: ]*\([0-9]*\).*/\1/')
 echo "--- 5-1) 판단 화면이 부르는 조회 3종 (신호등·기준가·주기) ---"
 # 방금 등록한 variant엔 딜이 하나도 없다. 그래서 정답은 "표본 없음"이다 —
 # 이 경로가 조용히 0원·GREEN을 내면 화면이 거짓말을 한다.
-variant_id=$(curl -fsS "${WEB}/api/v1/products/${product_id}/variants" |
-	sed 's/.*"variantId"[: ]*\([0-9]*\).*/\1/')
+# 라벨로 variant를 집는다. `sed 's/.*"variantId"...'`의 greedy `.*`는 **마지막** 것을 집어
+# "256GB를 노렸는데 512GB를 조회하는" 사고가 난다. 객체 경계로 쪼갠 뒤 라벨로 고른다.
+variants_json=$(curl -fsS "${WEB}/api/v1/products/${product_id}/variants")
+variant_of() {
+	echo "$variants_json" | sed 's/{"variantId"/\n{"variantId"/g' |
+		grep "\"label\":\"$1\"" | sed 's/[^0-9]*\([0-9]*\).*/\1/' | head -1
+}
+variant_256=$(variant_of 256GB)
+# 딜은 256GB에만 붙는다(제목에 그 축값이 있으므로). 아래 조회·구매 단계는 **딜이 없어야** 하므로 512GB를 쓴다.
+variant_id=$(variant_of 512GB)
+[ -n "$variant_256" ] && [ -n "$variant_id" ] || fail "variant를 라벨로 찾지 못했다: $variants_json"
 bench=$(curl -fsS "${WEB}/api/v1/variants/${variant_id}/benchmark?periodMonths=6")
 echo "$bench" | grep -q '"tier":"NONE"' || fail "딜 0건인데 tier가 NONE이 아니다: $bench"
 echo "$bench" | grep -q '"n":0' || fail "표본 수가 0이 아니다: $bench"
@@ -118,6 +129,35 @@ curl -fsS "${WEB}/api/v1/variants/${variant_id}/cadence" | grep -q '"guardMet":f
 # 없는 variant는 도메인 코드로 거절한다(web은 이 code를 그대로 보여준다).
 curl -sS -o /dev/null -w '%{http_code}' "${WEB}/api/v1/variants/999999/benchmark?periodMonths=6" |
 	grep -q '^404$' || fail "없는 variant인데 404가 아니다"
+
+echo "--- 5-1b) 파이프라인 트리거: raw_deal_post -> deal_event -> 기준가 ---"
+# 이 경로는 2026-07-10까지 **프로덕션에서 한 번도 실행된 적이 없었다** — @Scheduled가 없어
+# 수집된 원문을 아무도 소비하지 않았다(docs/91 Q-27). collector 없이 계약 테이블에 직접 한 행을 넣어
+# core의 스케줄러가 그걸 실제로 집어가는지 본다.
+#
+# 제목 '스모크 제품 256GB 특가' → 별칭 '스모크' substring 히트 → variant 축값 '256GB' 토큰 일치
+# → Matcher CONFIRMED → deal_event 생성. (매칭이 깨지면 review_queue_item으로 빠져 tier가 NONE에 머문다.)
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "raw_deal_post 삽입 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status)
+values ('ppomppu', 'smoke-1', 'https://example.invalid/1', '스모크 제품 256GB 특가', 999000, now(), 'ACTIVE');
+SQL
+
+# 스케줄러 주기는 2초. 넉넉히 기다리되 무한정은 아니다. 딜은 256GB variant에 붙는다.
+for _ in $(seq 20); do
+	bench=$(curl -fsS "${WEB}/api/v1/variants/${variant_256}/benchmark?periodMonths=6" || true)
+	case "$bench" in
+	*'"tier":"SPARSE"'*) ingested=1 && break ;;
+	esac
+	sleep 2
+done
+[ "${ingested:-0}" = 1 ] || fail "파이프라인이 원문을 소비하지 않았다(tier가 NONE에 머묾). 매칭이 CANDIDATE로 빠졌는지 review_queue_item을 볼 것. 마지막 응답: $bench"
+
+# 표본이 1건이면 SPARSE — 통계 필드는 여전히 null이어야 한다(정직성 계약, BM-06 AC-3).
+echo "$bench" | grep -q '"n":1' || fail "표본 수가 1이 아니다: $bench"
+echo "$bench" | grep -q '"benchmarkPrice":null' || fail "SPARSE인데 기준가를 냈다: $bench"
+echo "$bench" | grep -q '"cases":\[{' || fail "SPARSE인데 사례가 비었다: $bench"
+echo "$bench" | grep -q '999000' || fail "적재한 가격이 사례에 없다: $bench"
 
 echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
 # 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.

@@ -273,3 +273,11 @@
 - 규칙화된 교훈 (원인→해결): **"남은 게 없다"는 열린 보드가 아니라 요구 문서와 대조해서 말한다.** 요구 ID(SEC/PERF/REL/OBS/OPS)를 전수로 훑어 코드·CI에 대응물이 있는지 확인하고, 없으면 **구현하거나 보드에 올린다**(Q-55처럼 "안 한다"도 근거와 재개 트리거를 달아 올린다). 보드는 열린 것의 목록이 아니라 **시야의 경계**다.
 - 곁가지: 같은 감사에서 `.claude/rules/collector-python.md`가 이미 고친 버그를 경고하고 있었다("`parse_bunjang`은 `ENDED`를 낸다" — 2026-07-09 해소). **컨텍스트에 자동 로드되는 규칙 파일이 거짓말하면 다음 세션이 고친 버그를 또 고친다.** 규칙 파일은 코드보다 먼저 정정한다.
 - 관련 테스트: `web/src/purchase/present.test.ts`(`kstDate` 경계값 — `2026-07-01T20:00:00Z` → `2026-07-02`), `.github/dependabot.yml`(schemastore 스키마 검증 PASS).
+
+### 2026-07-10 쓰는 쪽도 읽는 쪽도 GREEN인데, 둘을 잇는 트리거가 없어 시스템이 죽어 있었다
+- 맥락: collector는 `raw_deal_post`에 업서트한다(통합 테스트 GREEN). core는 `ingestPending()`으로 그걸 읽어 `deal_event`를 만든다(Testcontainers GREEN). 상대는 `reprocessEndedDeals()`까지 붙였다(4케이스 GREEN). 종단 스모크도 PASS였다.
+- 증상: **프로덕션에서 `ingestPending()`을 부르는 곳이 한 군데도 없었다.** `grep -rn "@Scheduled\|@EnableScheduling\|ApplicationRunner" core/src/main/java` → 0건. `adapter/scheduler/`엔 `package-info.java` 하나뿐이고 javadoc은 `/** 폴링·파이프라인 트리거 */`라고만 적혀 있었다. 즉 `docker compose up -d`로 스택을 띄워도 **기준가 표본은 영원히 0이고 알림은 영원히 안 온다.** M1을 막던 진짜 블로커는 텔레그램 토큰도 네이버 키도 아니었다.
+- 원인: 모든 테스트가 "이 함수는 옳게 동작하는가"를 물었고, **"프로덕션에서 이 함수를 누가 부르는가"는 아무도 묻지 않았다.** 단위 테스트는 직접 부르고, 통합 테스트도 직접 부르고, 스모크는 REST만 두드렸다. 빈 패키지와 javadoc이 "여기 트리거가 있다"고 착각하게 만들었다.
+- 규칙화된 교훈 (원인→해결): **진입점(entry point)을 테스트한다.** "이 유스케이스를 프로덕션에서 부르는 경로가 존재하는가"는 별도의 질문이고 별도의 테스트가 필요하다. ① 배선 테스트: `@EnableScheduling`이 빠지면 `@Scheduled`는 **조용히 무시된다** — `ScheduledTaskHolder.getScheduledTasks()`로 **등록 사실**을 단언한다(애노테이션 존재가 아니라). ② 종단 스모크: 계약 테이블에 행을 하나 넣고 **REST 응답이 바뀌는지** 본다(`tier: NONE → SPARSE`). 그러면 "누가 부르는가"가 자동으로 검증된다. ③ 그 배선 테스트도 시험한다 — `@EnableScheduling`을 잠시 떼어 실제로 FAIL하는지 봤다.
+- 곁가지: 새 스모크가 처음에 실패했을 때 원인은 스케줄러가 아니라 **내 스모크의 greedy `sed`**였다(`sed 's/.*"variantId"...'`가 **마지막** 것을 집어, 딜이 붙은 256GB 대신 512GB를 조회했다). 격리 스택을 띄워 DB를 직접 보고 나서야 갈랐다 — `deal_event`는 이미 만들어져 있었다. **대상 코드보다 하네스를 먼저 의심하라**(같은 실수를 MinIO·gitleaks에서 이미 두 번 했다).
+- 관련 테스트: `PipelineSchedulerTest`(순서·단계별 예외 격리), `PipelineSchedulerWiringTest`(스케줄 등록 사실), `scripts/smoke.sh` 5-1b(`raw_deal_post` → `deal_event` → 기준가 REST).

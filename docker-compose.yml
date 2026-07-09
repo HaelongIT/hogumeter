@@ -34,6 +34,10 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
+      # 파이프라인 트리거 주기(ms). raw_deal_post -> deal_event 변환을 이 주기로 돈다.
+      # 이게 없으면 수집된 원문을 아무도 소비하지 않는다(docs/91 Q-27). Spring 완화 바인딩:
+      # CORE_PIPELINE_INTERVAL_MS -> core.pipeline.interval-ms
+      CORE_PIPELINE_INTERVAL_MS: ${CORE_PIPELINE_INTERVAL_MS:-60000}
     depends_on:
       postgres:
         condition: service_healthy

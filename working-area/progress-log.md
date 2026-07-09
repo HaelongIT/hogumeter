@@ -16,6 +16,14 @@
 
 ---
 
+## 2026-07-10 — M1 종단 루프를 이었다 (파이프라인 트리거 신설)
+
+- **한 일**: `ingestPending()`·`reprocessEndedDeals()`를 **프로덕션에서 부르는 사람이 없다는 것**을 발견하고(`@Scheduled` 0건) `adapter/scheduler/PipelineScheduler` + `SchedulingConfig` 신설. ingest→reprocess 순서, 단계별 예외 격리, `initialDelay=interval`. **기존 core 파일 수정 0**(신규 4파일). 스모크 5-1b 신설 — `raw_deal_post` 한 행을 넣으면 `deal_event`가 생기고 기준가 REST가 `NONE → SPARSE(n=1)`로 바뀌는 것을 매번 증명한다.
+- **자율로 정한 것**: 주기 기본 60s(`core.pipeline.interval-ms`, 게시판 폴링 하한과 정합) / 실패 시 `log.error` 후 다음 단계·다음 주기 계속(뭉개지 않되 죽지도 않는다) / 테스트에선 스케줄러 전역 off. 전부 되돌리기 쉬움 — decision-log 2026-07-10.
+- **⚠️ 당신이 볼 것**: `docs/91` **Q-56 신설** — 파이프라인 단계 실패가 **로그에만** 남는다. 관리 알림은 텔레그램 토큰(Q-20) 대기. 그때까지 `docker logs`가 유일한 창구다.
+- **발견**: 스모크가 처음엔 실패했는데 원인은 스케줄러가 아니라 **내 스모크의 greedy `sed`**였다(마지막 variantId=512GB를 집어 딜이 붙은 256GB 대신 조회). 라벨로 고르도록 고쳤다.
+- **다음**: SEC-05 크기 상한(Q-55) — collector가 크롤링 텍스트를 상한 없이 적재한다. 자르지 않고 거절+이벤트.
+
 ## 2026-07-09 — 무중단 지침 강화 + 진행 로그 신설
 
 - **한 일**: CLAUDE.md `## Autonomous(무중단) 모드`를 "스스로 계획하며 쭉 개발"로 재작성(증분 사이 무정지·self-plan·되돌리기 가능=자율·배치 비차단 보고). 이 진행 로그 파일 신설 + 루프엔드 라우팅 표에 편입.
