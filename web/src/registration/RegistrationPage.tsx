@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { ProductSummary } from '../api/types'
-import { InvalidForm, buildCommand, type RegistrationForm } from './buildCommand'
+import { InvalidForm, buildCommand, type AxisInput, type RegistrationForm } from './buildCommand'
 
 const EMPTY: RegistrationForm = {
   name: '',
   category: '',
-  axisName: '용량',
-  axisValues: '',
+  axes: [{ name: '용량', values: '' }],
   aliases: '',
   demandAxisMode: 'GROUPED',
 }
@@ -28,8 +27,28 @@ export function RegistrationPage() {
     void reload()
   }, [])
 
-  const set = (key: keyof RegistrationForm) => (event: { target: { value: string } }) =>
+  // 조합은 눈으로 확인해야 한다 — 축 2개면 variant가 곱셈으로 늘어난다(REG-02).
+  const preview = useMemo(() => {
+    try {
+      return buildCommand(form).variants.map((variant) => variant.label)
+    } catch {
+      return []
+    }
+  }, [form])
+
+  const set = (key: 'name' | 'category' | 'aliases' | 'demandAxisMode') => (event: { target: { value: string } }) =>
     setForm((current) => ({ ...current, [key]: event.target.value }))
+
+  const setAxis = (index: number, patch: Partial<AxisInput>) =>
+    setForm((current) => ({
+      ...current,
+      axes: current.axes.map((axis, i) => (i === index ? { ...axis, ...patch } : axis)),
+    }))
+
+  const addAxis = () => setForm((current) => ({ ...current, axes: [...current.axes, { name: '', values: '' }] }))
+
+  const removeAxis = (index: number) =>
+    setForm((current) => ({ ...current, axes: current.axes.filter((_, i) => i !== index) }))
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -64,14 +83,39 @@ export function RegistrationPage() {
           카테고리
           <input value={form.category} onChange={set('category')} />
         </label>
-        <label>
-          가격축 이름
-          <input value={form.axisName} onChange={set('axisName')} />
-        </label>
-        <label>
-          축 값 (쉼표 또는 줄바꿈)
-          <textarea value={form.axisValues} onChange={set('axisValues')} placeholder="256GB, 512GB" />
-        </label>
+
+        <fieldset>
+          <legend>가격축</legend>
+          {form.axes.map((axis, index) => (
+            <div key={index}>
+              <label>
+                축 {index + 1} 이름
+                <input
+                  value={axis.name}
+                  onChange={(event) => setAxis(index, { name: event.target.value })}
+                  placeholder="용량"
+                />
+              </label>
+              <label>
+                축 {index + 1} 값 (쉼표 또는 줄바꿈)
+                <textarea
+                  value={axis.values}
+                  onChange={(event) => setAxis(index, { values: event.target.value })}
+                  placeholder="256GB, 512GB"
+                />
+              </label>
+              {form.axes.length > 1 && (
+                <button type="button" onClick={() => removeAxis(index)}>
+                  축 {index + 1} 삭제
+                </button>
+              )}
+            </div>
+          ))}
+          <button type="button" onClick={addAxis}>
+            축 추가
+          </button>
+        </fieldset>
+
         <label>
           별칭 (매칭 사전 시드)
           <textarea value={form.aliases} onChange={set('aliases')} placeholder="아이폰17, iphone17" />
@@ -83,6 +127,17 @@ export function RegistrationPage() {
             <option value="SPLIT">분리</option>
           </select>
         </label>
+
+        {preview.length > 0 && (
+          <section aria-label="생성될 variant">
+            <p>생성될 variant {preview.length}개</p>
+            <ul>
+              {preview.map((label) => (
+                <li key={label}>{label}</li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <button type="submit" disabled={busy}>
           {busy ? '등록 중...' : '등록'}

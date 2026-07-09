@@ -32,7 +32,7 @@ describe('RegistrationPage', () => {
     render(<RegistrationPage />)
 
     await user.type(screen.getByLabelText(/제품명/), '아이폰 17')
-    await user.type(screen.getByLabelText(/축 값/), '256GB, 512GB')
+    await user.type(screen.getByLabelText(/축 1 값/), '256GB, 512GB')
     await user.click(screen.getByRole('button', { name: '등록' }))
 
     await waitFor(() => expect(api.registerProduct).toHaveBeenCalledOnce())
@@ -46,13 +46,34 @@ describe('RegistrationPage', () => {
     })
   })
 
+  it('축을 추가하면 조합대로 variant가 늘어난다 (REG-02 수용 기준)', async () => {
+    const user = userEvent.setup()
+    render(<RegistrationPage />)
+
+    await user.type(screen.getByLabelText(/제품명/), '아이폰 17')
+    await user.type(screen.getByLabelText(/축 1 값/), '256GB, 512GB')
+    await user.click(screen.getByRole('button', { name: '축 추가' }))
+    await user.type(screen.getByLabelText(/축 2 이름/), '색상')
+    await user.type(screen.getByLabelText(/축 2 값/), '블랙, 화이트')
+
+    // 조합은 눈으로 확인해야 한다 — 곱셈으로 늘어난다
+    const preview = await screen.findByRole('region', { name: '생성될 variant' })
+    expect(within(preview).getByText('생성될 variant 4개')).toBeInTheDocument()
+    expect(within(preview).getByText('256GB / 블랙')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '등록' }))
+
+    await waitFor(() => expect(api.registerProduct).toHaveBeenCalledOnce())
+    expect(vi.mocked(api.registerProduct).mock.calls[0]![0].variants).toHaveLength(4)
+  })
+
   it('등록 성공 후 목록을 다시 불러온다 — 사용자가 결과를 눈으로 확인해야 한다', async () => {
     const user = userEvent.setup()
     vi.mocked(api.listProducts).mockResolvedValueOnce([]).mockResolvedValueOnce([iphone])
     render(<RegistrationPage />)
 
     await user.type(screen.getByLabelText(/제품명/), '아이폰 17')
-    await user.type(screen.getByLabelText(/축 값/), '256GB, 512GB')
+    await user.type(screen.getByLabelText(/축 1 값/), '256GB, 512GB')
     await user.click(screen.getByRole('button', { name: '등록' }))
 
     expect(await screen.findByText('아이폰 17')).toBeInTheDocument()
@@ -74,7 +95,7 @@ describe('RegistrationPage', () => {
     await user.type(screen.getByLabelText(/제품명/), '아이폰 17')
     await user.click(screen.getByRole('button', { name: '등록' })) // 축 값 없음
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('축 값을 하나 이상')
+    expect(await screen.findByRole('alert')).toHaveTextContent('값을 하나 이상')
     expect(api.registerProduct).not.toHaveBeenCalled()
   })
 
@@ -85,7 +106,7 @@ describe('RegistrationPage', () => {
     render(<RegistrationPage />)
 
     await user.type(screen.getByLabelText(/제품명/), '아이폰 17')
-    await user.type(screen.getByLabelText(/축 값/), '256GB')
+    await user.type(screen.getByLabelText(/축 1 값/), '256GB')
     await user.click(screen.getByRole('button', { name: '등록' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('BM_INVALID_PERIOD')
