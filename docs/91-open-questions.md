@@ -240,6 +240,17 @@ _(Q-40. REL-06 파싱 드리프트 감지 — **해소됨 2026-07-09**: `schedul
 
 _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildCommand`가 데카르트 곱을 만든다(용량 2 × 색상 2 → variant 4). 축 이름 중복은 거부(맵에서 덮어쓰기), 빈 축 행은 무시, 화면이 "생성될 variant N개"를 미리 보여준다. 여기서 제거.)_
 
+## [열림] Q-52. OBS-01 상관 ID(딜 단위 추적)가 없다
+- **맥락**: OBS-01은 "구조화 로그(JSON), **상관 ID(딜 단위 추적)**"를 요구한다. collector는 이제 JSON Lines로 사이클·사이트 단위 카운터를 낸다(`observability.py`). 그러나 개별 딜이 수집→매칭→병합→알림을 거치며 어떤 판정을 받았는지 추적할 ID가 없다.
+- **잠정값**: collector는 **사이클·사이트 단위**까지만 관측한다(`sites_polled`·`deals`·`by_site`·`failures`·`blocked`·`alerts`·`stopped_sites`). 딜 단위 추적은 `deal_event`를 만드는 core의 관심사다. 자연키 `(site, post_id)`가 사실상 상관 ID 역할을 하지만 로그에 싣지는 않는다(사이클당 수십 줄이 된다).
+- **재개 트리거**: 1차 검증에서 "이 딜이 왜 알림이 안 왔나"를 추적해야 할 때 — core가 `deal_event.id`를 상관 ID로 삼아 매칭·병합·알림 판정 로그를 잇는다. collector는 `raw_deal_post.id`를 반환받아 로그에 실을 수 있다(현재 sink는 건수만 돌려준다).
+
+## [열림] Q-51. REL-05 롤백 스크립트가 V2에 없다 (그리고 아무도 검증하지 않는다)
+- **맥락**: REL-05는 "Flyway 단독, **롤백 스크립트 동반**"을 요구한다. `core/src/main/resources/db/rollback/`엔 `R1__init_rollback.sql`(V1용) 하나뿐이고 `V2__purchase.sql`의 롤백이 없다. 게다가 **롤백 스크립트를 실행해보는 테스트가 하나도 없다** — 있어도 도는지 모른다.
+- **왜 위험한가**: 롤백은 사고가 났을 때 처음 실행된다. 그때 문법 오류나 의존 순서(외래키) 문제가 드러나면 이미 늦다. 백업 복원(`scripts/restore-drill.sh`)은 리허설했지만 마이그레이션 롤백은 안 했다.
+- **잠정값**: V2 롤백 없음. 사고 시 복구 경로는 **백업 복원**뿐이다(그건 실측 검증됨).
+- **재개 트리거**: `db/rollback/R2__purchase_rollback.sql` 작성 + Testcontainers 테스트(V1→V2 적용 → R2 → R1 → 스키마 공백 확인). **core 소유 리소스라 상대와 조율.**
+
 ## [열림] Q-50. OBS-04 헬스체크 엔드포인트가 없다 (core·collector)
 - **맥락**: OBS-04는 "헬스체크 엔드포인트(컴포넌트별) + Compose healthcheck"를 요구한다. 현재 compose에 healthcheck가 있는 서비스는 **postgres 하나뿐**이고, core에는 `spring-boot-starter-actuator` 의존이 없다.
 - **왜 지금 문제인가**: `scripts/smoke.sh`가 core 준비를 `/api/v1/products`를 폴링해 판정한다 — **비즈니스 엔드포인트를 헬스체크로 오용**하는 것이다. core가 뜬 뒤 Flyway 마이그레이션이 끝나기 전에 200이 나올 여지도 있고, DB가 죽어도 이 경로는 200을 줄 수 있다.

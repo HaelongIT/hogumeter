@@ -90,8 +90,11 @@ product_id=$(echo "$created" | sed 's/.*"productId"[: ]*\([0-9]*\).*/\1/')
 [ "$(curl -fsS "${WEB}/api/v1/products/${product_id}/variants" | grep -o '"variantId"' | wc -l)" = 2 ] ||
 	fail "variant 2개가 아니다"
 
-echo "--- 6) collector는 opt-in 없이 네트워크를 만지지 않는다 ---"
-compose logs collector 2>&1 | grep -q 'COLLECTOR_ALLOW_NETWORK' || fail "collector가 정지조건 안내를 출력하지 않았다"
+echo "--- 6) collector는 opt-in 없이 네트워크를 만지지 않는다 (OBS-01 구조화 로그) ---"
+# 로그는 JSON Lines다. 문장을 grep하지 말고 이벤트를 본다 — 문구는 바뀌어도 계약은 안 바뀐다.
+collector_log=$(compose logs --no-log-prefix collector 2>&1 | grep '^{' | tail -1)
+echo "$collector_log" | grep -q '"event":"refused"' || fail "collector가 refused 이벤트를 내지 않았다: $collector_log"
+echo "$collector_log" | grep -q '"reason":"network_opt_in_missing"' || fail "정지 사유가 기록되지 않았다"
 
 echo "--- 7) SEC-02 Basic Auth: 켜면 막고, 끄면 열린다 ---"
 # 위 1~6은 auth 미설정(기본 off) 경로였다. 이제 켠 경로를 같은 이미지로 검증한다.

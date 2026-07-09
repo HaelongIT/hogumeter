@@ -17,10 +17,11 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from .db.raw_deal_sink import RawDealSink, connect_from_env
+from .observability import counters, event
 from .pipeline.ingest import to_raw_records
 from .scheduler.drift import DriftHistory, DriftPolicy, observe
 from .scheduler.fetcher import HttpFetcher, RobotsGate, urllib_opener
-from .scheduler.loop import CycleResult, run_cycle
+from .scheduler.loop import run_cycle
 from .scheduler.policy import BackoffPolicy
 from .scheduler.sites import hotdeal_boards
 
@@ -45,11 +46,10 @@ def main(
     clock=lambda: datetime.now(timezone.utc),
     max_cycles: int | None = None,
 ) -> int:
+    now = clock()
     if os.environ.get(ALLOW_NETWORK_ENV) != "1":
-        print(
-            f"collector: 실 네트워크 폴링은 기본 비활성입니다(정지조건).\n"
-            f"  켜려면 {ALLOW_NETWORK_ENV}=1 로 실행하세요."
-        )
+        _log("refused", now, reason="network_opt_in_missing", env=ALLOW_NETWORK_ENV,
+             message=f"실 네트워크 폴링은 기본 비활성입니다(정지조건). {ALLOW_NETWORK_ENV}=1 로 켜세요.")
         return 0
 
     fetch = _build_fetcher(opener or urllib_opener)
@@ -59,29 +59,38 @@ def main(
     drift = DriftHistory()
     cycles = 0
 
-    print(f"collector: {len(specs)}개 게시판 폴링 시작 (게시판당 1req/min 하한, robots 존중)")
-    if sink is None:
-        print("  DB 미설정(DB_HOST 없음): 수집 결과를 적재하지 않고 화면에만 출력합니다.")
+    _log("started", now, boards=[s.name for s in specs], sink="postgres" if sink else None,
+         message=None if sink else "DB 미설정(DB_HOST 없음): 적재하지 않고 로그만 남깁니다.")
 
     while max_cycles is None or cycles < max_cycles:
         now = clock()
         result = run_cycle(specs, states, now, fetch, BACKOFF)
         states = result.states
-        _report(result)
+
+        written = None
+        if sink is not None and result.deals:
+            written = sink.upsert_all(to_raw_records(result.deals, now))
+
+        _log("cycle", now, written=written, **counters(result))
+
+        for alert in result.alerts:
+            _log("alert", alert.at, kind="blocked", site=alert.site, reason=alert.reason)
 
         # REL-06: 파서가 조용히 0건을 내는 구조 변경을 잡는다.
         for observation in result.observations:
             drift, drift_alerts = observe(drift, observation, DRIFT, now)
             for alert in drift_alerts:
-                print(f"  [경고] {alert.site}: {alert.reason}")
+                _log("alert", alert.at, kind="drift", site=alert.site, reason=alert.reason)
 
-        if sink is not None and result.deals:
-            written = sink.upsert_all(to_raw_records(result.deals, now))
-            print(f"  적재: raw_deal_post {written}건 업서트")
         cycles += 1
         if max_cycles is None or cycles < max_cycles:
             sleep(TICK_SECONDS)
     return 0
+
+
+def _log(name: str, at: datetime, **fields) -> None:
+    """구조화 로그를 stdout으로. `docker logs`가 유일한 관측 창구다(OBS-01)."""
+    print(event(name, at, **fields))
 
 
 def _build_fetcher(opener) -> HttpFetcher:
@@ -91,24 +100,6 @@ def _build_fetcher(opener) -> HttpFetcher:
 def _build_sink() -> RawDealSink | None:
     connection = connect_from_env()
     return RawDealSink(connection) if connection else None
-
-
-def _report(result: CycleResult) -> None:
-    """stdout은 cp949 콘솔(Windows)에서도 인코딩돼야 한다 — em dash·이모지 금지.
-
-    실제로 `—`가 UnicodeEncodeError로 엔트리포인트를 죽였다. capsys는 utf-8로 캡처하므로
-    단위 테스트가 이를 못 잡는다(docs/99 2026-07-09).
-    """
-    if result.deals:
-        by_site: dict[str, int] = {}
-        for deal in result.deals:
-            by_site[deal.site] = by_site.get(deal.site, 0) + 1
-        print("  수집:", ", ".join(f"{site} {n}건" for site, n in sorted(by_site.items())))
-    for alert in result.alerts:
-        print(f"  [경고] {alert.site}: {alert.reason}")
-    stopped = [name for name, state in result.states.items() if state.stopped]
-    if stopped:
-        print(f"  중지된 사이트(수동 재개 필요, decisions-needed D-3): {', '.join(stopped)}")
 
 
 if __name__ == "__main__":

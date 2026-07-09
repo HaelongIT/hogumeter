@@ -3,10 +3,16 @@
 정지조건("실사이트 크롤링")을 산문이 아니라 기계로 강제한다. 이 테스트가 그 기계를 지킨다.
 """
 
+import json
 from datetime import datetime, timedelta, timezone
 
 from collector.__main__ import ALLOW_NETWORK_ENV, main
 from collector.scheduler.sites import hotdeal_boards
+
+
+def _events(out: str) -> list[dict]:
+    """stdout은 JSON Lines다(OBS-01). 문자열을 grep하지 말고 이벤트를 읽는다."""
+    return [json.loads(line) for line in out.strip().splitlines() if line]
 
 NOW = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)
 
@@ -30,8 +36,9 @@ def test_refuses_to_touch_network_without_optin(monkeypatch, capsys):
 
     assert exit_code == 0
     assert opener.calls == []  # 단 한 번도 나가지 않았다
-    out = capsys.readouterr().out
-    assert ALLOW_NETWORK_ENV in out  # 켜는 방법을 알려준다
+    (refused,) = _events(capsys.readouterr().out)
+    assert refused["event"] == "refused"
+    assert refused["env"] == ALLOW_NETWORK_ENV  # 켜는 방법을 알려준다
 
 
 def test_wrong_optin_value_is_still_a_refusal(monkeypatch):
@@ -74,12 +81,10 @@ class BlockingOpener(RecordingOpener):
 
 
 def _assert_console_safe(text: str) -> None:
-    """Windows 콘솔은 cp949다. em dash·이모지를 출력하면 UnicodeEncodeError로 죽는다.
-
-    capsys는 utf-8로 캡처하므로 문자열 단언만으로는 이 사고를 못 잡는다 — 실제로 `—`가
-    엔트리포인트를 죽였다(docs/99). 인코딩 가능 여부를 직접 단언한다.
-    """
+    """Windows 콘솔은 cp949다. capsys는 utf-8로 캡처하므로 문자열 단언만으론 이 사고를 못 잡는다 —
+    실제로 `—`가 엔트리포인트를 죽였다(docs/99). 이제 로그가 JSON(ensure_ascii)이라 구조적으로 안전하다."""
     text.encode("cp949")  # 실패하면 UnicodeEncodeError
+    text.encode("ascii")  # 구조화 로그는 순수 ASCII여야 한다
 
 
 def test_refusal_message_is_console_encodable(monkeypatch, capsys):
@@ -144,8 +149,11 @@ def test_no_sink_means_no_upsert_and_the_limitation_is_stated(monkeypatch, capsy
     main(opener=OneDealOpener(), sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
 
     out = capsys.readouterr().out
-    assert "DB 미설정" in out  # 숨기지 않는다
-    assert "적재:" not in out
+    events = _events(out)
+    started = next(e for e in events if e["event"] == "started")
+    assert "sink" not in started  # DB 없으면 sink 필드 자체가 없다
+    assert "DB 미설정" in started["message"]  # 숨기지 않는다
+    assert all("written" not in e for e in events)
     _assert_console_safe(out)
 
 
@@ -171,8 +179,10 @@ def test_silent_zero_yield_raises_a_console_safe_drift_alert(monkeypatch, capsys
     main(opener=RecordingOpener(), sleep=lambda _: None, clock=lambda: next(ticks), max_cycles=3)
 
     out = capsys.readouterr().out
-    assert "3회 연속 0건" in out
-    assert out.count("사이트 구조 변경 의심") == 3  # 사이트별 1회씩, 반복되지 않는다
+    drift = [e for e in _events(out) if e["event"] == "alert" and e["kind"] == "drift"]
+    assert len(drift) == 3  # 사이트별 1회씩, 반복되지 않는다
+    assert all("3회 연속 0건" in e["reason"] for e in drift)
+    assert sorted(e["site"] for e in drift) == sorted(s.name for s in hotdeal_boards())
     _assert_console_safe(out)
 
 
@@ -182,5 +192,9 @@ def test_alert_and_summary_output_are_console_encodable(monkeypatch, capsys):
     main(opener=BlockingOpener(), sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
 
     out = capsys.readouterr().out
-    assert "[경고]" in out and "중지된 사이트" in out
+    events = _events(out)
+    blocked = [e for e in events if e["event"] == "alert" and e["kind"] == "blocked"]
+    assert len(blocked) == 3  # 3사 모두 robots Disallow
+    cycle = next(e for e in events if e["event"] == "cycle")
+    assert cycle["blocked"] == 3 and sorted(cycle["stopped_sites"]) == sorted(s.name for s in hotdeal_boards())
     _assert_console_safe(out)

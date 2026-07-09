@@ -52,7 +52,19 @@ uv run python -m collector          # 안내만 출력하고 종료 (요청 0회
 COLLECTOR_ALLOW_NETWORK=1 uv run python -m collector   # 실 폴링 — 사용자 승인 사항
 ```
 
-두 개의 독립 스위치가 있다. **네트워크**는 `COLLECTOR_ALLOW_NETWORK=1`, **DB 적재**는 `DB_HOST` 설정. DB가 없으면 수집 결과를 화면에만 출력하고 그 사실을 알린다.
+두 개의 독립 스위치가 있다. **네트워크**는 `COLLECTOR_ALLOW_NETWORK=1`, **DB 적재**는 `DB_HOST` 설정. DB가 없으면 수집 결과를 로그로만 남기고 그 사실을 알린다.
+
+## 로그 (OBS-01)
+
+stdout은 **JSON Lines**다. `docker logs`가 유일한 관측 창구이므로 문장이 아니라 이벤트를 낸다.
+
+```json
+{"ts":"...","event":"cycle","sites_polled":3,"deals":69,"by_site":{"ppomppu":21,...},
+ "failures":0,"blocked":0,"alerts":0,"stopped_sites":[],"written":69}
+{"ts":"...","event":"alert","kind":"drift","site":"ppomppu","reason":"..."}
+```
+
+한글은 `\uXXXX`로 이스케이프된다 — 값은 온전하되 출력은 순수 ASCII라 **어떤 콘솔 인코딩에서도 죽지 않는다**. `by_site`의 0은 지우지 않는다: "성공했는데 0건"이 구조 변경의 전형이다.
 
 실 네트워크는 `fetcher.urllib_opener` **한 곳**뿐이고 테스트는 전부 fake opener를 쓴다. opt-in은 정지조건("실사이트 크롤링")을 산문이 아니라 기계로 강제하는 장치다.
 

@@ -4,9 +4,12 @@
 > 개발 중 "운영에서 따로 해줘야 한다"가 드러나면 **그 자리에서** `[필수]/[권장]/[완료]`로 추가한다(말로 끝내지 않음).
 
 ## A. 데이터베이스
-- **[필수]** Flyway 마이그레이션이 운영 Postgres 컨테이너에서 clean 상태로 완주하는지 확인(V1부터). 롤백 스크립트 동반(REL-05).
-- **[필수]** Postgres 데이터 볼륨 영속화 — 컨테이너 재생성 시 데이터 유실 방지.
-- **[필수]** 백업 가동 — pg_dump 일 1회·7일 보관·주 1회 S3 offsite(REL-04). 복원 리허설 1회.
+- **[완료]** Flyway 마이그레이션이 clean 컨테이너에서 완주 — `scripts/smoke.sh`가 매번 빈 볼륨에서 V1·V2를 돌리고 등록 API까지 왕복시킨다.
+- **[필수]** **V2 롤백 스크립트 부재**(REL-05) — `db/rollback/`엔 `R1__init_rollback.sql`만 있고 `V2__purchase.sql`의 롤백이 없다. 롤백을 검증하는 테스트도 없다. `docs/91` Q-51.
+- **[필수]** Postgres 데이터 볼륨 영속화 — `pgdata` 명명 볼륨. **운영에서 `docker compose down -v` 금지**(데이터 삭제).
+- **[완료]** 백업·복원 — `bash scripts/backup.sh`(pg_dump + gzip + 7일 보관, gzip 무결성 검사), `bash scripts/restore-drill.sh`(일회용 격리 컨테이너에 복원해 테이블·행·`flyway_schema_history` 확인). **리허설 실측 통과**: 제품 1건이 덤프를 거쳐 되살아났다.
+- **[필수]** **cron 등록** — `10 3 * * * cd /srv/hogumeter && bash scripts/backup.sh >> backups/backup.log 2>&1`. 스크립트만 있고 스케줄은 사람이 건다.
+- **[필수]** **주 1회 S3 offsite 사본**(REL-04) — 미구현. 로컬 디스크가 죽으면 백업도 함께 죽는다.
 
 ## B. 시크릿 · 환경설정
 - **[필수]** 운영 시크릿 = EC2의 `.env`(gitignore) — 텔레그램 봇 토큰, 네이버 쇼핑 API Client ID/Secret, Postgres 비밀번호. git/CI에 평문 금지.
