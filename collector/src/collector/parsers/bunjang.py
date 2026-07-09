@@ -1,4 +1,10 @@
-"""번개장터 파서 — 비공식 검색 JSON API 응답(docs/98). HTML 파싱 불요."""
+"""번개장터 파서 — 비공식 검색 JSON API 응답(docs/98). HTML 파싱 불요.
+
+status 매핑 주의: 실측된 건 `"0" = 판매중`뿐이고 나머지 코드표는 미측정이다(docs/91 Q-41).
+비-"0"을 전부 SOLD_OUT으로 보는 건 **잠정**이며, `예약중`을 판매완료로 오독할 수 있다.
+`ParsedDeal.status` 허용집합은 `ACTIVE / SOLD_OUT / DELETED` — `ENDED`는 `deal_event.status`의
+값이지 여기 값이 아니다(과거 이 파서가 `ENDED`를 내 `to_raw_records`가 터졌다).
+"""
 
 from __future__ import annotations
 
@@ -23,7 +29,7 @@ def parse_bunjang(payload: str) -> list[ParsedDeal]:
                 reaction_score=int(item.get("num_faved") or 0),
                 headline_price=int(price_raw) if price_raw.isdigit() else None,
                 posted_at=datetime.fromtimestamp(int(item["update_time"]), tz=timezone.utc),
-                status="ACTIVE" if str(item.get("status")) == "0" else "ENDED",
+                status="ACTIVE" if str(item.get("status")) == "0" else "SOLD_OUT",
                 raw={
                     "ad": item.get("ad", False),
                     "bizseller": item.get("bizseller", False),

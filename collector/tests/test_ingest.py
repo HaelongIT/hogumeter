@@ -1,10 +1,12 @@
 """적재 준비 — ParsedDeal → RawDealRecord 계약 매핑 + 배치 멱등(자연키 dedup). 네트워크·DB 없음."""
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
+from collector.parsers.bunjang import parse_bunjang
 from collector.parsers.fmkorea import parse_fmkorea
 from collector.parsers.models import ParsedDeal
 from collector.pipeline.ingest import RawDealRecord, to_raw_records
@@ -56,3 +58,24 @@ def test_preserves_raw_payload():
     records = to_raw_records([deal], CAPTURED)
 
     assert records[0].raw == {"ad": False, "pid": "9"}
+
+
+def test_accepts_every_status_the_bunjang_parser_can_emit():
+    """파서가 내는 status는 계약 허용집합 안이어야 한다.
+
+    `parse_bunjang`이 `ENDED`(= deal_event.status의 값)를 내던 시절엔 여기서 ValueError가 났다.
+    부품별 GREEN만으로는 이런 어휘 불일치가 안 잡힌다 — docs/91 Q-41.
+    """
+    payload = json.dumps(
+        {
+            "list": [
+                {"pid": 1, "name": "판매중", "price": "1000", "status": "0", "update_time": 1_700_000_000},
+                {"pid": 2, "name": "판매완료", "price": "2000", "status": "1", "update_time": 1_700_000_000},
+            ]
+        }
+    )
+    deals = parse_bunjang(payload)
+
+    records = to_raw_records(deals, CAPTURED)  # ValueError가 나면 계약 위반
+
+    assert [r.status for r in records] == ["ACTIVE", "SOLD_OUT"]
