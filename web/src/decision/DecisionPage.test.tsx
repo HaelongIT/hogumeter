@@ -45,6 +45,7 @@ describe('DecisionPage', () => {
     vi.spyOn(api, 'getSignal').mockResolvedValue(signal)
     vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
+    vi.spyOn(api, 'listPurchases').mockResolvedValue([]) // 패널이 같은 화면에 있다
   })
 
   it('variant를 고르면 신호등·기준가·갭·주기를 한 화면에 낸다', async () => {
@@ -138,6 +139,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     vi.spyOn(api, 'getSignal').mockResolvedValue(signal)
     vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
+    vi.spyOn(api, 'listPurchases').mockResolvedValue([]) // 패널이 같은 화면에 있다
   })
 
   it('기본은 6개월이고, 기준가·주기를 그 기간으로 부른다', async () => {

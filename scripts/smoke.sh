@@ -119,6 +119,24 @@ curl -fsS "${WEB}/api/v1/variants/${variant_id}/cadence" | grep -q '"guardMet":f
 curl -sS -o /dev/null -w '%{http_code}' "${WEB}/api/v1/variants/999999/benchmark?periodMonths=6" |
 	grep -q '^404$' || fail "없는 variant인데 404가 아니다"
 
+echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
+# 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.
+purchase=$(mktemp)
+cat >"$purchase" <<JSON
+{"variantId": ${variant_id}, "demandAxisValue": null, "paidPrice": 899000,
+ "purchasedAt": "2026-07-01T14:59:00Z", "observationDays": null, "linkedDealEventId": null}
+JSON
+created_purchase=$(curl -fsS -X POST "${WEB}/api/v1/purchases" \
+	-H 'Content-Type: application/json' -d @"$purchase") || fail "구매 기록 POST 실패"
+rm -f "$purchase"
+echo "$created_purchase" | grep -q '"purchaseId"' || fail "purchaseId를 돌려주지 않는다: $created_purchase"
+
+observations=$(curl -fsS "${WEB}/api/v1/variants/${variant_id}/purchases")
+echo "$observations" | grep -q '"state":"OBSERVING"' || fail "구매가 OBSERVING이 아니다: $observations"
+echo "$observations" | grep -q '"mode":"NO_ACTIVE_DEAL"' || fail "딜 0건인데 활성 딜이 있다고 한다"
+echo "$observations" | grep -q '"cheaperChanceCount":0' || fail "놓친 기회가 0이 아니다"
+echo "$observations" | grep -q '"paidPrice":899000' || fail "실지불가가 왕복하지 않는다"
+
 echo "--- 6) collector는 opt-in 없이 네트워크를 만지지 않는다 (OBS-01 구조화 로그) ---"
 # 로그는 JSON Lines다. 문장을 grep하지 말고 이벤트를 본다 — 문구는 바뀌어도 계약은 안 바뀐다.
 collector_log=$(compose logs --no-log-prefix collector 2>&1 | grep '^{' | tail -1)

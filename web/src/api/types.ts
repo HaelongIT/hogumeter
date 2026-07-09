@@ -118,6 +118,45 @@ export interface CadenceView {
   guardMet: boolean
 }
 
+/** PUR-01 구매 관찰 상태기계(docs/15). */
+export type PurchaseState = 'OBSERVING' | 'REPORT_PENDING' | 'CLOSED' | 'ARCHIVED'
+
+/**
+ * PUR-05 관찰 문맥. **세 모드 배타** — 모드 밖 필드는 null이다(도메인 계약).
+ * `overpaidWon` 양수 = 내가 더 비싸게 샀다.
+ */
+export interface ObservationContext {
+  mode: 'ACTIVE_DEAL' | 'NO_ACTIVE_DEAL' | 'REPORT_PENDING'
+  activeLowestPriceLast: number | null
+  overpaidWon: number | null
+  overpaidPct: number | null
+  observationDay: number | null
+  cheaperChanceCount: number | null
+}
+
+/** GET /api/v1/variants/{variantId}/purchases */
+export interface PurchaseObservation {
+  purchaseId: number
+  state: PurchaseState
+  paidPrice: number
+  purchasedAt: string
+  context: ObservationContext
+}
+
+/** POST /api/v1/purchases — `observationDays`가 null이면 core가 90일을 적용한다. */
+export interface RecordPurchaseCommand {
+  variantId: number
+  demandAxisValue: string | null
+  paidPrice: number
+  purchasedAt: string
+  observationDays: number | null
+  linkedDealEventId: number | null
+}
+
+export interface PurchaseRecorded {
+  purchaseId: number
+}
+
 /** ApiExceptionHandler가 돌려주는 유일한 에러 형태. 코드는 현재 2종뿐이다. */
 export interface ApiError {
   code: 'BM_VARIANT_NOT_FOUND' | 'BM_INVALID_PERIOD' | (string & {})

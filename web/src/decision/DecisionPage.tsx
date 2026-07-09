@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { BenchmarkView, CadenceView, ProductSummary, SignalView } from '../api/types'
+import { PurchasePanel } from '../purchase/PurchasePanel'
 import { benchmarkLine, cadenceLine, gapLine, signalBadge } from './present'
 
 interface Loaded {
@@ -151,6 +152,10 @@ export function DecisionPage() {
           )}
         </section>
       )}
+
+      {/* 판단 바로 아래에 기록을 둔다 — 사후에 "호구였나"를 물으려면 같은 variant 문맥이어야 한다.
+          조회가 실패해도(위의 error) 이미 산 것을 기록하는 길은 막지 않는다. */}
+      {variantId !== null && <PurchasePanel variantId={variantId} />}
     </main>
   )
 }

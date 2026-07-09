@@ -4,6 +4,9 @@ import type {
   CadenceView,
   ProductCreated,
   ProductSummary,
+  PurchaseObservation,
+  PurchaseRecorded,
+  RecordPurchaseCommand,
   RegisterProductCommand,
   SignalView,
   VariantView,
@@ -54,4 +57,13 @@ export const api = {
 
   getCadence: (variantId: number, periodMonths = 6) =>
     request<CadenceView>(`/api/v1/variants/${variantId}/cadence?periodMonths=${periodMonths}`),
+
+  // PUR — 구매 기록(쓰기)과 관찰 문맥(읽기).
+  listPurchases: (variantId: number) => request<PurchaseObservation[]>(`/api/v1/variants/${variantId}/purchases`),
+
+  recordPurchase: (command: RecordPurchaseCommand) =>
+    request<PurchaseRecorded>('/api/v1/purchases', {
+      method: 'POST',
+      body: JSON.stringify(command),
+    }),
 }
