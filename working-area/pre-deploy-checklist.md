@@ -15,7 +15,8 @@
 
 ## C. 보안 · 네트워크
 - **[완료]** ~~CORS 설정~~ **불필요해졌다.** `web` 컨테이너의 nginx가 `/api`를 `core:8080`으로 프록시하므로 브라우저에겐 **동일 오리진**이다. 교차 출처 요청이 발생하지 않아 core에 CORS를 넣을 이유가 없다. 개발(Vite 프록시)과 운영(nginx)의 동작이 같다. **단, 크롬 확장(기능4)이 core에 직접 붙으면 그때 다시 필요**해진다.
-- **[필수]** **web 접근 통제가 없다**(SEC-02: 최소 토큰/Basic Auth + HTTPS). compose는 `127.0.0.1:3000`으로만 개방하지만, 공개망에 내놓으려면 nginx에 Basic Auth + Caddy/certbot TLS를 붙여야 한다. **지금 상태로 0.0.0.0에 열면 아무나 제품을 등록·삭제한다.**
+- **[필수]** **web Basic Auth를 켤 것**(SEC-02). 구현돼 있으나 **기본 off**다 — `.env`의 `WEB_BASIC_AUTH_HTPASSWD`를 채워야 활성화된다. 해시 생성: `docker run --rm httpd:2.4-alpine htpasswd -nbm hogu '비밀번호'`(compose에 넣을 땐 `$`를 `$$`로). 끈 상태로 `0.0.0.0`에 열면 **아무나 제품을 등록·삭제한다.** `scripts/smoke.sh` 7단계가 켠/끈 경로를 모두 검증한다.
+- **[필수]** **HTTPS**(SEC-02 나머지) — Caddy 또는 nginx+certbot. Basic Auth는 평문 HTTP에서 자격증명을 그대로 노출한다.
 - **[필수]** core REST API 외부 노출 범위 확인 — 1인용이므로 기본 비공개(방화벽/보안그룹). compose는 `127.0.0.1:8080`으로만 개방한다.
 - **[권장]** EC2 보안그룹 최소화 — Postgres 포트는 외부 미개방(컨테이너 내부 네트워크만).
 

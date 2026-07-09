@@ -40,6 +40,10 @@ services:
     build: ./web
     # depends_on을 걸지 않는다. nginx가 요청 시점에 core를 해석하므로 core 없이도 뜬다
     # (core가 없으면 /api만 502, 정적 페이지는 정상). core 재시작에도 web이 죽지 않는다.
+    environment:
+      # SEC-02 접근 통제. 비면 Basic Auth 꺼짐(로컬 개발). 공개망 노출 전 필수 —
+      # 해시 생성: docker run --rm httpd:2.4-alpine htpasswd -nbm hogu '비밀번호'
+      WEB_BASIC_AUTH_HTPASSWD: ${WEB_BASIC_AUTH_HTPASSWD:-}
     ports:
       # nginx가 /api를 core로 프록시한다 → 브라우저에겐 동일 오리진, CORS 불필요.
       # ⚠️ 접근 통제 없음(SEC-02). 로컬만 개방 — 공개망 노출 전 pre-deploy §C 확인.

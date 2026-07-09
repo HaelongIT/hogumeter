@@ -268,10 +268,11 @@ _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildComm
 - **잠정값**: `window=10, min_success_rate=0.6, zero_yield_streak=3`. `DriftPolicy`로 **주입**(Q-14·Q-37 선례 — 승인값과 미승인값을 섞지 않는다). `docs/31` 위임 수치 표 등재.
 - **재개 트리거**: 실 수집 1~2주 관측 후 — 오탐(새벽 시간대 0건, 일시 5xx 다발)이 잦으면 임계 상향, 구조 변경을 놓치면 하향. 특히 `zero_yield_streak=3`은 게시판이 3주기(3분) 연속 새 글 0건일 수 있는지에 달렸다.
 
-## [열림] Q-42. SEC-01 gitleaks pre-commit 훅 미구현
-- **맥락**: `docs/20` SEC-01은 "커밋 전 훅으로 스캔(gitleaks)"을 명시한다. 미구현이라 시크릿 보호가 `.gitignore` 한 줄(`.env*`)에만 의존한다. 사람이 실수로 토큰을 붙여넣고 커밋하면 아무것도 막지 못한다.
-- **잠정값**: 미구현. `.claude/hooks/guard.sh`(Claude Code 훅)는 **git push만** 막지 커밋 내용은 검사하지 않는다 — 성격이 다르다. gitleaks는 **git 훅**이라 사람이 커밋할 때도 발동한다.
-- **재개 트리거**: gitleaks 바이너리 도입 승인 시 — `.git/hooks`는 git으로 공유되지 않으므로 `core.hooksPath`를 저장소 내 디렉토리(예: `.githooks/`)로 설정해야 상대에게도 적용된다. `pre-deploy-checklist` §B에 `[권장]` 동반 기재.
+## [열림] Q-42. SEC-01 gitleaks — CI 게이트 구현 완료, **로컬 pre-commit 훅은 미활성**
+- **맥락**: SEC-01은 "커밋 전 훅으로 스캔(gitleaks)"을 명시한다. 보류 사유였던 "로컬 바이너리 설치"는 **CI에선 필요 없다**(컨테이너로 실행).
+- **구현(2026-07-09)**: CI에 `secrets` 잡 — `fetch-depth: 0`으로 **히스토리 전체**(58커밋) 스캔. `.gitleaks.toml`은 기본 규칙셋 + **좁은 예외 하나**: `collector/tests/fixtures/**.{html,json}`. 캡처한 남의 페이지에 그 사이트의 토큰이 박혀 있어 오탐이 난다(펨코 `list_normal.html:65`). **디렉토리 전체를 예외로 두지 않았다** — 같은 토큰을 `.txt`로 옮기면 잡히는 것을 실측 확인했다. 스캔 결과 **우리 시크릿 유출은 0건**.
+- **잔여**: `.githooks/pre-commit`을 만들어뒀으나 **활성화하지 않았다**(`git config core.hooksPath .githooks`). 매 커밋마다 컨테이너를 띄우므로(수 초) 켤지는 각자 정한다. Docker가 없으면 조용히 넘어가지 않고 **실패**한다 — "스캔했다고 착각"이 가장 나쁘다.
+- **재개 트리거**: 커밋 지연이 감당되면 훅 활성화. 오탐이 늘면 `.gitleaks.toml` allowlist를 **좁게** 확장(디렉토리 전체 금지).
 
 ## [열림] Q-43. code intelligence(LSP) 플러그인 미도입
 - **맥락**: Claude Code 문서의 도입 트리거 표에 "심볼 정의를 찾으려 파일을 많이 읽는다 → code intelligence 플러그인"이 있다. 2026-07-09 세션에서 Explore 에이전트가 core를 훑다가 REST 계약을 지어낸 상황이 정확히 여기 해당한다.

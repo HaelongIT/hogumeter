@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# SEC-01 시크릿 스캔 — 스테이징된 변경분만 검사한다.
+#
+# 활성화(선택):  git config core.hooksPath .githooks
+# 비활성화:      git config --unset core.hooksPath
+#
+# `.git/hooks`는 git으로 공유되지 않으므로 `core.hooksPath`로 저장소 안 디렉토리를 가리킨다.
+# **자동으로 켜지 않는다** — 매 커밋마다 컨테이너를 띄우므로(수 초) 켤지는 각자 정한다.
+# CI(`secrets` 잡)가 최종 방어선이라, 이 훅을 안 켜도 유출은 머지 전에 잡힌다.
+#
+# 요구: Docker. 없으면 **조용히 넘어가지 않고** 실패한다 — "스캔했다고 착각"이 가장 나쁘다.
+
+set -euo pipefail
+
+if ! command -v docker >/dev/null 2>&1; then
+	echo "pre-commit: docker가 없어 시크릿 스캔을 못 했습니다." >&2
+	echo "  Docker를 켜거나, 이번만 건너뛰려면 git commit --no-verify (권장하지 않음)." >&2
+	exit 1
+fi
+
+root=$(git rev-parse --show-toplevel)
+# MSYS(Git Bash) 경로 변환 방지 — /repo가 C:/Program Files/Git/repo로 바뀐다.
+export MSYS_NO_PATHCONV=1
+
+echo "pre-commit: 스테이징된 변경분 시크릿 스캔..."
+docker run --rm -v "${root}:/repo" ghcr.io/gitleaks/gitleaks:latest \
+	protect --staged --source=/repo --config=/repo/.gitleaks.toml --redact --no-banner --verbose ||
+	{
+		echo "" >&2
+		echo "시크릿이 감지되어 커밋을 막았습니다. 값을 제거하고 다시 시도하세요." >&2
+		echo "  오탐이면 .gitleaks.toml의 allowlist를 **좁게** 확장하세요(디렉토리 전체 금지)." >&2
+		exit 1
+	}

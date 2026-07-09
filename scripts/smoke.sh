@@ -93,5 +93,19 @@ product_id=$(echo "$created" | sed 's/.*"productId"[: ]*\([0-9]*\).*/\1/')
 echo "--- 6) collector는 opt-in 없이 네트워크를 만지지 않는다 ---"
 compose logs collector 2>&1 | grep -q 'COLLECTOR_ALLOW_NETWORK' || fail "collector가 정지조건 안내를 출력하지 않았다"
 
+echo "--- 7) SEC-02 Basic Auth: 켜면 막고, 끄면 열린다 ---"
+# 위 1~6은 auth 미설정(기본 off) 경로였다. 이제 켠 경로를 같은 이미지로 검증한다.
+# 해시는 `htpasswd -nbm smoke smoke-pass` 산출물(apr1). 평문 비밀번호는 어디에도 두지 않는다.
+image=$(compose config --images | grep -E 'web$' | head -1)
+htpasswd='smoke:$apr1$HvjdDxij$LfiNPd.VUQvfyKaOeKNib0'
+auth_cid=$(docker run -d -p "127.0.0.1:${AUTH_PORT:-54000}:80" -e WEB_BASIC_AUTH_HTPASSWD="$htpasswd" "$image")
+sleep 2
+auth_url="http://127.0.0.1:${AUTH_PORT:-54000}/"
+code_no_creds=$(curl -s -o /dev/null -w '%{http_code}' "$auth_url")
+code_with_creds=$(curl -s -o /dev/null -w '%{http_code}' -u smoke:smoke-pass "$auth_url")
+docker rm -f "$auth_cid" >/dev/null
+[ "$code_no_creds" = 401 ] || fail "Basic Auth를 켰는데 인증 없이 ${code_no_creds}를 준다"
+[ "$code_with_creds" = 200 ] || fail "올바른 자격증명인데 ${code_with_creds}를 준다"
+
 echo
-echo "SMOKE PASS: web -> nginx -> core -> postgres 왕복 확인"
+echo "SMOKE PASS: web -> nginx -> core -> postgres 왕복 + SEC-02 Basic Auth 확인"

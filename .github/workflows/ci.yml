@@ -6,6 +6,19 @@ on:
   pull_request:
 
 jobs:
+  # SEC-01: 레포에 비밀 커밋 절대 금지. 히스토리 전체를 스캔한다(fetch-depth: 0).
+  # 로컬 pre-commit 훅은 별건 — .githooks/pre-commit + `git config core.hooksPath .githooks`.
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks (히스토리 전체)
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest \
+            detect --source=/repo --config=/repo/.gitleaks.toml --redact --no-banner --verbose
+
   core:
     runs-on: ubuntu-latest
     defaults:

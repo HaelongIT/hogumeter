@@ -1,0 +1,18 @@
+# SEC-01 시크릿 스캔 설정. 기본 규칙셋을 그대로 쓰고 예외만 좁게 둔다.
+[extend]
+useDefault = true
+
+[allowlist]
+description = """
+캡처한 남의 페이지는 우리 시크릿이 아니다.
+
+`collector/tests/fixtures/`는 핫딜 사이트의 응답을 **바이트 그대로** 보관한 golden이다.
+그 안에는 그 사이트가 자기 페이지에 심은 토큰·해시가 들어 있고(예: 펨코 list_normal.html의
+input_password.xml 토큰), gitleaks가 이를 generic-api-key로 잡는다.
+
+**디렉토리 전체를 예외로 두지 않는다** — 실수로 `.env`를 fixtures에 떨궈도 잡히도록,
+확장자를 캡처 산출물(html/json)로 한정한다.
+"""
+paths = [
+    '''collector/tests/fixtures/.*\.(html|json)$''',
+]
