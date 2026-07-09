@@ -60,6 +60,34 @@ def test_preserves_raw_payload():
     assert records[0].raw == {"ad": False, "pid": "9"}
 
 
+def test_applied_conditions_are_preserved_under_a_derived_key():
+    """`raw`는 "크롤링 원본 보관 전용"(docs/01)이라, 파생 데이터는 `_derived` 아래에 둔다.
+
+    `raw_deal_post`에 조건 컬럼이 없어 임시로 여기 싣는다 — docs/91 Q-46.
+    """
+    deal = ParsedDeal(
+        site="ppomppu",
+        post_id="1",
+        title="딜",
+        url="u",
+        raw={"src": "list"},
+        applied_conditions=["카할"],
+    )
+
+    (record,) = to_raw_records([deal], CAPTURED)
+
+    assert record.raw["src"] == "list"  # 원본 훼손 없음
+    assert record.raw["_derived"]["applied_conditions"] == ["카할"]
+
+
+def test_no_conditions_means_no_derived_key():
+    deal = ParsedDeal(site="ppomppu", post_id="1", title="딜", url="u", raw={"src": "list"})
+
+    (record,) = to_raw_records([deal], CAPTURED)
+
+    assert record.raw == {"src": "list"}
+
+
 def test_accepts_every_status_the_bunjang_parser_can_emit():
     """파서가 내는 status는 계약 허용집합 안이어야 한다.
 

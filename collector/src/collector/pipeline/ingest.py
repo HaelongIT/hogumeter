@@ -51,6 +51,16 @@ def to_raw_records(deals: list[ParsedDeal], captured_at: datetime) -> list[RawDe
             headline_price=deal.headline_price,
             posted_at=deal.posted_at,
             reaction_score=deal.reaction_score,
-            raw=deal.raw,
+            raw=_raw_with_derived(deal),
         )
     return list(by_key.values())
+
+
+def _raw_with_derived(deal: ParsedDeal) -> dict:
+    """`raw`는 "크롤링 원본 보관 전용"(docs/01)이므로 파생 데이터는 `_derived` 아래로 분리한다.
+
+    조건 태그(BM-02 AC-2)를 담을 컬럼이 `raw_deal_post`에 없어 임시로 여기 싣는다 — docs/91 Q-46.
+    """
+    if not deal.applied_conditions:
+        return deal.raw
+    return {**deal.raw, "_derived": {"applied_conditions": list(deal.applied_conditions)}}

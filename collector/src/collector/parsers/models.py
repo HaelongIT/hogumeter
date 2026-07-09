@@ -17,3 +17,6 @@ class ParsedDeal:
     posted_at: datetime | None = None
     status: str = "ACTIVE"  # ACTIVE / SOLD_OUT / DELETED
     raw: dict = field(default_factory=dict)  # 사이트별 원본 부가필드(JSONB 보관용)
+    # BM-02 AC-2: 카드·쿠폰·조건부 배송은 as-posted(역산 금지)로 두되 **태그로 보존**한다.
+    # 태그가 없으면 "누구나 이 가격"인지 "와우 회원만"인지 구분할 수 없다(정직성, 절대 원칙 1).
+    applied_conditions: list[str] = field(default_factory=list)

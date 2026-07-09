@@ -3,6 +3,8 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from collector.parsers.bunjang import parse_bunjang
 from collector.parsers.fmkorea import parse_fmkorea
 from collector.parsers.ppomppu import parse_ppomppu
@@ -132,6 +134,49 @@ def test_ppomppu_missing_recommend_is_zero():
 
     assert deals[1].post_id == "717718"
     assert deals[1].reaction_score == 0
+
+
+def test_ppomppu_preserves_conditional_price_tags():
+    """BM-02 AC-2: 조건가는 as-posted로 두되 태그로 보존한다.
+
+    태그가 없으면 "누구나 이 가격"인지 "카드할인 적용가"인지 구분할 수 없다.
+    """
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"), NOW)
+
+    card = next(d for d in deals if d.post_id == "717697")  # (카할180만원대/무배)
+    assert card.headline_price == 1_800_000  # 역산하지 않는다
+    assert "카할" in card.applied_conditions
+
+    paid_shipping = next(d for d in deals if d.post_id == "717710")  # (16,450원/유배)
+    assert "유료배송(금액미상)" in paid_shipping.applied_conditions
+
+
+def test_ppomppu_unconditional_deal_has_no_tags():
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"), NOW)
+
+    assert deals[0].applied_conditions == []  # (11,800원/무료)
+
+
+@pytest.mark.parametrize(
+    "post_id, shipping_word",
+    [
+        ("10041939805", "와우무배"),  # 쿠팡 와우 회원
+        ("10040951722", "네멤무료"),  # 네이버멤버십
+        ("10040781360", "1만5천원무료"),  # 일정 금액 이상 구매
+    ],
+)
+def test_fmkorea_tags_conditional_free_shipping(post_id, shipping_word):
+    """`.hotdeal_info`의 배송 어휘가 조건을 담는다. 지금까진 전부 '무료 0원'으로 흡수했다."""
+    deals = parse_fmkorea(_read("fmkorea/list_normal.html"), NOW)
+
+    deal = next(d for d in deals if d.post_id == post_id)
+    assert f"조건부무료배송:{shipping_word}" in deal.applied_conditions
+
+
+def test_fmkorea_plain_free_shipping_is_not_tagged():
+    deals = parse_fmkorea(_read("fmkorea/list_normal.html"), NOW)
+
+    assert deals[0].applied_conditions == []  # 배송 = '무료'
 
 
 def test_ppomppu_adds_shipping_fee_from_title_convention():

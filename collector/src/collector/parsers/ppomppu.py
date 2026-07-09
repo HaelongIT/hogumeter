@@ -55,6 +55,8 @@ def parse_ppomppu(html: str, now: datetime) -> list[ParsedDeal]:
                 status="SOLD_OUT" if tr.select_one(".end2") else "ACTIVE",
                 # `.baseList-time`: 당일 `21:10:11` / 이전 `26/07/03`. 해석엔 "오늘"이 필요하다.
                 posted_at=parse_board_time(_text(tr.select_one(".baseList-time")), now),
+                # `카할`(카드할인)·`유배`(유료배송 금액미상) 같은 조건을 태그로 보존(BM-02 AC-2).
+                applied_conditions=normalized.applied_conditions if normalized else [],
             )
         )
     return deals

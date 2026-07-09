@@ -48,6 +48,7 @@ def parse_ruliweb(html: str, now: datetime) -> list[ParsedDeal]:
                 status=status,
                 # `.time`: 당일 `날짜 18:10` / 이전 `날짜 2026.07.03` (스크린리더 라벨 접두)
                 posted_at=_posted_at(tr, now),
+                applied_conditions=normalized.applied_conditions if normalized else [],
             )
         )
     return deals

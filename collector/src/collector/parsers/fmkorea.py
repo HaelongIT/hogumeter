@@ -24,6 +24,7 @@ def parse_fmkorea(html: str, now: datetime) -> list[ParsedDeal]:
             continue
         title = anchor.get_text(strip=True)
 
+        price, conditions = _hotdeal_price(li)
         deals.append(
             ParsedDeal(
                 site="fmkorea",
@@ -31,9 +32,10 @@ def parse_fmkorea(html: str, now: datetime) -> list[ParsedDeal]:
                 title=title,
                 url=f"https://www.fmkorea.com/{post_id}",
                 reaction_score=_voted_count(li),
-                headline_price=_hotdeal_price(li),
+                headline_price=price,
                 status="SOLD_OUT" if li.select_one(".hotdeal_var8Y") else "ACTIVE",
                 posted_at=_posted_at(li, now),  # `.regdate`: 당일 `20:59`
+                applied_conditions=conditions,
             )
         )
     return deals
@@ -52,16 +54,34 @@ def _voted_count(li) -> int:
     return int(text) if text.isdigit() else 0
 
 
-def _hotdeal_price(li) -> int | None:
+def _hotdeal_price(li) -> tuple[int | None, list[str]]:
+    """`.hotdeal_info` = [쇼핑몰, 가격, 배송]. **배송 어휘가 조건을 담는다.**
+
+    실측: `무료`(17) / `와우무배`(쿠팡 와우 회원) / `네멤무료`(네이버멤버십) / `1만5천원무료`(금액 조건).
+    전부 배송비 0으로 흡수하면 "누구나 이 가격"처럼 보인다 — 조건을 태그로 남긴다(BM-02 AC-2).
+    """
     info = li.select_one(".hotdeal_info")
     if not info:
-        return None
+        return None, []
     links = [a.get_text(strip=True) for a in info.select("a")]
-    # links = [쇼핑몰, 가격, 배송]
     if len(links) < 2:
-        return None
+        return None, []
+
     price_text = links[1]
     shipping_text = links[2] if len(links) >= 3 else ""
     combined = price_text + (" 무료배송" if "무료" in shipping_text else " " + shipping_text)
     normalized = normalize_price(combined)
-    return normalized.headline_price if normalized else None
+    if not normalized:
+        return None, []
+
+    conditions = list(normalized.applied_conditions)
+    if _is_conditional_free_shipping(shipping_text):
+        conditions.append(f"조건부무료배송:{shipping_text}")
+    return normalized.headline_price, conditions
+
+
+def _is_conditional_free_shipping(shipping_text: str) -> bool:
+    """`무료`만 무조건이다. 그 외에 무료를 뜻하는 표현은 전부 조건이 붙어 있다."""
+    if not shipping_text or shipping_text == "무료":
+        return False
+    return "무료" in shipping_text or "무배" in shipping_text
