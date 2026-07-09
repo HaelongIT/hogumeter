@@ -145,7 +145,12 @@ echo "$collector_log" | grep -q '"reason":"network_opt_in_missing"' || fail "정
 
 echo "--- 7) SEC-02 Basic Auth: 켜면 막고, 끄면 열린다 ---"
 # 위 1~6은 auth 미설정(기본 off) 경로였다. 이제 켠 경로를 같은 이미지로 검증한다.
-# 해시는 `htpasswd -nbm smoke smoke-pass` 산출물(apr1). 평문 비밀번호는 어디에도 두지 않는다.
+#
+# 해시는 `htpasswd -nbm smoke smoke-pass` 산출물(apr1)이고, **평문 `smoke-pass`도 바로 아래
+# `-u`에 그대로 있다.** 성공 경로(200)를 확인하려면 평문이 필요하고, 해시와 짝이 맞아야 한다.
+# 이 자격증명은 여기서 띄우는 일회용 컨테이너에만 쓰이며 어디에도 배포되지 않는다 —
+# 그래서 `.gitleaks.toml`이 이 문자열·이 파일·이 규칙에 한해(AND) 예외를 둔다.
+# 다른 자격증명을 여기 넣으면 gitleaks가 잡는다.
 image=$(compose config --images | grep -E 'web$' | head -1)
 htpasswd='smoke:$apr1$HvjdDxij$LfiNPd.VUQvfyKaOeKNib0'
 auth_cid=$(docker run -d -p "127.0.0.1:${AUTH_PORT:-54000}:80" -e WEB_BASIC_AUTH_HTPASSWD="$htpasswd" "$image")
