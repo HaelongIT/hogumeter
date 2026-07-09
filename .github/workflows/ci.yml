@@ -67,6 +67,15 @@ jobs:
       - name: Typecheck + build
         run: npm run build
 
+  # REL-04: 복구 경로는 사고가 나야 처음 실행된다. 그래서 매 커밋 리허설한다.
+  # 실 AWS를 부르지 않는다 — MinIO(S3 호환)에 대고 운영과 **같은 스크립트**를 돌린다.
+  offsite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 오프사이트 백업 리허설 (MinIO)
+        run: bash scripts/offsite-drill.sh
+
   # 모듈별 테스트가 전부 GREEN이어도 스택이 뜬다는 보장은 없다. 실제로 nginx가
   # proxy_pass 업스트림을 기동 시점에 해석하다 죽은 적이 있고(docs/99), 어떤 단위
   # 테스트도 그걸 못 잡았다. 여기서 브라우저가 걷는 길을 그대로 걷는다.

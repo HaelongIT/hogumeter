@@ -8,7 +8,7 @@
 #   10 3 * * *  cd /srv/hogumeter && bash scripts/backup.sh >> backups/backup.log 2>&1
 #
 # **읽기만 한다.** 이 스크립트는 DB를 변경하지 않고, 지우는 것은 보존 기간이 지난 *덤프 파일*뿐이다.
-# 주 1회 오프사이트(S3) 사본은 아직 없다 — pre-deploy §A.
+# 오프사이트 사본은 `BACKUP_S3_BUCKET`이 있을 때만 올라간다(REL-04, `scripts/offsite-upload.sh`).
 
 set -euo pipefail
 
@@ -53,3 +53,8 @@ echo "backup: $(du -h "$out" | cut -f1)  ($(zcat "$out" | wc -l) 줄)"
 
 echo "backup: ${RETENTION_DAYS}일 지난 덤프 정리"
 find "$out_dir" -name "${DB_NAME}-*.sql.gz" -type f -mtime "+${RETENTION_DAYS}" -print -delete
+
+# 오프사이트 사본(REL-04)은 **마지막에**. 여기서 죽어도 로컬 덤프는 이미 온전하고 정리도 끝났다.
+# 실패하면 exit 0을 내지 않는다 — cron 로그에 남아야 사람이 안다(실패를 뭉개지 않는다).
+# 미설정이면 건너뛰되 "오프사이트 없음"을 출력한다.
+bash "$root/scripts/offsite-upload.sh" "$out"

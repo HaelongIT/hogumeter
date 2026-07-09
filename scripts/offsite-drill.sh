@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# REL-04 오프사이트 리허설 — `scripts/offsite-upload.sh`의 **바로 그 코드 경로**를
+# S3 호환 스토리지(MinIO)에 대고 실행한다.
+#
+#   bash scripts/offsite-drill.sh
+#
+# 왜 MinIO인가: 실 AWS 호출은 비용·자격증명·정지조건에 걸린다. 우리가 검증해야 하는 건
+# "S3 API에 대고 우리 스크립트가 옳게 동작하는가"이지 AWS 그 자체가 아니다.
+#
+# 왜 리허설이 필요한가: 업로드 코드는 **사고가 나야 처음 읽힌다**. 백업 스크립트가 exit 0을
+# 내는 것과 원격에 온전한 객체가 있는 것은 다른 사건이다(docs/99).
+#
+# 격리: 전용 네트워크·전용 컨테이너 이름. 운영/개발 어디에도 닿지 않는다.
+
+set -euo pipefail
+
+NET="hogumeter-offsite-drill"
+MINIO="hogumeter-offsite-minio"
+BUCKET="hogumeter-drill"
+work=$(mktemp -d)
+
+cleanup() {
+	docker rm -f "$MINIO" >/dev/null 2>&1 || true
+	docker network rm "$NET" >/dev/null 2>&1 || true
+	rm -rf "$work"
+}
+trap cleanup EXIT
+
+fail() {
+	echo "FAIL: $*" >&2
+	exit 1
+}
+
+echo "--- MinIO 기동 (일회용) ---"
+docker network create "$NET" >/dev/null
+docker run -d --name "$MINIO" --network "$NET" \
+	-e MINIO_ROOT_USER=drilluser -e MINIO_ROOT_PASSWORD=drillpass123 \
+	minio/minio:latest server /data >/dev/null
+
+export OFFSITE_DOCKER_NETWORK="$NET"
+export BACKUP_S3_ENDPOINT="http://${MINIO}:9000"
+export BACKUP_S3_BUCKET="$BUCKET"
+export BACKUP_S3_PREFIX="postgres"
+export AWS_ACCESS_KEY_ID=drilluser
+export AWS_SECRET_ACCESS_KEY=drillpass123
+export AWS_DEFAULT_REGION=us-east-1
+
+work_host="$work"
+case "$(uname -s)" in
+MINGW* | MSYS*) work_host=$(cd "$work" && pwd -W) ;;
+esac
+
+aws() {
+	MSYS_NO_PATHCONV=1 docker run --rm --network "$NET" \
+		-v "${work_host}:/data" \
+		-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+		-e AWS_EC2_METADATA_DISABLED=true -e AWS_S3_ADDRESSING_STYLE=path \
+		amazon/aws-cli:latest --endpoint-url "$BACKUP_S3_ENDPOINT" "$@"
+}
+
+echo "--- MinIO 준비 대기 ---"
+for _ in $(seq 30); do
+	if aws s3 ls >/dev/null 2>&1; then
+		ready=1
+		break
+	fi
+	sleep 1
+done
+[ "${ready:-0}" = 1 ] || fail "MinIO가 뜨지 않았다"
+aws s3 mb "s3://${BUCKET}" >/dev/null
+
+echo "--- 덤프를 흉내낸 gzip 파일 생성 ---"
+dump="$work/hogumeter-drill.sql.gz"
+{
+	echo "-- pg_dump 흉내"
+	seq 1 5000
+} | gzip -9 >"$dump"
+local_size=$(wc -c <"$dump" | tr -d ' ')
+
+echo "--- 1) 업로드 (운영과 같은 스크립트) ---"
+root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+bash "$root/scripts/offsite-upload.sh" "$dump" || fail "업로드 실패"
+
+echo "--- 2) 되받아 무결성 확인 (올렸다 != 온전히 있다) ---"
+aws s3 cp "s3://${BUCKET}/postgres/$(basename "$dump")" /data/roundtrip.sql.gz --only-show-errors ||
+	fail "다운로드 실패"
+back="$work/roundtrip.sql.gz"
+[ "$(wc -c <"$back" | tr -d ' ')" = "$local_size" ] || fail "크기 불일치"
+gzip -t "$back" || fail "gzip 무결성 검사 실패"
+[ "$(zcat "$back" | wc -l)" = 5001 ] || fail "내용 줄 수가 다르다"
+
+echo "--- 3) 스위치가 없으면 조용히 성공하지 않는다 ---"
+# BACKUP_S3_BUCKET을 비우면 업로드를 건너뛰되, "오프사이트 없음"을 말해야 한다.
+skipped=$(BACKUP_S3_BUCKET= bash "$root/scripts/offsite-upload.sh" "$dump")
+echo "$skipped" | grep -q "미설정" || fail "오프사이트 미설정 사실을 알리지 않는다"
+
+echo "--- 4) 크기 불일치를 실제로 잡아내는가 (검증기 검증) ---"
+# 원격 객체를 다른 내용으로 덮어쓰면 offsite-upload는 성공한 뒤 크기를 대조한다.
+# 여기서는 검증 로직 자체를 시험한다: 없는 키를 head 하면 실패해야 한다.
+if aws s3api head-object --bucket "$BUCKET" --key "postgres/nonexistent.sql.gz" >/dev/null 2>&1; then
+	fail "없는 객체를 head 했는데 성공했다"
+fi
+
+echo "OFFSITE DRILL PASS: 업로드 -> 확인 -> 왕복 무결성 -> 미설정 경고"

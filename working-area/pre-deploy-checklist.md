@@ -9,7 +9,8 @@
 - **[필수]** Postgres 데이터 볼륨 영속화 — `pgdata` 명명 볼륨. **운영에서 `docker compose down -v` 금지**(데이터 삭제).
 - **[완료]** 백업·복원 — `bash scripts/backup.sh`(pg_dump + gzip + 7일 보관, gzip 무결성 검사), `bash scripts/restore-drill.sh`(일회용 격리 컨테이너에 복원해 테이블·행·`flyway_schema_history` 확인). **리허설 실측 통과**: 제품 1건이 덤프를 거쳐 되살아났다.
 - **[필수]** **cron 등록** — `10 3 * * * cd /srv/hogumeter && bash scripts/backup.sh >> backups/backup.log 2>&1`. 스크립트만 있고 스케줄은 사람이 건다.
-- **[필수]** **주 1회 S3 offsite 사본**(REL-04) — 미구현. 로컬 디스크가 죽으면 백업도 함께 죽는다.
+- **[완료 — 코드]** **오프사이트 사본**(REL-04) — `scripts/offsite-upload.sh`가 덤프를 S3에 올리고 **head-object로 크기까지 대조**한다("올렸다"와 "온전히 거기 있다"는 다른 사건). `backup.sh`가 마지막 단계로 호출하며, 실패해도 로컬 덤프·보존 정리는 이미 끝난 뒤다. `bash scripts/offsite-drill.sh`가 MinIO에 대고 **운영과 같은 코드 경로**를 리허설한다(CI `offsite` 잡, 매 커밋). aws-cli는 컨테이너로만 실행 — 호스트 설치 없음(OPS-02).
+- **[필수]** 오프사이트 **실 버킷·IAM 준비** — `.env`에 `BACKUP_S3_BUCKET`(+ `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_DEFAULT_REGION`). **비워두면 업로드를 건너뛰고 "오프사이트 없음"을 출력한다** — 조용히 성공하지 않는다. IAM은 해당 prefix에 `PutObject`/`GetObject`/`HeadObject`만. 버킷 버저닝·수명주기(예: 90일) 권장.
 
 ## B. 시크릿 · 환경설정
 - **[필수]** 운영 시크릿 = EC2의 `.env`(gitignore) — 텔레그램 봇 토큰, 네이버 쇼핑 API Client ID/Secret, Postgres 비밀번호. git/CI에 평문 금지.

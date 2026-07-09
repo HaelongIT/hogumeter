@@ -117,6 +117,7 @@ bash scripts/smoke.sh   # 빌드 → 기동 → web → nginx → core → postg
 # 2-1) 백업·복원 리허설 (REL-04)
 bash scripts/backup.sh          # pg_dump + gzip → backups/, 7일 보관
 bash scripts/restore-drill.sh   # 일회용 컨테이너에 복원해 검증 (운영 DB 안 건드림)
+bash scripts/offsite-drill.sh   # 오프사이트 업로드 리허설 (MinIO — 실 AWS 미호출)
 
 # 3) 모듈별 테스트
 cd core && ./gradlew test                    # 단위 + Testcontainers 통합
