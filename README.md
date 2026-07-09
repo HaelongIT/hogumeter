@@ -127,6 +127,7 @@ cd collector && uv run pytest  # 파서 golden + 파이프라인
 hogumeter/
 ├── core/            # Spring Boot — 기준가 엔진·매칭·알림·REST (헥사고날)
 ├── collector/       # Python — 핫딜 3사 + 번개장터 폴링·파싱
+├── web/             # React — 최소 슬라이스(제품 등록 + 목록)
 ├── docs/            # 기획·설계 정본 (1·2차) — 읽기 순서는 docs/README.md
 ├── working-area/    # 작업 보드 (결정·로그·배포 체크리스트)
 ├── docker-compose.yml

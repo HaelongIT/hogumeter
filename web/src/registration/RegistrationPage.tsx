@@ -1,0 +1,124 @@
+import { useEffect, useState } from 'react'
+import { ApiFailure, api } from '../api/client'
+import type { ProductSummary } from '../api/types'
+import { InvalidForm, buildCommand, type RegistrationForm } from './buildCommand'
+
+const EMPTY: RegistrationForm = {
+  name: '',
+  category: '',
+  axisName: '용량',
+  axisValues: '',
+  aliases: '',
+  demandAxisMode: 'GROUPED',
+}
+
+export function RegistrationPage() {
+  const [form, setForm] = useState<RegistrationForm>(EMPTY)
+  const [products, setProducts] = useState<ProductSummary[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const reload = () =>
+    api
+      .listProducts()
+      .then(setProducts)
+      .catch(() => setError('제품 목록을 불러오지 못했습니다. core가 떠 있는지 확인하세요.'))
+
+  useEffect(() => {
+    void reload()
+  }, [])
+
+  const set = (key: keyof RegistrationForm) => (event: { target: { value: string } }) =>
+    setForm((current) => ({ ...current, [key]: event.target.value }))
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setError(null)
+    setBusy(true)
+    try {
+      await api.registerProduct(buildCommand(form))
+      setForm(EMPTY)
+      await reload()
+    } catch (failure) {
+      setError(describe(failure))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <main>
+      <h1>제품 등록</h1>
+
+      <p role="note">
+        네이버 후보 검색은 API 키가 없어 아직 쓸 수 없습니다(docs/91 Q-3). 지금은 수동 입력만
+        가능합니다 — REG-01이 인정한 폴백 경로입니다.
+      </p>
+
+      <form onSubmit={submit} aria-label="제품 등록">
+        <label>
+          제품명
+          <input value={form.name} onChange={set('name')} required />
+        </label>
+        <label>
+          카테고리
+          <input value={form.category} onChange={set('category')} />
+        </label>
+        <label>
+          가격축 이름
+          <input value={form.axisName} onChange={set('axisName')} />
+        </label>
+        <label>
+          축 값 (쉼표 또는 줄바꿈)
+          <textarea value={form.axisValues} onChange={set('axisValues')} placeholder="256GB, 512GB" />
+        </label>
+        <label>
+          별칭 (매칭 사전 시드)
+          <textarea value={form.aliases} onChange={set('aliases')} placeholder="아이폰17, iphone17" />
+        </label>
+        <label>
+          수요축 모드
+          <select value={form.demandAxisMode} onChange={set('demandAxisMode')}>
+            <option value="GROUPED">묶음 (기본)</option>
+            <option value="SPLIT">분리</option>
+          </select>
+        </label>
+
+        <button type="submit" disabled={busy}>
+          {busy ? '등록 중...' : '등록'}
+        </button>
+      </form>
+
+      {error && <p role="alert">{error}</p>}
+
+      <h2>등록된 제품</h2>
+      {products === null ? (
+        <p>불러오는 중...</p>
+      ) : products.length === 0 ? (
+        <p>아직 등록된 제품이 없습니다.</p>
+      ) : (
+        <ul aria-label="등록된 제품">
+          {products.map((product) => (
+            <li key={product.productId}>
+              <strong>{product.name}</strong>
+              <ul>
+                {product.variants.map((variant) => (
+                  // variantId를 노출한다 — 기준가·신호·주기 조회가 전부 이걸 요구한다.
+                  <li key={variant.variantId}>
+                    {variant.label} <code>#{variant.variantId}</code>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+    </main>
+  )
+}
+
+function describe(failure: unknown): string {
+  if (failure instanceof InvalidForm) return failure.message
+  if (failure instanceof ApiFailure) return `등록 실패 (${failure.code})`
+  return '등록 실패: 알 수 없는 오류'
+}

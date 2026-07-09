@@ -238,6 +238,16 @@ _(Q-39. BLOCKED 자동 중지의 수동 재개 경로 — **`working-area/decisi
 
 _(Q-40. REL-06 파싱 드리프트 감지 — **해소됨 2026-07-09**: `scheduler/drift.py`(순수, 이동창). 두 신호를 본다 — ① **조용한 0건**(성공인데 연속 0건 = 구조 변경의 전형. 뽐뿌 셀렉터 체인이 끊겼을 때 예외 없이 0건이었다) ② **성공률 저하**(창 안 TRANSIENT 비율). BLOCKED는 세지 않는다(이미 중지+Alert). 창 미충족 시 미판정, 회복 시 재무장, 같은 증상 반복 알림 억제. `__main__`이 사이클마다 관측을 먹인다. 임계는 **미승인 잠정 주입**(아래 Q-45). 여기서 제거.)_
 
+## [열림] Q-47. web 등록 폼은 가격축 1개만 지원 (조합 미지원)
+- **맥락**: REG-02는 "priceAxis 값 **조합**대로 Variant 생성"을 요구한다(용량×색상 → 4 variant). 최소 슬라이스는 축 1개만 받는다.
+- **잠정값**: `buildCommand`가 축 1개 → variant N개. 축 2개 이상은 화면 복잡도(동적 축 추가·조합 미리보기)가 커서 미룬다. **core는 이미 조합을 받는다**(`RegisterProductCommand.variants[]`가 `priceAxisValues` 맵) — 막힌 건 UI뿐이다.
+- **재개 트리거**: 1차 검증 제품(아이폰 17 256GB)이 축 1개로 충분하다. 축 2개가 필요한 제품을 등록할 때 UI 확장.
+
+## [열림] Q-48. 알림 정책 설정(REG-03) 화면을 만들 REST가 없다
+- **맥락**: 확정본 §7의 web 최소 슬라이스는 "등록 + 후보선택 + **variant/키워드/목표가 설정**"이다. `alert_policy` 테이블·`AlertPolicyEntity`·`AlertPolicyRepository`는 있으나 **컨트롤러가 없다** — 목표가·기간 P·K_display·제외 키워드·quiet hours를 화면에서 저장할 수 없다.
+- **잠정값**: web은 등록+목록만. 설정은 미구현. 사용자 승인은 "**읽기 전용** 조회 API 추가"까지였고 정책 저장은 쓰기 API라 범위 밖.
+- **재개 트리거**: `AlertPolicyController`(GET/PUT) 착수 시 — core 소유 영역이라 상대와 조율. 그때 REG-03 화면.
+
 ## [열림] Q-46. 조건 태그(`applied_conditions`)를 담을 컬럼이 `raw_deal_post`에 없다
 - **맥락**: BM-02 AC-2는 "카드·쿠폰 조건가는 as-posted(역산 금지), **태그만 보존**"을 요구한다. `normalize_price`는 `카할`(카드할인)·`유배`(유료배송 금액미상)·`N카드` 태그를 계산해왔으나 **아무도 저장하지 않아 전부 버려지고 있었다**(2026-07-09 발견). 펨코의 `와우무배`·`네멤무료`·`1만5천원무료`(조건부 무료배송)도 마찬가지.
 - **잠정값**: `ParsedDeal.applied_conditions` → `raw_deal_post.raw` jsonb의 **`_derived.applied_conditions`** 키에 저장. `raw`는 docs/01상 "크롤링 원본 보관 전용"이라 파생 데이터임이 드러나도록 `_derived` 아래에 분리했다. **가장 보수적 선택** — 스키마 변경 0, core 무영향(`RawDealPost` 엔티티는 `raw`를 매핑조차 하지 않는다).
