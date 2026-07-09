@@ -240,6 +240,12 @@ _(Q-40. REL-06 파싱 드리프트 감지 — **해소됨 2026-07-09**: `schedul
 
 _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildCommand`가 데카르트 곱을 만든다(용량 2 × 색상 2 → variant 4). 축 이름 중복은 거부(맵에서 덮어쓰기), 빈 축 행은 무시, 화면이 "생성될 variant N개"를 미리 보여준다. 여기서 제거.)_
 
+## [열림] Q-50. OBS-04 헬스체크 엔드포인트가 없다 (core·collector)
+- **맥락**: OBS-04는 "헬스체크 엔드포인트(컴포넌트별) + Compose healthcheck"를 요구한다. 현재 compose에 healthcheck가 있는 서비스는 **postgres 하나뿐**이고, core에는 `spring-boot-starter-actuator` 의존이 없다.
+- **왜 지금 문제인가**: `scripts/smoke.sh`가 core 준비를 `/api/v1/products`를 폴링해 판정한다 — **비즈니스 엔드포인트를 헬스체크로 오용**하는 것이다. core가 뜬 뒤 Flyway 마이그레이션이 끝나기 전에 200이 나올 여지도 있고, DB가 죽어도 이 경로는 200을 줄 수 있다.
+- **잠정값**: 스모크는 `/api/v1/products` 폴링으로 진행. compose의 core/collector에 healthcheck 없음. `depends_on: service_healthy`는 postgres에만 걸린다.
+- **재개 트리거**: `core/build.gradle.kts`에 actuator 추가 + `management.endpoints`(`/actuator/health`) 노출 → compose healthcheck. **core 기존 파일이라 상대와 조율.** collector는 프로세스형이라 healthcheck 대신 재시작 정책으로 충분한지 함께 판단.
+
 ## [열림] Q-49. `POST /api/v1/products`에 서버측 검증이 없다 — 잘못된 입력이 500이 된다
 - **맥락**: `RegistrationController`는 `@Valid`를 쓰지 않고 `RegisterProductCommand`에도 컴팩트 생성자 검증이 없다(`spring-boot-starter-validation`은 의존성에 있으나 미사용). 빈 `name`으로 POST하면 `ProductEntity.name nullable=false` 제약에 걸려 **`DataIntegrityViolationException` → 500**이 난다. `axes`/`variants`가 `null`이면 `NullPointerException` → 500.
 - **왜 발견됐나**: web 최소 슬라이스가 `docs/benchmark/07`의 "FE code별 분기 확정 기재" 의무를 이행하며 드러났다. 클라이언트(`buildCommand`)가 먼저 검증하므로 화면으로는 안 보이지만, **curl로 직접 치면 500**이다. 클라이언트 검증은 방어가 아니라 편의다.

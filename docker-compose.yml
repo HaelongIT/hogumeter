@@ -16,7 +16,9 @@ services:
       timeout: 3s
       retries: 10
     ports:
-      - "127.0.0.1:5432:5432"             # 로컬 개발 편의 — 외부 미개방
+      # 로컬 개발 편의 — 외부 미개방. 호스트에 이미 Postgres가 있으면 POSTGRES_PORT로 비켜간다
+      # (포트 하나가 스택 전체의 기동을 막으면 안 된다).
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
 
   core:
     build: ./core
@@ -32,7 +34,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${CORE_PORT:-8080}:8080"
 
   web:
     build: ./web
@@ -41,7 +43,7 @@ services:
     ports:
       # nginx가 /api를 core로 프록시한다 → 브라우저에겐 동일 오리진, CORS 불필요.
       # ⚠️ 접근 통제 없음(SEC-02). 로컬만 개방 — 공개망 노출 전 pre-deploy §C 확인.
-      - "127.0.0.1:3000:80"
+      - "127.0.0.1:${WEB_PORT:-3000}:80"
 
   collector:
     build: ./collector

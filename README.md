@@ -107,13 +107,20 @@
 # 0) 시크릿 준비 (.env는 gitignore — 절대 커밋 금지)
 cp .env.example .env    # DB_PASSWORD 등 값 채움
 
-# 1) 전체 기동
-docker compose up -d    # postgres + core + collector
+# 1) 전체 기동 — http://127.0.0.1:3000 (web), :8080 (core)
+docker compose up -d    # postgres + core + web + collector
 
-# 2) 테스트
-cd core && ./gradlew test      # 단위 + Testcontainers 통합
-cd collector && uv run pytest  # 파서 golden + 파이프라인
+# 2) 종단 스모크 (전용 프로젝트로 격리 — 개발 데이터 안 건드림)
+bash scripts/smoke.sh   # 빌드 → 기동 → web → nginx → core → postgres 왕복
+
+# 3) 모듈별 테스트
+cd core && ./gradlew test                    # 단위 + Testcontainers 통합
+cd collector && uv run pytest                # 전체 (Docker 필요)
+cd collector && uv run pytest -m "not integration"   # 빠른 루프 (~1초)
+cd web && npm test && npm run build          # Vitest + 타입체크
 ```
+
+> 수집은 기본 비활성이다. `COLLECTOR_ALLOW_NETWORK=1`로 켜야 핫딜 3사에 실제 요청을 보낸다(정지조건의 기계적 강제). 켜기 전 [`pre-deploy-checklist`](working-area/pre-deploy-checklist.md) §F 확인.
 
 - 로컬 시크릿은 루트 `.env`([`.env.example`](.env.example) 참조): DB 비밀번호 · 텔레그램 봇 토큰 · 네이버 쇼핑 API 키.
 - 텔레그램/네이버 연동은 토큰·키 발급 후 활성화(현재 포트만 정의, [`docs/91`](docs/91-open-questions.md) Q-3·Q-20).
