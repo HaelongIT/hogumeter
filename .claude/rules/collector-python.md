@@ -23,6 +23,11 @@ paths:
 - **`print`로 나가는 문자열에 em dash(`—`)·이모지를 쓰지 않는다.** Windows 콘솔은 cp949라 `UnicodeEncodeError`로 죽는다. `capsys`는 utf-8로 캡처해 이를 못 잡으니, 출력 문구는 `text.encode("cp949")`로 단언한다. Alert reason도 결국 출력된다. (99: 2026-07-09)
 - **엔트리포인트는 테스트 GREEN이어도 한 번은 실제로 실행해본다.**
 
+## 파서
+
+- **파서는 사이트 구조 변경에 터지지 않는다 — 조용히 0건을 낸다.** `soup.select()`는 못 찾으면 `[]`를 준다. 셀렉터 파싱의 실패 모드는 예외가 아니라 **침묵**이라 try/except가 못 잡는다. "성공했는데 산출물이 0"을 1급 경보 신호로 다룬다(`scheduler/drift.py`). (99: 2026-07-09)
+- **"셀렉터가 없다"는 주장은 파서로 재현해 확인한다.** 상위 셀렉터 실패를 하위 셀렉터 부재로 일반화하지 않는다. `grep` 문자열 카운트는 bs4 결과를 대변하지 못한다(`class="x"` 8건 vs `select('.x')` 27건).
+
 ## 계약
 
 - `raw_deal_post`는 `(site, post_id)` UNIQUE 멱등. `status` 허용집합은 **`ACTIVE`/`SOLD_OUT`/`DELETED`**(DB CHECK와 동일).

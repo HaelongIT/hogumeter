@@ -278,7 +278,3 @@ _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildComm
 - **잠정값**: 미도입. Grep/Read로 진행하고, 로드베어링 주장은 원문 대조로 검증(자동 메모리 `verify-subagent-claims`).
 - **재개 트리거**: Java·Python 플러그인 마켓플레이스 의존 추가를 승인할 때. 외부 의존이 늘어나므로 사용자 결정.
 
-## [열림] Q-41. `parse_bunjang`의 `status="ENDED"`가 raw_deal_post CHECK와 불일치 (기존 결함)
-- **맥락**: `parsers/bunjang.py`는 판매중이 아니면 `status="ENDED"`를 낸다. 그런데 `pipeline/ingest.to_raw_records`의 허용집합과 `raw_deal_post` DB CHECK는 **`{ACTIVE, SOLD_OUT, DELETED}`**다 — 번개 매물을 `to_raw_records`에 넣으면 `ValueError`. (`ENDED`는 `deal_event.status`의 값이지 `raw_deal_post`의 값이 아니다.)
-- **잠정값**: 현재는 터지지 않는다 — 번개는 `used_listing_observation` 경로(M2)라 `to_raw_records`를 안 거치기 때문. 즉 **잠복 결함**이며, 스케줄러 착수 중 발견했으나 내 변경이 만든 것이 아니라 고치지 않았다(surgical).
-- **재개 트리거**: 번개 적재 경로(M2 USED) 착수 시 — `SOLD_OUT`으로 고치거나(핫딜 계약 재사용), 번개 전용 레코드 매퍼를 분리한다. 어느 쪽이든 파서 테스트 기대값 동반 갱신.
