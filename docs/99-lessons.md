@@ -100,3 +100,17 @@
 - 규칙화된 교훈 (원인→해결): **휴리스틱의 정체는 실 데이터로만 드러난다. 라이브를 기다리지 말고 이미 가진 golden으로 전수 측정하라** — fixture는 파서 검증용만이 아니라 **하류 규칙의 시험대**다. 그리고 오검출은 정규식을 덧대서가 아니라 **후보 서열**(만원 > `원` 동반 > 콤마 > 맨 숫자)로 푼다. 위치가 아니라 신뢰도로 고른다. 개선 시엔 **before/after 전수 대조**로 "의도한 N건만 바뀌었음"을 증명한다(69건 중 7건 변경, 62건 불변).
 - 파급: 오검출 `1000`·`1200`·`5600`이 기준가 표본에 들어가면 Tukey 하한을 뚫어 LOWER 이상치로 분류되고, BM-05상 **🔥 최우선 오알림**이 된다. 파싱 결함 하나가 알림 신뢰를 무너뜨린다.
 - 관련 테스트: `collector/tests/test_price.py::test_unit_bearing_numbers_are_not_prices` 외 실 제목 회귀 7건.
+
+### 2026-07-09 부품별 GREEN은 계약을 보장하지 않는다 — `ENDED` vs `SOLD_OUT`이 3일 잠복했다
+- 맥락: collector의 파서(4사)·가격 정규화·스케줄러·적재 레코드 변환이 전부 각자 GREEN이었다. 그런데 **함께 돌려본 테스트가 하나도 없었다.**
+- 증상: 종단 스모크를 짜려고 `parse_bunjang` → `to_raw_records`를 처음 연결하자마자 `ValueError: 알 수 없는 status: 'ENDED'`. 파서가 내는 어휘(`ENDED`)가 소비처의 허용집합(`ACTIVE/SOLD_OUT/DELETED`)에도 DB CHECK에도 없었다. `ENDED`는 `deal_event.status`의 값이었다.
+- 원인: 파서 테스트는 파서만, ingest 테스트는 **손으로 만든** `ParsedDeal`만 봤다. 양쪽 다 자기 세계 안에서 옳았다. 두 부품의 **경계에 있는 어휘**는 어느 테스트도 지키지 않았다.
+- 규칙화된 교훈 (원인→해결): **부품 사이에 값이 흐르면 그 경로를 관통하는 테스트를 하나 둔다.** 이건 "통합 테스트"가 아니라 **계약 검증**이다 — 느리고 광범위한 E2E가 아니라, `A의 출력을 B에 그대로 먹이는` 좁은 테스트면 충분하다(`to_raw_records(parse_bunjang(payload))`). 그리고 소비처의 허용집합은 **손으로 만든 값이 아니라 생산자가 실제로 낼 수 있는 값 전부**로 시험한다. 도메인 어휘가 계층마다 다르면(raw 상태 vs 이벤트 상태) 이름을 재사용하지 말 것.
+- 관련 테스트: `test_ingest.py::test_accepts_every_status_the_bunjang_parser_can_emit`, `test_pipeline_smoke.py`(fixture 바이트 → RawDealRecord 관통).
+
+### 2026-07-09 `capsys`는 콘솔 인코딩을 대신 검증하지 못한다 — em dash가 엔트리포인트를 죽였다
+- 맥락: `collector/__main__.py`에 opt-in 안내 문구를 넣고 `capsys`로 출력을 단언했다. 4개 테스트 전부 GREEN.
+- 증상: 계획의 검증 항목대로 **실제로 `python -m collector`를 돌리자** `UnicodeEncodeError: 'cp949' codec can't encode character '—'`로 exit 1. Windows 콘솔 기본 인코딩이 cp949인데 문구에 `—`(em dash)와 `⚠️`를 썼다. 한글은 cp949에 있어서 멀쩡했고, 저 두 글자만 없었다.
+- 원인: `capsys`(및 pytest의 캡처)는 **utf-8 텍스트 스트림으로 캡처**한다. 실제 콘솔의 인코더를 타지 않으므로 인코딩 불가 문자를 통과시킨다. "출력 문자열이 맞는가"만 봤지 "출력이 가능한가"는 안 봤다.
+- 규칙화된 교훈 (원인→해결): **엔트리포인트는 테스트가 GREEN이어도 한 번은 실제로 실행해본다.** 그리고 stdout에 나갈 문자열은 `text.encode("cp949")`로 **인코딩 가능성을 직접 단언**한다(로그·알림 문구 포함 — Alert reason도 결국 출력된다). 콘솔 출력엔 em dash·이모지·타이포그래피 문자를 쓰지 않는다. 문서엔 써도 되지만 `print`엔 안 된다.
+- 관련 테스트: `test_main.py::test_refusal_message_is_console_encodable`, `::test_alert_and_summary_output_are_console_encodable`.

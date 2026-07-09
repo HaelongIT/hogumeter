@@ -23,20 +23,33 @@ src/collector/
 ├── pipeline/        # 정규화(가격 추출)·적재 준비
 │   ├── price.py     # 실결제가+배송비 규칙 기반 파싱 (as-posted, 카드 역산 금지)
 │   └── ingest.py    # ParsedDeal → raw_deal_post 레코드 + 배치 멱등(자연키 dedup)
-├── scheduler/       # 폴링 루프 (게시판당 1req/min 하한, 백오프, 차단 시 중지)
+├── scheduler/       # 폴링 (1req/min 하한, 백오프, robots 존중, 차단 시 중지)
 │   ├── policy.py    # 순수: 레이트 하한·결과 3분해·지수 백오프·사이트 상태 전이
-│   └── loop.py      # 사이트별 격리 1회 통과. fetch는 주입 포트(실 구현 없음)
-└── __main__.py      # 스텁 — 실 fetch가 없어 아직 루프를 돌리지 않는다
+│   ├── loop.py      # 사이트별 격리 1회 통과. fetch는 주입 포트
+│   ├── sites.py     # 핫딜 3사 레지스트리 (URL·인코딩 — docs/98 실측)
+│   └── fetcher.py   # Opener 포트 뒤 네트워크 격리 + robots 게이트
+└── __main__.py      # 조립. COLLECTOR_ALLOW_NETWORK=1 없이는 요청하지 않는다
 tests/
 ├── fixtures/{ppomppu,ruliweb,fmkorea,bunjang}/   # golden HTML/JSON
-├── test_parsers.py / test_price.py / test_ingest.py / test_scheduler.py / test_smoke.py
+├── test_parsers.py / test_price.py / test_ingest.py / test_scheduler.py
+└── test_fetcher.py / test_pipeline_smoke.py / test_main.py / test_smoke.py
 ```
 
+## 실행
+
+```bash
+uv run python -m collector          # 안내만 출력하고 종료 (요청 0회)
+COLLECTOR_ALLOW_NETWORK=1 uv run python -m collector   # 실 폴링 — 사용자 승인 사항
+```
+
+실 네트워크는 `fetcher.urllib_opener` **한 곳**뿐이고 테스트는 전부 fake opener를 쓴다. opt-in은 정지조건("실사이트 크롤링")을 산문이 아니라 기계로 강제하는 장치다.
+
 ## 미구현 (정직하게)
-- **실 HTTP fetch·DB 적재**: 스케줄러는 `fetch` 포트와 상태 커서까지만. 실 네트워크·신규 의존(psycopg 등)은 승인 대상 — `docs/91` Q-36.
-- **robots.txt 게이트**(SEC-08): 미구현. 현재 크롤링 윤리는 코드 강제 레이트 하한 + 차단 신호(403/429) 즉시 중지로만 이행 — Q-38.
+- **DB 적재**: 수집한 딜을 아무 데도 쓰지 않는다. opt-in해도 화면 출력뿐이다. psycopg 의존 승인 + 업서트 필드 정책 + `decisions-needed` D-3(차단 사이트 재개 경로) 선결 — `docs/91` Q-36. **이게 붙으면 collector가 실제로 수집한다.**
+- **robots 실 대조**: `RobotsGate`는 구현됐으나(Q-38 해소) fake opener 테스트만 통과했다. 실 3사 robots.txt는 아직 안 봤다.
 - **파싱 드리프트 감지**(REL-06): 파싱 실패를 일시 장애로 흡수만 한다 — Q-40.
 - **품절 감지 실검증**: 4사 모두 `list_normal` golden만 있어 SOLD_OUT 경로는 fixture로 확인되지 않았다 — Q-19.
+- **번개 status 코드표**: `"0"=판매중`만 실측. 비-`"0"`을 전부 SOLD_OUT으로 보는 건 잠정 — Q-44.
 
 ## 사이트별 함정
 - **뽐뿌**: `charset=euc-kr`을 선언하지만 실제로는 **cp949**로 디코딩해야 한다(`decode("euc-kr")`는 터진다). 목록에 뽐뿌마켓·자유게시판 위젯 행이 섞이므로 게시판 id로 필터. 오픈소스의 `#revolution_main_table` 셀렉터는 우리가 받는 응답에 없다 — 자세한 실측은 [`docs/98`](../docs/98-field-notes.md).

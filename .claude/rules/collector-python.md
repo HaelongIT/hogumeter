@@ -20,6 +20,8 @@ paths:
 
 - 테스트: `uv run pytest`. **shebang/경로 문제로 죽으면** `uv run python -m pytest`로 우회하거나 `uv sync --reinstall`로 venv 재생성(콘솔 스크립트가 옛 경로로 baked됨). (99: 2026-07-04)
 - 신규 런타임 의존은 **승인 대상**이다(현재 런타임 의존은 `beautifulsoup4` 하나). psycopg·Testcontainers-python 도입은 `docs/91` Q-36.
+- **`print`로 나가는 문자열에 em dash(`—`)·이모지를 쓰지 않는다.** Windows 콘솔은 cp949라 `UnicodeEncodeError`로 죽는다. `capsys`는 utf-8로 캡처해 이를 못 잡으니, 출력 문구는 `text.encode("cp949")`로 단언한다. Alert reason도 결국 출력된다. (99: 2026-07-09)
+- **엔트리포인트는 테스트 GREEN이어도 한 번은 실제로 실행해본다.**
 
 ## 계약
 

@@ -76,6 +76,23 @@
 - **시사점**: 번개장터는 **HTML 크롤링 불요 — 공식 앱이 쓰는 JSON API**를 저빈도 폴링(기본 10분). 매칭 3계층 필터는 `name` 문자열 기준. `ad`/`bizseller`로 광고·업자 매물 구분 가능. `price` 문자열 → 정수 파싱, `update_time` epoch → timestamptz. golden → `tests/fixtures/bunjang/find_v2_iphone.json`.
 - **주의**: 비공식 API. 플랫폼 잣대상 "공식 API 우선"엔 부합하나 약관/차단 리스크는 리스크 장부(docs/90 §12) 성격 — 저빈도·개인용 유지, 차단 시 즉시 중단.
 
+### 2026-07-09 ⚠️ status 코드표 미실측
+- 실측된 건 **`"0" = 판매중`뿐**이다. 예약중·판매완료·삭제가 각각 어느 코드인지 모른다.
+- 현재 `parse_bunjang`은 **비-`"0"`을 전부 `SOLD_OUT`** 으로 본다(잠정). `예약중` 매물을 판매완료로 오독하면 중고 생애주기 알림이 조기 발화한다 — `docs/91` Q-44.
+- `ParsedDeal.status` 허용집합은 `ACTIVE / SOLD_OUT / DELETED`다. **`ENDED`는 `deal_event.status`의 값**이지 raw 계층 값이 아니다(과거 이 파서가 `ENDED`를 내 `to_raw_records`가 터졌다 — `docs/99` 2026-07-09).
+
+## 수집 대상 목록 (M1 핫딜 3사)
+### 2026-07-09 리스트 URL·인코딩 표 (`collector/scheduler/sites.py`가 정본)
+| site | URL | 인코딩 | 비고 |
+|---|---|---|---|
+| ppomppu | `https://www.ppomppu.co.kr/zboard/zboard.php?id=ppomppu` | **cp949** | 선언은 `charset=euc-kr`이나 EUC-KR에 없는 바이트를 담는다 |
+| ruliweb | `https://bbs.ruliweb.com/market/board/1020?view=thumbnail&page=1` | utf-8 | RSS도 있음(`/1020/rss`) |
+| fmkorea | `https://www.fmkorea.com/hotdeal` | utf-8 | CF 챌린지는 M0 프로브 시점엔 없었음 |
+
+- **번개장터는 레지스트리에 없다** — 검색어별 URL(`find_v2.json?q=…`)이라 `UsedSearch`(M2) 모델이 선행한다. 파서는 이미 있다.
+- **UA는 `hogumeter/0.1 (personal use)` 고정.** 위장 금지(절대 원칙 5) — `Mozilla` 사칭을 테스트로 막아뒀다.
+- **robots.txt는 아직 실 대조를 안 했다.** `RobotsGate`는 fake opener 테스트만 통과했다. 실 수집 착수 시 3사 robots가 실제로 무엇을 Disallow하는지 확인해 여기 기록할 것(pre-deploy §F).
+
 ## 네이버 쇼핑 API
 ### 2026-07-04 스파이크 보류
 - Client ID/Secret 미발급으로 "아이폰 17 256" 응답 품질 스파이크 **미실행**(사용자 확인). 키 확보 시 재개 → `docs/91` Q-3.

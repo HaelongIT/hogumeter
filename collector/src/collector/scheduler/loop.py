@@ -77,7 +77,8 @@ def run_cycle(
             alerts.append(
                 Alert(
                     site=spec.name,
-                    reason=f"차단 신호 감지(status={status_code}) — 자동 중지, 재시도하지 않음",
+                    # 이 문자열은 콘솔로 출력된다. cp949(Windows)에 없는 문자를 넣지 말 것.
+                    reason=f"차단 신호 감지(status={status_code}): 자동 중지, 재시도하지 않음",
                     at=now,
                 )
             )
