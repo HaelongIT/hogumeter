@@ -313,3 +313,26 @@ def test_a_success_resets_the_failure_streak(monkeypatch):
     )
 
     assert exit_code == 0  # 임계 직전까지 실패했지만 성공이 끼어들어 살아남았다
+
+
+def test_zero_deals_with_a_sink_reports_written_zero_not_absent(monkeypatch, capsys):
+    """카운터에서 0을 생략하지 않는다(OBS-02). "0건 적재"와 "적재 못 함"은 다른 사건이다."""
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+
+    main(opener=RecordingOpener(), sink=FakeSink(), sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
+
+    cycle = next(e for e in _events(capsys.readouterr().out) if e["event"] == "cycle")
+    assert cycle["deals"] == 0
+    assert cycle["written"] == 0  # 부재가 아니다
+
+
+def test_write_failure_is_distinguishable_from_writing_zero(monkeypatch, capsys):
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+
+    main(opener=OneDealOpener(), sink=BrokenSink(fail_times=1), sleep=lambda _: None,
+         clock=lambda: NOW, max_cycles=1)
+
+    events = _events(capsys.readouterr().out)
+    cycle = next(e for e in events if e["event"] == "cycle")
+    assert "written" not in cycle  # 못 썼다 (0을 썼다가 아니다)
+    assert any(e["event"] == "sink_error" for e in events)

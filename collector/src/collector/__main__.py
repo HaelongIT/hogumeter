@@ -87,13 +87,16 @@ def main(
         result = run_cycle(specs, states, now, fetch, BACKOFF)
         states = result.states
 
-        written = None
+        # sink가 있으면 0도 센다 — "딜이 0건이라 안 썼다"와 "적재를 못 했다"는 다른 사건이고,
+        # 후자는 written 부재 + sink_error로 나타난다. 카운터에서 0을 생략하지 않는다(OBS-02).
+        written = 0 if sink is not None else None
         if sink is not None and result.deals:
             records = to_raw_records(result.deals, now)
             try:
                 written = sink.upsert_all(records)
                 sink_failures = 0
             except Exception as failure:
+                written = None
                 # DB 일시장애가 수집 루프를 죽이면 안 된다(REL-02의 정신). 다만 **뭉개지도 않는다** —
                 # 몇 건을 잃었는지 남기고, 계속 실패하면 아래에서 프로세스를 내린다.
                 sink_failures += 1

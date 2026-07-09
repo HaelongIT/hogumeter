@@ -67,6 +67,15 @@ jobs:
       - name: Typecheck + build
         run: npm run build
 
+  # REL-05: 롤백 스크립트는 사고가 나야 처음 실행된다. 모든 V에 짝이 되는 R이 있는지,
+  # 역순 적용이 스키마를 비우는지, 순서를 어기면 실패하는지를 일회용 컨테이너에서 확인한다.
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 마이그레이션 롤백 리허설
+        run: bash scripts/rollback-drill.sh
+
   # REL-04: 복구 경로는 사고가 나야 처음 실행된다. 그래서 매 커밋 리허설한다.
   # 실 AWS를 부르지 않는다 — MinIO(S3 호환)에 대고 운영과 **같은 스크립트**를 돌린다.
   offsite:

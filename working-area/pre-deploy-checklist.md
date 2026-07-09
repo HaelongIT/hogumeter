@@ -5,7 +5,7 @@
 
 ## A. 데이터베이스
 - **[완료]** Flyway 마이그레이션이 clean 컨테이너에서 완주 — `scripts/smoke.sh`가 매번 빈 볼륨에서 V1·V2를 돌리고 등록 API까지 왕복시킨다.
-- **[필수]** **V2 롤백 스크립트 부재**(REL-05) — `db/rollback/`엔 `R1__init_rollback.sql`만 있고 `V2__purchase.sql`의 롤백이 없다. 롤백을 검증하는 테스트도 없다. `docs/91` Q-51.
+- **[완료]** 롤백 스크립트(REL-05) — V1·V2 각각에 `R1`·`R2`. `bash scripts/rollback-drill.sh`가 일회용 컨테이너에서 전진 → **역순** 후진 → 재전진을 매번 확인한다(CI `rollback` 잡). ⚠️ **롤백은 역순으로만 성립한다**(`purchase`가 `variant`·`deal_event`를 참조) — 운영 롤백 시 `R2` → `R1` 순서로 수동 적용하고 `flyway_schema_history`에서 해당 버전 행을 지운다. Flyway가 자동 실행하지 않는다.
 - **[필수]** Postgres 데이터 볼륨 영속화 — `pgdata` 명명 볼륨. **운영에서 `docker compose down -v` 금지**(데이터 삭제).
 - **[완료]** 백업·복원 — `bash scripts/backup.sh`(pg_dump + gzip + 7일 보관, gzip 무결성 검사), `bash scripts/restore-drill.sh`(일회용 격리 컨테이너에 복원해 테이블·행·`flyway_schema_history` 확인). **리허설 실측 통과**: 제품 1건이 덤프를 거쳐 되살아났다.
 - **[필수]** **cron 등록** — `10 3 * * * cd /srv/hogumeter && bash scripts/backup.sh >> backups/backup.log 2>&1`. 스크립트만 있고 스케줄은 사람이 건다.

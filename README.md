@@ -114,10 +114,11 @@ docker compose up -d    # postgres + core + web + collector
 # 2) 종단 스모크 (전용 프로젝트로 격리 — 개발 데이터 안 건드림)
 bash scripts/smoke.sh   # 빌드 → 기동 → web → nginx → core → postgres 왕복 + Basic Auth
 
-# 2-1) 백업·복원 리허설 (REL-04)
+# 2-1) 복구 리허설 (REL-04 백업·복원 / REL-05 롤백)
 bash scripts/backup.sh          # pg_dump + gzip → backups/, 7일 보관
 bash scripts/restore-drill.sh   # 일회용 컨테이너에 복원해 검증 (운영 DB 안 건드림)
 bash scripts/offsite-drill.sh   # 오프사이트 업로드 리허설 (MinIO — 실 AWS 미호출)
+bash scripts/rollback-drill.sh  # 마이그레이션 롤백 리허설 (REL-05, 일회용 컨테이너)
 
 # 3) 모듈별 테스트
 cd core && ./gradlew test                    # 단위 + Testcontainers 통합

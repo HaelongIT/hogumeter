@@ -259,11 +259,7 @@ _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildComm
 - **잠정값**: collector는 **사이클·사이트 단위**까지만 관측한다(`sites_polled`·`deals`·`by_site`·`failures`·`blocked`·`alerts`·`stopped_sites`). 딜 단위 추적은 `deal_event`를 만드는 core의 관심사다. 자연키 `(site, post_id)`가 사실상 상관 ID 역할을 하지만 로그에 싣지는 않는다(사이클당 수십 줄이 된다).
 - **재개 트리거**: 1차 검증에서 "이 딜이 왜 알림이 안 왔나"를 추적해야 할 때 — core가 `deal_event.id`를 상관 ID로 삼아 매칭·병합·알림 판정 로그를 잇는다. collector는 `raw_deal_post.id`를 반환받아 로그에 실을 수 있다(현재 sink는 건수만 돌려준다).
 
-## [열림] Q-51. REL-05 롤백 스크립트가 V2에 없다 (그리고 아무도 검증하지 않는다)
-- **맥락**: REL-05는 "Flyway 단독, **롤백 스크립트 동반**"을 요구한다. `core/src/main/resources/db/rollback/`엔 `R1__init_rollback.sql`(V1용) 하나뿐이고 `V2__purchase.sql`의 롤백이 없다. 게다가 **롤백 스크립트를 실행해보는 테스트가 하나도 없다** — 있어도 도는지 모른다.
-- **왜 위험한가**: 롤백은 사고가 났을 때 처음 실행된다. 그때 문법 오류나 의존 순서(외래키) 문제가 드러나면 이미 늦다. 백업 복원(`scripts/restore-drill.sh`)은 리허설했지만 마이그레이션 롤백은 안 했다.
-- **잠정값**: V2 롤백 없음. 사고 시 복구 경로는 **백업 복원**뿐이다(그건 실측 검증됨).
-- **재개 트리거**: `db/rollback/R2__purchase_rollback.sql` 작성 + Testcontainers 테스트(V1→V2 적용 → R2 → R1 → 스키마 공백 확인). **core 소유 리소스라 상대와 조율.**
+_(Q-51. REL-05 롤백 스크립트 — **해소됨 2026-07-09**: `R2__purchase_rollback.sql` 작성 + `scripts/rollback-drill.sh`(CI `rollback` 잡). 일회용 컨테이너에서 ① 모든 V에 짝 R이 있는지 ② 전진 → 역순 후진 시 public 스키마가 비는지 ③ **순서를 어기면(R1 먼저) 외래키 의존으로 실패하는지** ④ 롤백 뒤 재전진이 되는지를 매 커밋 확인한다. R2를 숨겨 드릴이 실제로 FAIL하는 것도 확인했다. decision-log 참조. 여기서 제거.)_
 
 ## [열림] Q-50. OBS-04 — core에 전용 헬스 엔드포인트가 없다 (compose healthcheck는 임시방편으로 붙임)
 - **맥락**: OBS-04는 "헬스체크 엔드포인트(컴포넌트별) + Compose healthcheck"를 요구한다. **compose healthcheck는 붙였다**(2026-07-09): postgres(`pg_isready`) · core(`curl /api/v1/products`) · web(`wget /healthz`, `auth_basic off`). collector는 **일부러 걸지 않았다** — 1회 실행 후 종료하는 배치라 살아 있음을 물으면 항상 죽어 있다(관측은 OBS-01 로그 이벤트로).
