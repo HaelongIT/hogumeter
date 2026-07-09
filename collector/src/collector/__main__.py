@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 from .db.raw_deal_sink import RawDealSink, connect_from_env
 from .pipeline.ingest import to_raw_records
+from .scheduler.drift import DriftHistory, DriftPolicy, observe
 from .scheduler.fetcher import HttpFetcher, RobotsGate, urllib_opener
 from .scheduler.loop import CycleResult, run_cycle
 from .scheduler.policy import BackoffPolicy
@@ -27,6 +28,9 @@ ALLOW_NETWORK_ENV = "COLLECTOR_ALLOW_NETWORK"
 
 # docs/31 위임 수치(미승인 잠정) — docs/91 Q-37.
 BACKOFF = BackoffPolicy(base=timedelta(seconds=60), factor=2, cap=timedelta(minutes=30))
+
+# docs/31 위임 수치(미승인 잠정) — docs/91 Q-40. 실 수집 데이터로 재조정한다.
+DRIFT = DriftPolicy(window=10, min_success_rate=0.6, zero_yield_streak=3)
 
 # 사이클 간 대기. 실제 폴링 주기는 사이트별 next_attempt_at이 강제하므로(하한 60s)
 # 이 값은 "얼마나 촘촘히 due를 확인할까"일 뿐이다.
@@ -52,6 +56,7 @@ def main(
     sink = sink or _build_sink()
     specs = hotdeal_boards()
     states: dict = {}
+    drift = DriftHistory()
     cycles = 0
 
     print(f"collector: {len(specs)}개 게시판 폴링 시작 (게시판당 1req/min 하한, robots 존중)")
@@ -63,6 +68,13 @@ def main(
         result = run_cycle(specs, states, now, fetch, BACKOFF)
         states = result.states
         _report(result)
+
+        # REL-06: 파서가 조용히 0건을 내는 구조 변경을 잡는다.
+        for observation in result.observations:
+            drift, drift_alerts = observe(drift, observation, DRIFT, now)
+            for alert in drift_alerts:
+                print(f"  [경고] {alert.site}: {alert.reason}")
+
         if sink is not None and result.deals:
             written = sink.upsert_all(to_raw_records(result.deals, now))
             print(f"  적재: raw_deal_post {written}건 업서트")

@@ -7,7 +7,7 @@ fetch는 주입 포트다. 실 HTTP 구현체는 여기 없다 — 실 네트워
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from ..parsers.models import ParsedDeal
@@ -48,10 +48,25 @@ class SiteSpec:
 
 
 @dataclass(frozen=True)
+class SiteObservation:
+    """이번 사이클에 이 사이트가 어떻게 됐나. REL-06 드리프트 판정의 입력.
+
+    `ok=True, deal_count=0`이 구조 변경의 전형적 징후다 — 예외 없이 조용히 빈 목록을 낸다.
+    (실제로 뽐뿌 셀렉터 체인이 끊겼을 때 그랬다.)
+    """
+
+    site: str
+    outcome: Outcome
+    deal_count: int
+
+
+@dataclass(frozen=True)
 class CycleResult:
     states: dict[str, SiteState]
     deals: list[ParsedDeal]
     alerts: list[Alert]
+    # due가 아니어서 건너뛴 사이트는 관측이 없다(폴링하지 않았으므로 판단할 근거도 없다).
+    observations: list[SiteObservation] = field(default_factory=list)
 
 
 def run_cycle(
@@ -65,6 +80,7 @@ def run_cycle(
     next_states: dict[str, SiteState] = {}
     deals: list[ParsedDeal] = []
     alerts: list[Alert] = []
+    observations: list[SiteObservation] = []
 
     for spec in specs:
         state = states.get(spec.name, SiteState(site=spec.name))
@@ -74,6 +90,7 @@ def run_cycle(
 
         outcome, site_deals, status_code = _poll(spec, fetch, now)
         deals.extend(site_deals)
+        observations.append(SiteObservation(spec.name, outcome, len(site_deals)))
         if outcome is Outcome.BLOCKED:
             alerts.append(
                 Alert(
@@ -87,7 +104,7 @@ def run_cycle(
             state, outcome, now, effective_interval(spec.interval, spec.kind), policy
         )
 
-    return CycleResult(states=next_states, deals=deals, alerts=alerts)
+    return CycleResult(states=next_states, deals=deals, alerts=alerts, observations=observations)
 
 
 def _poll(

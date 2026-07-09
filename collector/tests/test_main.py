@@ -3,7 +3,7 @@
 정지조건("실사이트 크롤링")을 산문이 아니라 기계로 강제한다. 이 테스트가 그 기계를 지킨다.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from collector.__main__ import ALLOW_NETWORK_ENV, main
 from collector.scheduler.sites import hotdeal_boards
@@ -157,6 +157,23 @@ def test_empty_cycle_does_not_touch_the_sink(monkeypatch):
     main(opener=RecordingOpener(), sink=sink, sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
 
     assert sink.batches == []
+
+
+def test_silent_zero_yield_raises_a_console_safe_drift_alert(monkeypatch, capsys):
+    """REL-06: 파서가 예외 없이 계속 0건이면 구조 변경을 의심해 알린다.
+
+    RecordingOpener는 3사 모두 빈 HTML을 준다 → 파싱 성공, 딜 0건. 3사이클이면 임계(3) 도달.
+    시계를 전진시켜야 한다 — 고정 시계면 레이트 하한(60s) 때문에 2·3번째 사이클이 건너뛴다.
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    ticks = iter(NOW + timedelta(seconds=61 * i) for i in range(10))
+
+    main(opener=RecordingOpener(), sleep=lambda _: None, clock=lambda: next(ticks), max_cycles=3)
+
+    out = capsys.readouterr().out
+    assert "3회 연속 0건" in out
+    assert out.count("사이트 구조 변경 의심") == 3  # 사이트별 1회씩, 반복되지 않는다
+    _assert_console_safe(out)
 
 
 def test_alert_and_summary_output_are_console_encodable(monkeypatch, capsys):

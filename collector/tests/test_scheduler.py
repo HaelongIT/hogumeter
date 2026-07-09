@@ -172,6 +172,34 @@ def test_due_site_is_fetched_parsed_and_advanced():
     assert result.states["ruliweb"].last_successful_poll == NOW
 
 
+def test_cycle_reports_one_observation_per_polled_site():
+    """REL-06 드리프트 판정의 입력. due가 아니어서 건너뛴 사이트는 관측이 없다."""
+    specs = [_spec("ruliweb"), _spec("fmkorea")]
+    fetch = FakeFetcher(
+        {
+            "ruliweb": FetchResult(status_code=200, body="<html/>"),
+            "fmkorea": FetchResult(status_code=500, body=""),
+        }
+    )
+
+    result = run_cycle(specs, {}, NOW, fetch, BACKOFF)
+
+    assert [(o.site, o.outcome, o.deal_count) for o in result.observations] == [
+        ("ruliweb", Outcome.OK, 1),
+        ("fmkorea", Outcome.TRANSIENT, 0),
+    ]
+
+
+def test_skipped_site_produces_no_observation():
+    spec = _spec()
+    fetch = FakeFetcher({"ruliweb": FetchResult(status_code=200, body="<html/>")})
+    not_due = SiteState(site="ruliweb", next_attempt_at=NOW + timedelta(seconds=30))
+
+    result = run_cycle([spec], {"ruliweb": not_due}, NOW, fetch, BACKOFF)
+
+    assert result.observations == []
+
+
 def test_site_not_yet_due_is_not_fetched():
     spec = _spec()
     fetch = FakeFetcher({"ruliweb": FetchResult(status_code=200, body="<html/>")})
