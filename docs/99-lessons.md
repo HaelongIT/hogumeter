@@ -56,3 +56,17 @@
 - 원인: 스키마 컬럼이 `smallint`(int2)인데 JPA 필드를 `Integer`로 매핑 → validate가 INTEGER를 기대해 불일치. (한 엔티티 매핑 오류가 EntityManagerFactory 생성을 막아 모든 @SpringBootTest가 컨텍스트 로드 실패로 무더기 FAIL — 22건.)
 - 규칙화된 교훈 (원인→해결): DDL 타입과 JPA 필드 타입을 정확히 맞춘다. Java `Integer`를 유지하려면 **`@JdbcTypeCode(SqlTypes.SMALLINT)`**로 컬럼 JDBC 타입을 명시(또는 필드를 `Short`로). 컨텍스트 로드 대량 실패 = 스키마 검증 불일치 의심 → 리포트에서 `Schema-validation` 라인 확인.
 - 관련 테스트: `EvaluateAlertOnDealUseCaseTest`(alert_policy) 외 전 @SpringBootTest.
+
+### 2026-07-09 지수 백오프 — `min(delay, cap)`은 cap을 곱셈 **뒤에** 적용해 오버플로
+- 맥락: collector 스케줄러 `backoff_delay(failures, policy)` 구현. 포화 테스트를 `failures=99`로 잡았다.
+- 증상: `test_backoff_saturates_at_cap`이 `OverflowError: Python int too large to convert to C int`로 실패. 다른 26개는 통과.
+- 원인: `policy.base * (policy.factor ** (failures - 1))` — `timedelta.__mul__`이 `2**98`을 C int로 변환하려다 터진다. `min(delay, cap)`은 delay가 **이미 만들어진 뒤** 실행되므로 보호막이 못 된다. 상한이 있는데도 상한 없는 중간값을 만든 게 실수.
+- 규칙화된 교훈 (원인→해결): **포화(cap)가 있는 지수식은 cap 비교를 곱셈 전에 스칼라로 수행**한다 — `total_seconds()` float로 계산하고 `>= cap_seconds`면 즉시 cap 반환(float 지수는 넘치면 `inf`라 비교가 그대로 성립). 일반화: "상한이 있는 계산은 상한 없는 중간값을 만들지 않는다". 그리고 **포화 테스트의 입력은 경계 바로 위(예 5)가 아니라 극단값(99)으로** 잡아야 이런 오버플로가 드러난다.
+- 관련 테스트: `collector/tests/test_scheduler.py::test_backoff_saturates_at_cap`.
+
+### 2026-07-09 SEC-08 — "모든 실패에 백오프"는 크롤링 윤리 위반, 차단 신호는 별도 경로
+- 맥락: 스케줄러 재시도 정책 설계. `docs/11`은 "지수 백오프", SEC-08(`docs/20`)은 "차단 신호(403/429) 감지 시 자동 중지 + 관리 알림 — **재시도 강행 금지**".
+- 증상(설계 단계에서 포착): 관용적 구현(`except: backoff; retry`)을 그대로 쓰면 403/429에도 재시도가 붙어 SEC-08을 정면 위반한다. 두 문서를 각각 읽으면 충돌이 안 보인다.
+- 원인: "실패"를 단일 개념으로 뭉갠 것. 일시 장애(5xx·타임아웃)와 플랫폼의 거절(403/429)은 **의미가 반대**다 — 전자는 "잠시 후 다시", 후자는 "오지 마라".
+- 규칙화된 교훈 (원인→해결): 폴링 결과는 **`OK / TRANSIENT / BLOCKED` 3분해**하고 BLOCKED만 중지 경로(사이트별 `stopped` + Alert)로 보낸다. 레이트 하한은 설정이 아니라 **코드 상수**로 못박는다(SEC-08 "완화 불가"). 일반 규칙: **외부 시스템의 거절 신호를 재시도 가능한 오류로 분류하지 않는다.**
+- 관련 테스트: `test_classify_status`, `test_blocked_stops_the_site_without_retry`, `test_stopped_site_is_never_fetched_again`, `test_configured_interval_below_floor_is_clamped_in_cycle`.

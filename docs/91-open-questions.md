@@ -192,3 +192,33 @@ _(이하 2026-07-08 2차 기획 통합에서 등장한 위임 항목. 출처: `w
 - **맥락**: SIG·CAD REST 배선(`GetSignalUseCase`·`GetCadenceUseCase`, compute-on-demand)은 관측 좌표 2개가 필요하다 — CAD의 `observedFrom`(variant 관측 시작)과 SIG 신선도의 `lastPoll`(마지막 성공 폴링). 둘 다 아직 어디에도 저장하지 않는다(등록/수집 메타 미배선).
 - **잠정값**: `observedFrom` = 해당 variant 딜 중 **최초 firstSeen**(딜 0건이면 now) — 관측 개시를 최초 관측으로 근사. `lastPoll` = **`clock.instant()`(now)** — 항상 방금 폴링했다고 가정(신선도가 낙관적으로 편향). 가장 보수적이진 않으나 조회 read-model이라 되돌리기 쉬움. seam = 두 use-case의 해당 라인 1곳씩.
 - **재개 트리거**: (a) variant 등록/백필 도달 시각을 저장(REG 배선)하면 `observedFrom`을 그 값으로 교체 — 최초 딜보다 이른 관측 공백을 반영. (b) 수집 파이프라인이 `last_successful_poll`(사이트별/전역)을 기록하면 `lastPoll`을 실측으로 교체 — 수집 정지 시 신선도가 올바로 강등(Q-25). 연결: `Staleness`(3-2 관측 시계).
+- **진행(2026-07-09)**: collector 스케줄러가 `SiteState.last_successful_poll`을 **산출**하기 시작했다(사이트별). 다만 아직 **메모리 값**이라 core가 읽을 수 없다 — 영속화는 Q-36(DB 접점)에 종속. Q-36 해소 시 이 값을 테이블에 쓰면 (b)가 바로 열린다.
+
+---
+
+_(이하 2026-07-09 collector 스케줄러(폴링 루프·백오프·차단 중지) 착수에서 등장.)_
+
+## [열림] Q-37. 지수 백오프 수치(base·factor·cap) — 미승인 잠정 파라미터
+- **맥락**: `docs/11` line 4가 "지수 백오프"를 요구하나 수치는 어디에도 없다(docs/31 승인 6값에 없음). 폴링 실패 재시도 간격을 결정.
+- **잠정값**: `base=60s, factor=2, cap=30min`. `BackoffPolicy`(frozen dataclass)로 **주입** — 순수 함수는 주입값만 참조하고 모듈 상수에 하드코딩하지 않는다(Q-14 `absurdityRatio` 선례와 동일: 승인값과 미승인값을 섞지 않음). 지터 없음(1인용·사이트당 1커넥션이라 thundering herd 무관, 테스트 결정성 우선).
+- **재개 트리거**: 운영자 승인 요청(docs/31 위임 수치 표에 등재됨) → 승인 시 상단 표 편입. 실 수집에서 5xx 빈발·복구 지연 관측 시 폭 재조정.
+
+## [열림] Q-38. robots.txt 준수 게이트 미구현
+- **맥락**: SEC-08(`docs/20` line 11)은 "robots 존중"을 요구한다. 스케줄러 순수 정책(레이트 하한·백오프·차단 분류)엔 이를 넣을 수 없다 — robots.txt 조회는 네트워크 IO다.
+- **잠정값**: **미구현**. 현재는 레이트 하한(코드 강제)과 차단 신호 즉시 중지만으로 크롤링 윤리를 이행한다. `scheduler/__init__.py` docstring에 미구현 사실을 명시(허위 주장 방지).
+- **재개 트리거**: 실 HTTP fetcher 도입(신규 의존 승인) 시 — fetch 포트 구현체 안에 robots 파싱·캐시·Disallow 게이트를 함께 넣는다. `urllib.robotparser`(stdlib)면 신규 의존 없이 가능.
+
+## [열림] Q-39. BLOCKED 자동 중지의 수동 재개 경로 미정
+- **맥락**: SEC-08 "차단 신호 감지 시 자동 중지 + 관리 알림 — 재시도 강행 금지". `advance()`는 `stopped=True`를 **종착 상태**로 만든다(어떤 결과가 와도 유지). 그럼 사람이 어떻게 다시 켜는가가 미정.
+- **잠정값**: 재개 수단 **없음**(프로세스 재시작 = 상태 초기화 = 재개, 커서가 아직 메모리라서). 이건 우연한 동작이지 설계가 아니다 — 커서를 영속화하는 순간(Q-36) 사이트가 영구히 죽는다.
+- **재개 트리거**: 커서 영속화(Q-36)와 **동시에** 결정해야 한다 — 텔레그램 봇 명령(`/resume ruliweb`)인지, 설정 플래그인지, 쿨다운 후 자동 1회 재시도(SEC-08 "재시도 강행 금지"와의 경계 확인 필요)인지. 성격상 정책 결정이면 `decisions-needed.md`로 승격.
+
+## [열림] Q-40. REL-06 파싱 드리프트 감지(성공률 임계 알림) 미구현
+- **맥락**: REL-06(`docs/20` line 26)은 "사이트별 파싱 성공률/글 유입량이 임계 이탈 시 관리 알림"을 요구. 현재 `_poll`은 파싱 예외를 TRANSIENT로 흡수만 한다 — 사이트 구조 변경과 일시 장애가 구분되지 않는다.
+- **잠정값**: 파싱 실패 = TRANSIENT(백오프 후 재시도). 성공률 집계·임계·알림 없음. 구조 변경은 사람이 딜 유입 0을 눈치채야 발견된다.
+- **재개 트리거**: 실 수집 가동 후 — 사이클별 (파싱 건수, 실패 여부)를 누적해 이동창 성공률을 내고 임계 이탈 시 `Alert` 방출. 알림 발송 경로(Q-20)와 함께.
+
+## [열림] Q-41. `parse_bunjang`의 `status="ENDED"`가 raw_deal_post CHECK와 불일치 (기존 결함)
+- **맥락**: `parsers/bunjang.py`는 판매중이 아니면 `status="ENDED"`를 낸다. 그런데 `pipeline/ingest.to_raw_records`의 허용집합과 `raw_deal_post` DB CHECK는 **`{ACTIVE, SOLD_OUT, DELETED}`**다 — 번개 매물을 `to_raw_records`에 넣으면 `ValueError`. (`ENDED`는 `deal_event.status`의 값이지 `raw_deal_post`의 값이 아니다.)
+- **잠정값**: 현재는 터지지 않는다 — 번개는 `used_listing_observation` 경로(M2)라 `to_raw_records`를 안 거치기 때문. 즉 **잠복 결함**이며, 스케줄러 착수 중 발견했으나 내 변경이 만든 것이 아니라 고치지 않았다(surgical).
+- **재개 트리거**: 번개 적재 경로(M2 USED) 착수 시 — `SOLD_OUT`으로 고치거나(핫딜 계약 재사용), 번개 전용 레코드 매퍼를 분리한다. 어느 쪽이든 파서 테스트 기대값 동반 갱신.
