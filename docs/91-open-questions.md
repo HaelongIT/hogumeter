@@ -238,10 +238,13 @@ _(Q-39. BLOCKED 자동 중지의 수동 재개 경로 — **`working-area/decisi
 
 _(Q-40. REL-06 파싱 드리프트 감지 — **해소됨 2026-07-09**: `scheduler/drift.py`(순수, 이동창). 두 신호를 본다 — ① **조용한 0건**(성공인데 연속 0건 = 구조 변경의 전형. 뽐뿌 셀렉터 체인이 끊겼을 때 예외 없이 0건이었다) ② **성공률 저하**(창 안 TRANSIENT 비율). BLOCKED는 세지 않는다(이미 중지+Alert). 창 미충족 시 미판정, 회복 시 재무장, 같은 증상 반복 알림 억제. `__main__`이 사이클마다 관측을 먹인다. 임계는 **미승인 잠정 주입**(아래 Q-45). 여기서 제거.)_
 
-## [열림] Q-47. web 등록 폼은 가격축 1개만 지원 (조합 미지원)
-- **맥락**: REG-02는 "priceAxis 값 **조합**대로 Variant 생성"을 요구한다(용량×색상 → 4 variant). 최소 슬라이스는 축 1개만 받는다.
-- **잠정값**: `buildCommand`가 축 1개 → variant N개. 축 2개 이상은 화면 복잡도(동적 축 추가·조합 미리보기)가 커서 미룬다. **core는 이미 조합을 받는다**(`RegisterProductCommand.variants[]`가 `priceAxisValues` 맵) — 막힌 건 UI뿐이다.
-- **재개 트리거**: 1차 검증 제품(아이폰 17 256GB)이 축 1개로 충분하다. 축 2개가 필요한 제품을 등록할 때 UI 확장.
+_(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildCommand`가 데카르트 곱을 만든다(용량 2 × 색상 2 → variant 4). 축 이름 중복은 거부(맵에서 덮어쓰기), 빈 축 행은 무시, 화면이 "생성될 variant N개"를 미리 보여준다. 여기서 제거.)_
+
+## [열림] Q-49. `POST /api/v1/products`에 서버측 검증이 없다 — 잘못된 입력이 500이 된다
+- **맥락**: `RegistrationController`는 `@Valid`를 쓰지 않고 `RegisterProductCommand`에도 컴팩트 생성자 검증이 없다(`spring-boot-starter-validation`은 의존성에 있으나 미사용). 빈 `name`으로 POST하면 `ProductEntity.name nullable=false` 제약에 걸려 **`DataIntegrityViolationException` → 500**이 난다. `axes`/`variants`가 `null`이면 `NullPointerException` → 500.
+- **왜 발견됐나**: web 최소 슬라이스가 `docs/benchmark/07`의 "FE code별 분기 확정 기재" 의무를 이행하며 드러났다. 클라이언트(`buildCommand`)가 먼저 검증하므로 화면으로는 안 보이지만, **curl로 직접 치면 500**이다. 클라이언트 검증은 방어가 아니라 편의다.
+- **잠정값**: 미수정. web이 클라이언트 검증으로 가린다. `ApiExceptionHandler`는 이 예외들을 매핑하지 않으므로 `{code,message}`도 못 준다 → 클라이언트는 `HTTP_500`으로 처리.
+- **재개 트리거**: `RegistrationController`/`RegisterProductCommand`는 **기존 core 파일**이라 상대와 조율 대상. 착수 시 — `@Valid` + `@NotBlank`/`@NotEmpty` 또는 record 컴팩트 생성자 검증, `MethodArgumentNotValidException`·`IllegalArgumentException`을 `ApiExceptionHandler`에 400으로 매핑(신규 code 필요, 예: `REG_INVALID_COMMAND`).
 
 ## [열림] Q-48. 알림 정책 설정(REG-03) 화면을 만들 REST가 없다
 - **맥락**: 확정본 §7의 web 최소 슬라이스는 "등록 + 후보선택 + **variant/키워드/목표가 설정**"이다. `alert_policy` 테이블·`AlertPolicyEntity`·`AlertPolicyRepository`는 있으나 **컨트롤러가 없다** — 목표가·기간 P·K_display·제외 키워드·quiet hours를 화면에서 저장할 수 없다.

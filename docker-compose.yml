@@ -34,6 +34,15 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
 
+  web:
+    build: ./web
+    # depends_on을 걸지 않는다. nginx가 요청 시점에 core를 해석하므로 core 없이도 뜬다
+    # (core가 없으면 /api만 502, 정적 페이지는 정상). core 재시작에도 web이 죽지 않는다.
+    ports:
+      # nginx가 /api를 core로 프록시한다 → 브라우저에겐 동일 오리진, CORS 불필요.
+      # ⚠️ 접근 통제 없음(SEC-02). 로컬만 개방 — 공개망 노출 전 pre-deploy §C 확인.
+      - "127.0.0.1:3000:80"
+
   collector:
     build: ./collector
     environment:
