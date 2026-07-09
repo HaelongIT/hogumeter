@@ -123,6 +123,9 @@ cd core && ./gradlew test                    # 단위 + Testcontainers 통합
 cd collector && uv run pytest                # 전체 (Docker 필요)
 cd collector && uv run pytest -m "not integration"   # 빠른 루프 (~1초)
 cd web && npm test && npm run build          # Vitest + 타입체크
+
+# 4) (선택) 커밋 전 시크릿 스캔 훅 켜기 — SEC-01. 매 커밋 수 초 소요, CI에도 같은 게이트가 있다
+git config core.hooksPath .githooks           # 끄기: git config --unset core.hooksPath
 ```
 
 > 수집은 기본 비활성이다. `COLLECTOR_ALLOW_NETWORK=1`로 켜야 핫딜 3사에 실제 요청을 보낸다(정지조건의 기계적 강제). 켜기 전 [`pre-deploy-checklist`](working-area/pre-deploy-checklist.md) §F 확인.
