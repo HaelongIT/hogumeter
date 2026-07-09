@@ -20,7 +20,7 @@ def _read(rel: str) -> str:
 
 
 def test_maps_parsed_deal_to_contract_record():
-    deals = parse_fmkorea(_read("fmkorea/list_normal.html"))
+    deals = parse_fmkorea(_read("fmkorea/list_normal.html"), CAPTURED)
     records = to_raw_records(deals, CAPTURED)
 
     assert len(records) == 20  # 중복 없음
@@ -74,7 +74,7 @@ def test_accepts_every_status_the_bunjang_parser_can_emit():
             ]
         }
     )
-    deals = parse_bunjang(payload)
+    deals = parse_bunjang(payload, CAPTURED)
 
     records = to_raw_records(deals, CAPTURED)  # ValueError가 나면 계약 위반
 

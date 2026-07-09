@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 from .models import ParsedDeal
 
 
-def parse_bunjang(payload: str) -> list[ParsedDeal]:
+def parse_bunjang(payload: str, now: datetime | None = None) -> list[ParsedDeal]:
+    """`now`는 파서 포트 시그니처를 맞추기 위한 것 — 번개는 `update_time`(epoch)을 직접 준다."""
     data = json.loads(payload)
     deals: list[ParsedDeal] = []
     for item in data.get("list", []):

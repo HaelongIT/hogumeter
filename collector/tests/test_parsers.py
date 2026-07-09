@@ -1,13 +1,18 @@
 """BM-01 AC-3 파서 golden — fixture HTML/JSON → ParsedDeal 스냅샷. 실 네트워크 호출 금지(문자열 입력)."""
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 from collector.parsers.bunjang import parse_bunjang
 from collector.parsers.fmkorea import parse_fmkorea
 from collector.parsers.ppomppu import parse_ppomppu
 from collector.parsers.ruliweb import parse_ruliweb
+from collector.pipeline.timestamps import KST
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+# 목록 시각("당일 21:10")을 해석하려면 폴링 시각이 필요하다. 2026-07-09 23:00 KST.
+NOW = datetime(2026, 7, 9, 14, 0, tzinfo=timezone.utc)
 
 
 def _read(rel: str) -> str:
@@ -21,7 +26,7 @@ def _read_cp949(rel: str) -> str:
 
 
 def test_bunjang_golden_first_item():
-    deals = parse_bunjang(_read("bunjang/find_v2_iphone.json"))
+    deals = parse_bunjang(_read("bunjang/find_v2_iphone.json"), NOW)
 
     assert len(deals) == 20
     d = deals[0]
@@ -36,7 +41,7 @@ def test_bunjang_golden_first_item():
 
 
 def test_ruliweb_golden_rows():
-    deals = parse_ruliweb(_read("ruliweb/list_normal.html"))
+    deals = parse_ruliweb(_read("ruliweb/list_normal.html"), NOW)
 
     assert len(deals) == 28  # docs/98 실측: info_article_id 28건
     d = deals[0]
@@ -48,7 +53,7 @@ def test_ruliweb_golden_rows():
 
 
 def test_fmkorea_golden_rows():
-    deals = parse_fmkorea(_read("fmkorea/list_normal.html"))
+    deals = parse_fmkorea(_read("fmkorea/list_normal.html"), NOW)
 
     assert len(deals) == 20  # docs/98 실측: hotdeal_info 20건
     d = deals[0]
@@ -61,7 +66,7 @@ def test_fmkorea_golden_rows():
 
 
 def test_ppomppu_golden_rows():
-    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"))
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"), NOW)
 
     assert len(deals) == 21  # docs/98 실측: 뽐뿌게시판 딜 행 21건
     d = deals[0]
@@ -71,12 +76,40 @@ def test_ppomppu_golden_rows():
     assert d.headline_price == 11_800  # 제목 내 가격(BM-02 정규화)
     assert d.reaction_score == 3  # .baseList-rec "3 - 0" = 추천 - 비추천
     assert d.status == "ACTIVE"
-    assert d.posted_at is None  # 목록 시각은 당일/이전 형식이 갈린다(docs/98, Q-23)
+    # row0은 인기글이라 `26/07/03`(날짜만) — 시각 미상이므로 23:59 KST (Q-23 잠정값)
+    assert d.posted_at == datetime(2026, 7, 3, 23, 59, tzinfo=KST)
+    # 나머지 20건은 당일 `HH:MM:SS`
+    assert deals[1].posted_at == datetime(2026, 7, 9, 21, 10, 11, tzinfo=KST)
+
+
+def test_ppomppu_posted_at_feeds_first_seen():
+    """core는 `firstSeen = postedAt ?? capturedAt`. postedAt이 없으면 3일 전 글도 '방금 발생'이 된다."""
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"), NOW)
+
+    assert all(d.posted_at is not None for d in deals)
+    assert all(d.posted_at <= NOW for d in deals)  # 미래 발생 시각은 기간 필터를 무너뜨린다
+
+
+def test_ruliweb_posted_at_handles_both_formats():
+    """루리웹은 `날짜 18:10`(당일) / `날짜 2026.07.03`(이전) 두 형식을 섞어 쓴다."""
+    deals = parse_ruliweb(_read("ruliweb/list_normal.html"), NOW)
+
+    assert deals[0].posted_at == datetime(2026, 7, 9, 18, 10, tzinfo=KST)
+    dated = [d for d in deals if d.posted_at == datetime(2026, 7, 3, 23, 59, tzinfo=KST)]
+    assert len(dated) == 15  # docs/98 실측
+    assert all(d.posted_at is not None for d in deals)
+
+
+def test_fmkorea_posted_at_is_todays_time():
+    deals = parse_fmkorea(_read("fmkorea/list_normal.html"), NOW)
+
+    assert deals[0].posted_at == datetime(2026, 7, 9, 20, 59, tzinfo=KST)
+    assert all(d.posted_at is not None for d in deals)
 
 
 def test_ppomppu_url_is_canonical():
     """href의 page·divpage는 페이지네이션 잔여물 — 자연키 URL은 board+no만."""
-    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"))
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"), NOW)
 
     assert deals[0].url == "https://www.ppomppu.co.kr/zboard/view.php?id=ppomppu&no=717553"
     assert all("divpage" not in d.url and "page=" not in d.url for d in deals)
@@ -85,7 +118,7 @@ def test_ppomppu_url_is_canonical():
 def test_ppomppu_excludes_other_board_widgets():
     """목록 페이지엔 뽐뿌마켓(id=pmarket)·자유게시판(id=social) 위젯 행이 섞여 있고,
     이들도 tr.baseList.bbs_new1을 쓴다. 글번호가 없어 자연키를 못 만든다 — 반드시 제외."""
-    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"))
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"), NOW)
 
     assert all(d.post_id.isdigit() for d in deals)
     assert all("id=ppomppu" in d.url for d in deals)
@@ -95,7 +128,7 @@ def test_ppomppu_excludes_other_board_widgets():
 
 def test_ppomppu_missing_recommend_is_zero():
     """신규 글은 .baseList-rec 텍스트가 비어 있다."""
-    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"))
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"), NOW)
 
     assert deals[1].post_id == "717718"
     assert deals[1].reaction_score == 0
@@ -103,7 +136,7 @@ def test_ppomppu_missing_recommend_is_zero():
 
 def test_ppomppu_adds_shipping_fee_from_title_convention():
     """제목 관례 `(가격원/배송비)`의 배송비를 합산한다(BM-02 AC-1). 실 fixture가 회귀를 잡는다."""
-    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"))
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"), NOW)
 
     d = next(x for x in deals if x.post_id == "717716")
     assert "(13,490원/3,000원)" in d.title

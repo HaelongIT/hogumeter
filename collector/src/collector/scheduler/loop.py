@@ -43,7 +43,8 @@ class SiteSpec:
     interval: timedelta
     url: str
     encoding: str
-    parse: Callable[[str], list[ParsedDeal]]
+    # 목록 시각이 "당일 21:10" 형태라 해석에 폴링 시각이 필요하다(pipeline/timestamps).
+    parse: Callable[[str, datetime], list[ParsedDeal]]
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,7 @@ def run_cycle(
             next_states[spec.name] = state
             continue
 
-        outcome, site_deals, status_code = _poll(spec, fetch)
+        outcome, site_deals, status_code = _poll(spec, fetch, now)
         deals.extend(site_deals)
         if outcome is Outcome.BLOCKED:
             alerts.append(
@@ -90,7 +91,7 @@ def run_cycle(
 
 
 def _poll(
-    spec: SiteSpec, fetch: Callable[[SiteSpec], FetchResult]
+    spec: SiteSpec, fetch: Callable[[SiteSpec], FetchResult], now: datetime
 ) -> tuple[Outcome, list[ParsedDeal], int | None]:
     """한 사이트 폴링. fetch·parse의 어떤 예외도 TRANSIENT로 흡수한다(REL-02 격리).
 
@@ -102,6 +103,6 @@ def _poll(
         outcome = classify_status(result.status_code)
         if outcome is not Outcome.OK:
             return outcome, [], result.status_code
-        return Outcome.OK, spec.parse(result.body), result.status_code
+        return Outcome.OK, spec.parse(result.body, now), result.status_code
     except Exception:
         return Outcome.TRANSIENT, [], None

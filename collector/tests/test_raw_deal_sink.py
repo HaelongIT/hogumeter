@@ -147,7 +147,7 @@ def test_status_outside_the_contract_is_rejected_by_the_database(connection):
 def test_ppomppu_fixture_reaches_the_database_intact(connection):
     """cp949로 디코딩된 제목이 DB까지 온전히 간다 — 종단 계약."""
     fixture = Path(__file__).parent / "fixtures/ppomppu/list_normal.html"
-    deals = parse_ppomppu(fixture.read_bytes().decode("cp949"))
+    deals = parse_ppomppu(fixture.read_bytes().decode("cp949"), CAPTURED)
     records = to_raw_records(deals, CAPTURED)
 
     written = RawDealSink(connection).upsert_all(records)

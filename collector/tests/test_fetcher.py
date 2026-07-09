@@ -42,7 +42,7 @@ def _spec(encoding: str = "utf-8", url: str = f"{SITE}/hotdeal") -> SiteSpec:
         interval=timedelta(seconds=60),
         url=url,
         encoding=encoding,
-        parse=lambda body: [],
+        parse=lambda body, now: [],
     )
 
 

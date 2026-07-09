@@ -12,16 +12,19 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from bs4 import BeautifulSoup
 
 from ..pipeline.price import normalize_price
+from ..pipeline.timestamps import parse_board_time
 from .models import ParsedDeal
 
 _BOARD = "ppomppu"
 _BASE_URL = "https://www.ppomppu.co.kr/zboard/view.php"
 
 
-def parse_ppomppu(html: str) -> list[ParsedDeal]:
+def parse_ppomppu(html: str, now: datetime) -> list[ParsedDeal]:
     soup = BeautifulSoup(html, "html.parser")
     deals: list[ParsedDeal] = []
     for tr in soup.select("tr.baseList"):
@@ -50,8 +53,8 @@ def parse_ppomppu(html: str) -> list[ParsedDeal]:
                 headline_price=normalized.headline_price if normalized else None,
                 # 종료 표식(docs/98). 이 fixture엔 0건이라 실 검증은 미완 — docs/91 Q-19.
                 status="SOLD_OUT" if tr.select_one(".end2") else "ACTIVE",
-                # posted_at은 파싱하지 않는다: .baseList-time이 당일 `HH:MM:SS` /
-                # 이전 `YY/MM/DD`로 갈려, "오늘"을 주입해야 해석된다(순수성 유지, docs/91 Q-23).
+                # `.baseList-time`: 당일 `21:10:11` / 이전 `26/07/03`. 해석엔 "오늘"이 필요하다.
+                posted_at=parse_board_time(_text(tr.select_one(".baseList-time")), now),
             )
         )
     return deals

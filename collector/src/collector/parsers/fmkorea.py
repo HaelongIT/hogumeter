@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from bs4 import BeautifulSoup
 
 from ..pipeline.price import normalize_price
+from ..pipeline.timestamps import parse_board_time
 from .models import ParsedDeal
 
 
-def parse_fmkorea(html: str) -> list[ParsedDeal]:
+def parse_fmkorea(html: str, now: datetime) -> list[ParsedDeal]:
     soup = BeautifulSoup(html, "html.parser")
     deals: list[ParsedDeal] = []
     for li in soup.select("#content .fm_best_widget ul li"):
@@ -30,9 +33,15 @@ def parse_fmkorea(html: str) -> list[ParsedDeal]:
                 reaction_score=_voted_count(li),
                 headline_price=_hotdeal_price(li),
                 status="SOLD_OUT" if li.select_one(".hotdeal_var8Y") else "ACTIVE",
+                posted_at=_posted_at(li, now),  # `.regdate`: 당일 `20:59`
             )
         )
     return deals
+
+
+def _posted_at(li, now: datetime):
+    node = li.select_one(".regdate")
+    return parse_board_time(node.get_text(strip=True), now) if node else None
 
 
 def _voted_count(li) -> int:

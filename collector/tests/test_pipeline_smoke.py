@@ -17,7 +17,8 @@ from collector.scheduler.policy import BackoffPolicy
 from collector.scheduler.sites import hotdeal_boards
 
 FIXTURES = Path(__file__).parent / "fixtures"
-NOW = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)
+# 2026-07-09 23:00 KST. fixture의 최신 글(21:10 KST)보다 뒤여야 postedAt이 과거로 해석된다.
+NOW = datetime(2026, 7, 9, 14, 0, tzinfo=timezone.utc)
 BACKOFF = BackoffPolicy(base=timedelta(seconds=60), factor=2, cap=timedelta(minutes=30))
 
 # 파서 골든이 단언한 건수. 종단에서도 같은 수가 나와야 한다.
@@ -81,6 +82,20 @@ def test_each_site_is_fetched_once_with_its_own_encoding():
     for d in result.deals:
         counts[d.site] = counts.get(d.site, 0) + 1
     assert counts == EXPECTED
+
+
+def test_posted_at_is_resolved_for_every_board_deal():
+    """core는 `firstSeen = postedAt ?? capturedAt`. 여기가 비면 3일 전 글도 '방금 발생'이 된다.
+
+    목록 시각은 "당일 21:10" 형태라 폴링 시각(now)이 있어야 해석된다 — run_cycle이 넘긴다.
+    """
+    result = _run(FakeOpener())
+
+    assert all(d.posted_at is not None for d in result.deals)
+    assert all(d.posted_at <= NOW for d in result.deals)
+
+    records = to_raw_records(result.deals, NOW)
+    assert all(r.posted_at is not None for r in records)
 
 
 def test_ppomppu_survives_cp949_decoding_end_to_end():
