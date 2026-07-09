@@ -6,7 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.claude/hooks/session-brief.sh\""
+            "command": "bash",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/session-brief.sh"],
+            "timeout": 10
           }
         ]
       }
@@ -17,21 +19,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.claude/hooks/guard.sh\""
+            "command": "bash",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/guard.sh"],
+            "timeout": 5
           }
         ]
       }
     ]
   },
   "permissions": {
+    "deny": [
+      "Bash(git push *)"
+    ],
     "allow": [
       "Bash(uv run pytest:*)",
       "Bash(uv run python -m pytest:*)",
-      "Bash(./gradlew test:*)",
-      "Bash(git status:*)",
-      "Bash(git log:*)",
-      "Bash(git diff:*)",
-      "Bash(git show:*)"
+      "Bash(./gradlew test:*)"
     ]
   }
 }

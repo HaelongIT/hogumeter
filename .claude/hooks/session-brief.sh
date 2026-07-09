@@ -10,7 +10,8 @@
 
 set -u
 
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+# CLAUDE_CODE가 주입하는 프로젝트 루트를 우선 쓴다(문서 권장). 없으면 git으로 폴백.
+ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 cd "$ROOT" 2>/dev/null || exit 0
 
 DN="working-area/decisions-needed.md"

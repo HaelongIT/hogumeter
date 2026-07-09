@@ -70,3 +70,17 @@
 - 원인: "실패"를 단일 개념으로 뭉갠 것. 일시 장애(5xx·타임아웃)와 플랫폼의 거절(403/429)은 **의미가 반대**다 — 전자는 "잠시 후 다시", 후자는 "오지 마라".
 - 규칙화된 교훈 (원인→해결): 폴링 결과는 **`OK / TRANSIENT / BLOCKED` 3분해**하고 BLOCKED만 중지 경로(사이트별 `stopped` + Alert)로 보낸다. 레이트 하한은 설정이 아니라 **코드 상수**로 못박는다(SEC-08 "완화 불가"). 일반 규칙: **외부 시스템의 거절 신호를 재시도 가능한 오류로 분류하지 않는다.**
 - 관련 테스트: `test_classify_status`, `test_blocked_stops_the_site_without_retry`, `test_stopped_site_is_never_fetched_again`, `test_configured_interval_below_floor_is_clamped_in_cycle`.
+
+### 2026-07-09 차단 장치는 "무엇을 통과시키는가"를 먼저 테스트해야 한다 (오차단이 진짜 위험)
+- 맥락: `PreToolUse` 가드레일(`.claude/hooks/guard.sh`)로 `git push`·실사이트 호출을 차단. 계약 테스트 18건(차단 8 + 통과 10)이 GREEN이라 배포했다.
+- 증상: 사후 검증에서 **오차단 4건** 발견 — `grep -rn "git push" docs/`, `echo "git push"`, `grep -rn "curl https://…ppomppu…" docs/`, 그리고 **무해한 `ls`가 description 때문에 차단**. 전부 실제 개발 중 칠 법한 명령이다.
+- 원인: (1) JSON의 `"command":"` 를 앵커로 잡으려 구분자 문자군에 `"`를 넣어, 사용자 따옴표 뒤도 "명령 시작"으로 오인. (2) **stdin 전체를 grep** — Bash 도구의 `description` 필드까지 매칭됐다. (3) 통과 테스트 10건을 내가 골랐는데, 하필 이 네 형태를 안 골랐다.
+- 규칙화된 교훈 (원인→해결): **차단 장치(훅·가드·필터)는 차단 케이스보다 통과 케이스를 먼저·많이 짠다.** 오차단은 조용히 작업을 마비시키지만 미차단은 다른 방어선이 받는다. 검사 대상은 **입력 전체가 아니라 해당 필드만 파싱**한다(주변 필드 오염 차단). 앵커 문자군에 데이터 문자(`"`)를 섞지 않는다. 그리고 매 호출마다 도는 훅은 **서브프로세스를 쓰지 않는다** — `grep`/`sed` 3개가 229ms였고, bash 내장 `[[ =~ ]]`로 85ms가 됐다.
+- 관련 테스트: `.claude/hooks/guard.test.sh`(오차단 4건을 회귀로 고정).
+
+### 2026-07-09 설정 스키마는 요약이 아니라 원문·JSON 스키마로 확인한다
+- 맥락: `.claude/settings.json`에 훅·permissions를 작성. 문서 요약 모델에게 스키마를 물었다.
+- 증상: 요약이 훅 구조를 `{"on-session-start": {"type":"http"}}`로, permissions 문법을 `Bash(npm run test *)`만 있는 것처럼 알려줬다. 실제는 `{"SessionStart":[{"hooks":[{"type":"command"}]}]}`. 그리고 나는 반대로 "공백형은 틀렸고 `:*` 콜론형이 맞다"고 단정했는데, 원문은 **둘이 동등**이라고 명시한다. `cd X && cmd`가 allow 규칙에 안 걸린다고도 단정했으나, 원문은 **하위명령별로 독립 매칭**한다고 한다.
+- 원인: 요약 모델(및 서브에이전트)의 사실 주장을 원문 대조 없이 채택. 내장 Explore·Plan 에이전트는 CLAUDE.md조차 로드하지 않는다(공식 문서).
+- 규칙화된 교훈 (원인→해결): **로드베어링한 사실(경로·타입·필드명·설정 키·문법)은 원문 또는 JSON 스키마로 확인한 것만 쓴다.** Claude Code 설정은 `json.schemastore.org/claude-code-settings.json`이 최종 권위다. 두 출처가 엇갈리면 둘 다 의심한다. **틀린 단정을 했으면 즉시 정정한다** — 잘못된 확신은 침묵보다 해롭다.
+- 관련 테스트: 없음(문서·설정). `.claude/settings.json`이 스키마 검증을 통과하는지로 확인.

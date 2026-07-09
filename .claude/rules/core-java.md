@@ -16,8 +16,4 @@ paths:
 - **`ddl-auto=validate`는 DDL 타입과 JPA 필드 타입을 정확히 맞춘다.** `smallint` 컬럼을 `Integer`로 매핑하면 검증 실패. `@JdbcTypeCode(SqlTypes.SMALLINT)`를 붙이거나 필드를 `Short`로. **컨텍스트 로드가 무더기로 깨지면 스키마 검증 불일치를 먼저 의심**하고 리포트에서 `Schema-validation` 라인을 볼 것. (99: 2026-07-08)
 - **`@SpringBootTest`는 컨테이너(postgres)를 공유하고 기본은 롤백이 없다.** 전역 count 단정은 다른 테스트의 커밋에 오염된다 → 특정 `variantId`로 스코프하거나 `@Transactional`로 tx 롤백. (99: 2026-07-08)
 
-## 도메인 규율 (CLAUDE.md TDD 규율의 core 적용)
-
-- 순수 도메인(기준가 산식·이상치·매칭·알림 판정·집합 술어)은 **IO 없는 순수 함수/클래스**. `Clock`은 주입.
-- 수치 파라미터는 **주입받은 params만 참조**(하드코딩 금지). 승인값은 `BenchmarkParams`, 미승인 잠정값은 섞지 말고 별도 주입 — `docs/91` Q-14 선례.
-- Flyway 마이그레이션은 **core 단독 소유**. collector는 계약 테이블만 접근한다.
+> TDD·순수 도메인·파라미터 주입·Flyway 소유권 규율은 CLAUDE.md에 있다. 여기 옮겨 적지 않는다 — 중복 지침은 준수율을 떨어뜨린다.
