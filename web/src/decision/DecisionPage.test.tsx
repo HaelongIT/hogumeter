@@ -131,3 +131,44 @@ describe('DecisionPage', () => {
     await waitFor(() => expect(api.getSignal).not.toHaveBeenCalled())
   })
 })
+
+describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'listProducts').mockResolvedValue([iphone])
+    vi.spyOn(api, 'getSignal').mockResolvedValue(signal)
+    vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
+    vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
+  })
+
+  it('기본은 6개월이고, 기준가·주기를 그 기간으로 부른다', async () => {
+    render(<DecisionPage />)
+    await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+    await pick()
+
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 6))
+    expect(api.getCadence).toHaveBeenCalledWith(11, 6)
+  })
+
+  it('기간을 바꾸면 그 기간으로 다시 부른다', async () => {
+    render(<DecisionPage />)
+    await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+    await pick()
+    await userEvent.selectOptions(screen.getByLabelText('기간'), '12')
+
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 12))
+    expect(api.getCadence).toHaveBeenCalledWith(11, 12)
+  })
+
+  it('신호등이 기간을 따르지 않는다는 사실을 숨기지 않는다', async () => {
+    render(<DecisionPage />)
+    await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+    await pick()
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument() // 6개월이면 군더더기 없음
+    await userEvent.selectOptions(screen.getByLabelText('기간'), '3')
+
+    expect(await screen.findByRole('note')).toHaveTextContent('신호등은 기간 설정과 무관하게 최근 6개월')
+    // core는 신호등에 기간을 받지 않는다 — 인자를 지어내지 않았다.
+    expect(api.getSignal).toHaveBeenLastCalledWith(11)
+  })
+})
