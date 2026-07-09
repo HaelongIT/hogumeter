@@ -1,7 +1,7 @@
 """적재 준비 — ParsedDeal → raw_deal_post 레코드(계약). 순수 함수(네트워크·DB 없음).
 
-raw_deal_post 계약(docs/01, V1 스키마): (site, post_id) UNIQUE 멱등. 한 배치 안의 중복은
-자연키로 접어(last-wins) insert-only 적재가 배치 내 충돌 없이 삼도록 한다. captured_at은 주입받는다
+raw_deal_post 계약(docs/01, V1 스키마): (site, post_id) UNIQUE **업서트**. 한 배치 안의 중복은
+자연키로 접어(last-wins) 업서트가 배치 내 충돌 없이 삼도록 한다. captured_at은 주입받는다
 (폴링/채취 시각 — 순수성 위해 now() 미사용). status는 DB CHECK 제약과 동일 집합을 선검증.
 """
 
@@ -17,7 +17,10 @@ _VALID_STATUS = {"ACTIVE", "SOLD_OUT", "DELETED"}
 
 @dataclass(frozen=True)
 class RawDealRecord:
-    """raw_deal_post 한 행. collector가 insert-only로 적재하는 계약 형태(core가 소비 후 매칭·병합)."""
+    """raw_deal_post 한 행. collector가 `(site, post_id)` 업서트로 적재하는 계약 형태(core가 소비 후 매칭·병합).
+
+    상태·가격 변화는 기존 행에 반영된다(BM-01 AC-2). `posted_at`만 불변(발생 시각, C-2).
+    """
 
     site: str
     post_id: str

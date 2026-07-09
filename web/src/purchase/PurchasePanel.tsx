@@ -3,7 +3,7 @@ import { ApiFailure, api } from '../api/client'
 import type { PurchaseObservation } from '../api/types'
 import { InvalidForm } from '../registration/buildCommand'
 import { buildPurchaseCommand, type PurchaseForm } from './buildPurchaseCommand'
-import { observationLine, stateLabel } from './present'
+import { kstDate, observationLine, stateLabel } from './present'
 
 const EMPTY = { paidPrice: '', purchasedDate: '', observationDays: '', demandAxisValue: '' }
 
@@ -89,7 +89,7 @@ export function PurchasePanel({ variantId }: { variantId: number }) {
           {purchases.map((purchase) => (
             <li key={purchase.purchaseId}>
               <span aria-label="구매가">{purchase.paidPrice.toLocaleString('en-US')}원</span> ·{' '}
-              {purchase.purchasedAt.slice(0, 10)} · {stateLabel(purchase.state)}
+              {kstDate(purchase.purchasedAt)} · {stateLabel(purchase.state)}
               <br />
               <span aria-label={`관찰 문맥 ${purchase.purchaseId}`}>{observationLine(purchase)}</span>
             </li>

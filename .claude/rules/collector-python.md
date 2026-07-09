@@ -36,7 +36,7 @@ paths:
 
 ## 계약
 
-- `raw_deal_post`는 `(site, post_id)` UNIQUE 멱등. `status` 허용집합은 **`ACTIVE`/`SOLD_OUT`/`DELETED`**(DB CHECK와 동일).
-  ⚠️ `parse_bunjang`은 `ENDED`를 낸다 — 잠복 불일치, `docs/91` Q-41.
+- `raw_deal_post`는 `(site, post_id)` UNIQUE **업서트**. `status` 허용집합은 **`ACTIVE`/`SOLD_OUT`/`DELETED`**(DB CHECK와 동일). `ENDED`는 `deal_event.status`의 값이지 여기 값이 아니다 — 한때 `parse_bunjang`이 이걸 내 `to_raw_records`가 터졌다(해소 2026-07-09).
+  ⚠️ 번개 status 코드표는 여전히 **미실측**(`"0"=판매중`만 안다). 비-`"0"`을 전부 `SOLD_OUT`으로 보는 건 잠정 — `docs/91` Q-44.
 - 레이트 하한(게시판 60s / 마켓 600s)은 **설정으로 완화 불가**(SEC-08). `scheduler/policy.py`의 상수를 낮추지 말 것.
 - 사이트 셀렉터·차단 징후·fixture 채취일의 실측은 `docs/98-field-notes.md`에 기록한다.

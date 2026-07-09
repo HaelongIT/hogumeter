@@ -90,3 +90,16 @@ describe('PurchasePanel', () => {
     await waitFor(() => expect(api.listPurchases).toHaveBeenCalledWith(12))
   })
 })
+
+describe('PurchasePanel — 날짜는 KST로 그린다 (OPS-03)', () => {
+  it('UTC 저녁에 기록된 구매는 KST 날짜(다음 날)로 보인다', async () => {
+    vi.spyOn(api, 'listPurchases').mockResolvedValue([
+      { ...observing, purchasedAt: '2026-07-01T20:00:00Z' }, // KST 2026-07-02 05:00
+    ])
+    render(<PurchasePanel variantId={11} />)
+
+    const item = await screen.findByRole('listitem')
+    expect(item).toHaveTextContent('2026-07-02')
+    expect(item).not.toHaveTextContent('2026-07-01')
+  })
+})
