@@ -181,3 +181,17 @@
 - 원인: stdout을 **사람이 읽는 산문**으로 정의한 것이 근본 원인이다. 그러면 인코딩·문구·파싱이 전부 결합된다.
 - 규칙화된 교훈 (원인→해결): **관측 출력은 문장이 아니라 이벤트(JSON Lines)로 낸다**(OBS-01). `ensure_ascii=True`면 한글은 `\uXXXX`로 나가 **값은 온전한 채 바이트는 순수 ASCII**가 된다 — 인코딩 문제가 규칙이 아니라 구조로 사라진다. 테스트·스모크는 문구를 grep하지 말고 `json.loads`로 이벤트를 읽는다: 문구는 바뀌어도 계약은 안 바뀐다. 그리고 카운터에서 **0을 지우지 않는다** — `by_site`의 `{"ppomppu": 0}`은 "성공했는데 0건"이라는 드리프트의 전형이고, 필드를 생략하면 그 사실이 사라진다(실패·차단도 같은 이유로 따로 센다: 대응이 다르다).
 - 관련 테스트: `collector/tests/test_observability.py`, `test_main.py`(`_assert_console_safe`가 `encode("ascii")`까지 단언), `scripts/smoke.sh` 6단계(`"event":"refused"`).
+
+### 2026-07-09 화면을 그려보기 전까지 "정상 응답"인 거짓말은 드러나지 않는다 — currentPrice=0
+- 맥락: core의 기준가 REST는 계약대로 동작했고 테스트도 전부 GREEN이었다. 네이버 키가 없어 `StubCurrentPriceProvider`가 현재가로 **0**을 반환하는 것도 주석에 정직하게 적혀 있었다.
+- 증상: 그 0이 `gap = currentPrice − 기준가`를 타고 흐르면 `{won: -820000, pct: -100.0}`이 된다. **타입·스키마·상태코드 어디에도 이상이 없다.** 화면이 이걸 그리면 "지금 100% 싸다"는, 이 시스템이 낼 수 있는 **가장 강한 매수 신호를 거짓으로** 낸다. 더 조용한 쪽은 알림이다 — `AlertEvaluator`의 콜드스타트 잭팟은 `price ≤ currentPrice·(1−ratio)`라서 임계가 0이 되고 **어떤 딜도 통과하지 못한다**(놓침). 하필 그 경로는 기준가가 없는 초기, 즉 지금을 위해 만든 것이다.
+- 원인: **"미확립"을 도메인 타입이 아니라 sentinel(0)로 표현**했다. `null`이면 컴파일러와 계산이 막아주지만 `0`은 유효한 `long`이라 어디든 흘러간다. SPARSE/NONE의 통계 필드는 `null`로 못박아 둔 프로젝트가, 현재가만 sentinel로 남겨뒀다.
+- 규칙화된 교훈 (원인→해결): **"값 없음"을 값으로 표현하지 않는다.** 스텁이 반환하는 sentinel은 스텁 안에 갇히지 않고 산식·알림·화면까지 흐른다. 불가피하면 **해석을 한 곳에 가둔다**(`CURRENT_PRICE_UNAVAILABLE` 상수 + `gapLine` 하나, refactor seam) — 소비자가 늘어나기 전에. 그리고 일반화: **표시 계층을 만들면 도메인의 거짓말이 드러난다.** "화면은 나중에"는 검증을 나중으로 미루는 것과 같다.
+- 관련 테스트: `web/src/decision/present.test.ts`(`currentPrice=0`이면 갭 대신 미확립), `scripts/smoke.sh` 5-1단계(딜 0건 variant → `tier:NONE`·`GRAY`·`guardMet:false`, 없는 variant → 404). 보드: `docs/91` Q-53.
+
+### 2026-07-09 우회 스위치는 "필요한 명령에만" 건다 — MSYS_NO_PATHCONV가 스모크를 죽였다
+- 맥락: `restore-drill.sh`에서 Git Bash가 도커 볼륨 인자 `/repo`를 `C:/Program Files/Git/repo`로 바꾸는 걸 막으려 `MSYS_NO_PATHCONV=1`을 배웠다. 그 뒤 습관적으로 `MSYS_NO_PATHCONV=1 bash scripts/smoke.sh`로 실행했다.
+- 증상: `curl: Failed to open /tmp/tmp.nVFYWtUsWm` → 등록 POST 실패. 스모크가 5단계에 닿지도 못했다. 경로 변환을 끄자 `mktemp`가 준 **MSYS 경로**를 Windows `curl.exe`가 열 수 없게 된 것이다. 정작 그 `-d @file`은 **다른 우회**(argv cp949 회피)로 도입한 것이었다.
+- 원인: 경로 변환 억제는 **프로세스 전체**에 걸리는데, 그 프로세스 안엔 변환이 필요한 명령과 방해받는 명령이 섞여 있었다. 우회끼리 충돌했다.
+- 규칙화된 교훈 (원인→해결): **환경변수 우회는 스크립트 바깥에서 걸지 말고, 그게 필요한 명령 앞에만 붙인다**(`MSYS_NO_PATHCONV=1 docker run …`). 스크립트는 자기가 필요한 우회를 스스로 지녀야 호출자가 실수할 수 없다. 부수: 스모크가 **크게 실패**해줘서 30초 만에 원인을 짚었다 — 조용히 건너뛰었다면 새 단계가 안 돈 줄도 몰랐을 것이다.
+- 관련 테스트: `bash scripts/smoke.sh`(우회 없이 그대로 실행되어야 한다).

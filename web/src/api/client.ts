@@ -1,4 +1,13 @@
-import type { ApiError, ProductCreated, ProductSummary, RegisterProductCommand, VariantView } from './types'
+import type {
+  ApiError,
+  BenchmarkView,
+  CadenceView,
+  ProductCreated,
+  ProductSummary,
+  RegisterProductCommand,
+  SignalView,
+  VariantView,
+} from './types'
 
 /** core가 `{ code, message }`로 돌려준 실패. 그 외 실패는 `Error`. */
 export class ApiFailure extends Error {
@@ -36,4 +45,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(command),
     }),
+
+  // 조회 3종. variant가 없으면 BM_VARIANT_NOT_FOUND로 실패한다.
+  getBenchmark: (variantId: number, periodMonths = 6) =>
+    request<BenchmarkView>(`/api/v1/variants/${variantId}/benchmark?periodMonths=${periodMonths}`),
+
+  getSignal: (variantId: number) => request<SignalView>(`/api/v1/variants/${variantId}/signal`),
+
+  getCadence: (variantId: number, periodMonths = 6) =>
+    request<CadenceView>(`/api/v1/variants/${variantId}/cadence?periodMonths=${periodMonths}`),
 }

@@ -90,6 +90,22 @@ product_id=$(echo "$created" | sed 's/.*"productId"[: ]*\([0-9]*\).*/\1/')
 [ "$(curl -fsS "${WEB}/api/v1/products/${product_id}/variants" | grep -o '"variantId"' | wc -l)" = 2 ] ||
 	fail "variant 2개가 아니다"
 
+echo "--- 5-1) 판단 화면이 부르는 조회 3종 (신호등·기준가·주기) ---"
+# 방금 등록한 variant엔 딜이 하나도 없다. 그래서 정답은 "표본 없음"이다 —
+# 이 경로가 조용히 0원·GREEN을 내면 화면이 거짓말을 한다.
+variant_id=$(curl -fsS "${WEB}/api/v1/products/${product_id}/variants" |
+	sed 's/.*"variantId"[: ]*\([0-9]*\).*/\1/')
+bench=$(curl -fsS "${WEB}/api/v1/variants/${variant_id}/benchmark?periodMonths=6")
+echo "$bench" | grep -q '"tier":"NONE"' || fail "딜 0건인데 tier가 NONE이 아니다: $bench"
+echo "$bench" | grep -q '"n":0' || fail "표본 수가 0이 아니다: $bench"
+curl -fsS "${WEB}/api/v1/variants/${variant_id}/signal" | grep -q '"color":"GRAY"' ||
+	fail "표본 0인데 신호등이 GRAY가 아니다"
+curl -fsS "${WEB}/api/v1/variants/${variant_id}/cadence" | grep -q '"guardMet":false' ||
+	fail "발생 0인데 주기 가드가 통과했다"
+# 없는 variant는 도메인 코드로 거절한다(web은 이 code를 그대로 보여준다).
+curl -sS -o /dev/null -w '%{http_code}' "${WEB}/api/v1/variants/999999/benchmark?periodMonths=6" |
+	grep -q '^404$' || fail "없는 variant인데 404가 아니다"
+
 echo "--- 6) collector는 opt-in 없이 네트워크를 만지지 않는다 (OBS-01 구조화 로그) ---"
 # 로그는 JSON Lines다. 문장을 grep하지 말고 이벤트를 본다 — 문구는 바뀌어도 계약은 안 바뀐다.
 collector_log=$(compose logs --no-log-prefix collector 2>&1 | grep '^{' | tail -1)
