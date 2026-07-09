@@ -217,6 +217,16 @@ _(Q-39. BLOCKED 자동 중지의 수동 재개 경로 — **`working-area/decisi
 - **잠정값**: 파싱 실패 = TRANSIENT(백오프 후 재시도). 성공률 집계·임계·알림 없음. 구조 변경은 사람이 딜 유입 0을 눈치채야 발견된다.
 - **재개 트리거**: 실 수집 가동 후 — 사이클별 (파싱 건수, 실패 여부)를 누적해 이동창 성공률을 내고 임계 이탈 시 `Alert` 방출. 알림 발송 경로(Q-20)와 함께.
 
+## [열림] Q-42. SEC-01 gitleaks pre-commit 훅 미구현
+- **맥락**: `docs/20` SEC-01은 "커밋 전 훅으로 스캔(gitleaks)"을 명시한다. 미구현이라 시크릿 보호가 `.gitignore` 한 줄(`.env*`)에만 의존한다. 사람이 실수로 토큰을 붙여넣고 커밋하면 아무것도 막지 못한다.
+- **잠정값**: 미구현. `.claude/hooks/guard.sh`(Claude Code 훅)는 **git push만** 막지 커밋 내용은 검사하지 않는다 — 성격이 다르다. gitleaks는 **git 훅**이라 사람이 커밋할 때도 발동한다.
+- **재개 트리거**: gitleaks 바이너리 도입 승인 시 — `.git/hooks`는 git으로 공유되지 않으므로 `core.hooksPath`를 저장소 내 디렉토리(예: `.githooks/`)로 설정해야 상대에게도 적용된다. `pre-deploy-checklist` §B에 `[권장]` 동반 기재.
+
+## [열림] Q-43. code intelligence(LSP) 플러그인 미도입
+- **맥락**: Claude Code 문서의 도입 트리거 표에 "심볼 정의를 찾으려 파일을 많이 읽는다 → code intelligence 플러그인"이 있다. 2026-07-09 세션에서 Explore 에이전트가 core를 훑다가 REST 계약을 지어낸 상황이 정확히 여기 해당한다.
+- **잠정값**: 미도입. Grep/Read로 진행하고, 로드베어링 주장은 원문 대조로 검증(자동 메모리 `verify-subagent-claims`).
+- **재개 트리거**: Java·Python 플러그인 마켓플레이스 의존 추가를 승인할 때. 외부 의존이 늘어나므로 사용자 결정.
+
 ## [열림] Q-41. `parse_bunjang`의 `status="ENDED"`가 raw_deal_post CHECK와 불일치 (기존 결함)
 - **맥락**: `parsers/bunjang.py`는 판매중이 아니면 `status="ENDED"`를 낸다. 그런데 `pipeline/ingest.to_raw_records`의 허용집합과 `raw_deal_post` DB CHECK는 **`{ACTIVE, SOLD_OUT, DELETED}`**다 — 번개 매물을 `to_raw_records`에 넣으면 `ValueError`. (`ENDED`는 `deal_event.status`의 값이지 `raw_deal_post`의 값이 아니다.)
 - **잠정값**: 현재는 터지지 않는다 — 번개는 `used_listing_observation` 경로(M2)라 `to_raw_records`를 안 거치기 때문. 즉 **잠복 결함**이며, 스케줄러 착수 중 발견했으나 내 변경이 만든 것이 아니라 고치지 않았다(surgical).
