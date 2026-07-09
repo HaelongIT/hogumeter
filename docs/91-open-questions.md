@@ -259,11 +259,11 @@ _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildComm
 - **잠정값**: V2 롤백 없음. 사고 시 복구 경로는 **백업 복원**뿐이다(그건 실측 검증됨).
 - **재개 트리거**: `db/rollback/R2__purchase_rollback.sql` 작성 + Testcontainers 테스트(V1→V2 적용 → R2 → R1 → 스키마 공백 확인). **core 소유 리소스라 상대와 조율.**
 
-## [열림] Q-50. OBS-04 헬스체크 엔드포인트가 없다 (core·collector)
-- **맥락**: OBS-04는 "헬스체크 엔드포인트(컴포넌트별) + Compose healthcheck"를 요구한다. 현재 compose에 healthcheck가 있는 서비스는 **postgres 하나뿐**이고, core에는 `spring-boot-starter-actuator` 의존이 없다.
-- **왜 지금 문제인가**: `scripts/smoke.sh`가 core 준비를 `/api/v1/products`를 폴링해 판정한다 — **비즈니스 엔드포인트를 헬스체크로 오용**하는 것이다. core가 뜬 뒤 Flyway 마이그레이션이 끝나기 전에 200이 나올 여지도 있고, DB가 죽어도 이 경로는 200을 줄 수 있다.
-- **잠정값**: 스모크는 `/api/v1/products` 폴링으로 진행. compose의 core/collector에 healthcheck 없음. `depends_on: service_healthy`는 postgres에만 걸린다.
-- **재개 트리거**: `core/build.gradle.kts`에 actuator 추가 + `management.endpoints`(`/actuator/health`) 노출 → compose healthcheck. **core 기존 파일이라 상대와 조율.** collector는 프로세스형이라 healthcheck 대신 재시작 정책으로 충분한지 함께 판단.
+## [열림] Q-50. OBS-04 — core에 전용 헬스 엔드포인트가 없다 (compose healthcheck는 임시방편으로 붙임)
+- **맥락**: OBS-04는 "헬스체크 엔드포인트(컴포넌트별) + Compose healthcheck"를 요구한다. **compose healthcheck는 붙였다**(2026-07-09): postgres(`pg_isready`) · core(`curl /api/v1/products`) · web(`wget /healthz`, `auth_basic off`). collector는 **일부러 걸지 않았다** — 1회 실행 후 종료하는 배치라 살아 있음을 물으면 항상 죽어 있다(관측은 OBS-01 로그 이벤트로).
+- **남은 문제**: core에 `spring-boot-starter-actuator`가 없어 **비즈니스 엔드포인트를 헬스체크로 쓴다**. `/api/v1/products`는 DB까지 닿으므로 readiness엔 가깝지만, ① 목록이 커지면 헬스체크가 비싸지고 ② "core는 살아 있는데 DB만 죽음"을 구분하지 못하며 ③ 엔드포인트 경로가 바뀌면 헬스체크가 조용히 깨진다.
+- **잠정값**: 위 임시방편으로 진행. `start_period: 40s`(Flyway 마이그레이션 시간), `interval: 10s`. web 헬스체크는 nginx만 증명하고 core를 증명하지 않는다 — web은 core 없이도 떠야 하므로 의도된 것이다.
+- **재개 트리거**: `core/build.gradle.kts`에 actuator 추가 + `/actuator/health` 노출 → compose의 core healthcheck 교체(1줄). **core 기존 파일이라 상대와 조율.**
 
 ## [열림] Q-49. `POST /api/v1/products`에 서버측 검증이 없다 — 잘못된 입력이 500이 된다
 - **맥락**: `RegistrationController`는 `@Valid`를 쓰지 않고 `RegisterProductCommand`에도 컴팩트 생성자 검증이 없다(`spring-boot-starter-validation`은 의존성에 있으나 미사용). 빈 `name`으로 POST하면 `ProductEntity.name nullable=false` 제약에 걸려 **`DataIntegrityViolationException` → 500**이 난다. `axes`/`variants`가 `null`이면 `NullPointerException` → 500.

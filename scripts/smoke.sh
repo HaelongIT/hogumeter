@@ -54,6 +54,19 @@ for _ in $(seq 60); do
 done
 [ "${ready:-0}" = 1 ] || fail "core가 120초 안에 준비되지 않았다"
 
+echo "--- 0) OBS-04 헬스체크: compose가 healthy라고 말한다 ---"
+# 헬스체크는 "정의했다"가 아니라 "실제로 healthy를 보고한다"까지 확인해야 한다.
+# 명령이 이미지에 없거나(curl/wget 부재) 인증에 막히면 조용히 unhealthy로 굳는다.
+for _ in $(seq 30); do
+	statuses=$(compose ps --format '{{.Service}}:{{.Health}}')
+	case "$statuses" in
+	*core:healthy*) [ -n "$(echo "$statuses" | grep '^web:healthy')" ] && healthy=1 && break ;;
+	esac
+	sleep 2
+done
+[ "${healthy:-0}" = 1 ] || fail "core·web이 healthy가 되지 않았다: $(compose ps --format '{{.Service}}:{{.Health}}' | tr '\n' ' ')"
+curl -fsS "${WEB}/healthz" | grep -q '^ok$' || fail "/healthz가 ok를 주지 않는다"
+
 echo "--- 1) 정적 자산이 서빙된다 ---"
 curl -fsS "${WEB}/" | grep -q '<div id="root">' || fail "index.html이 아니다"
 
@@ -122,7 +135,10 @@ sleep 2
 auth_url="http://127.0.0.1:${AUTH_PORT:-54000}/"
 code_no_creds=$(curl -s -o /dev/null -w '%{http_code}' "$auth_url")
 code_with_creds=$(curl -s -o /dev/null -w '%{http_code}' -u smoke:smoke-pass "$auth_url")
+# 헬스체크는 인증 뒤에 숨으면 안 된다 — 자격증명 없이도 200이어야 컨테이너가 healthy가 된다.
+code_health=$(curl -s -o /dev/null -w '%{http_code}' "${auth_url}healthz")
 docker rm -f "$auth_cid" >/dev/null
+[ "$code_health" = 200 ] || fail "auth를 켜니 /healthz가 ${code_health}다 (헬스체크가 막힌다)"
 [ "$code_no_creds" = 401 ] || fail "Basic Auth를 켰는데 인증 없이 ${code_no_creds}를 준다"
 [ "$code_with_creds" = 200 ] || fail "올바른 자격증명인데 ${code_with_creds}를 준다"
 

@@ -33,6 +33,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      # OBS-04 임시방편. 전용 헬스 엔드포인트가 없어(actuator 미도입, docs/91 Q-50)
+      # 조회 엔드포인트로 대신한다. DB까지 닿아야 200이므로 liveness가 아니라 readiness에 가깝다
+      # — DB가 죽으면 core도 unhealthy가 된다. 그 판정은 지금 상태에선 정확하다(core는 DB 없이 쓸모없다).
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/api/v1/products"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 40s
     ports:
       - "127.0.0.1:${CORE_PORT:-8080}:8080"
 
@@ -44,6 +53,14 @@ services:
       # SEC-02 접근 통제. 비면 Basic Auth 꺼짐(로컬 개발). 공개망 노출 전 필수 —
       # 해시 생성: docker run --rm httpd:2.4-alpine htpasswd -nbm hogu '비밀번호'
       WEB_BASIC_AUTH_HTPASSWD: ${WEB_BASIC_AUTH_HTPASSWD:-}
+    healthcheck:
+      # nginx만 증명한다(core는 증명하지 않는다 — web은 core 없이도 떠야 하므로 그게 옳다).
+      # /healthz는 auth_basic이 꺼져 있다. 자격증명 있는 사람만 확인 가능하면 헬스체크가 아니다.
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     ports:
       # nginx가 /api를 core로 프록시한다 → 브라우저에겐 동일 오리진, CORS 불필요.
       # ⚠️ 접근 통제 없음(SEC-02). 로컬만 개방 — 공개망 노출 전 pre-deploy §C 확인.
@@ -58,6 +75,9 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?}
       # 실 폴링 스위치. 기본 off — 운영자가 의도적으로 켜야 수집이 시작된다(pre-deploy §F).
       COLLECTOR_ALLOW_NETWORK: ${COLLECTOR_ALLOW_NETWORK:-0}
+    # healthcheck를 걸지 않는다. collector는 상주 서비스가 아니라 1회 실행 후 종료하는
+    # 배치다(opt-in이 없으면 refused 이벤트만 내고 exit 0). 살아 있음을 물으면 항상 죽어 있다.
+    # 관측은 헬스체크가 아니라 로그 이벤트로 한다(OBS-01: cycle·alert).
     depends_on:
       postgres:
         condition: service_healthy
