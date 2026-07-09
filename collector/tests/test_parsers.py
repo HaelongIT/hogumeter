@@ -99,3 +99,12 @@ def test_ppomppu_missing_recommend_is_zero():
 
     assert deals[1].post_id == "717718"
     assert deals[1].reaction_score == 0
+
+
+def test_ppomppu_adds_shipping_fee_from_title_convention():
+    """제목 관례 `(가격원/배송비)`의 배송비를 합산한다(BM-02 AC-1). 실 fixture가 회귀를 잡는다."""
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"))
+
+    d = next(x for x in deals if x.post_id == "717716")
+    assert "(13,490원/3,000원)" in d.title
+    assert d.headline_price == 16_490  # 13,490 + 3,000
