@@ -8,6 +8,13 @@ type Tab = keyof typeof TABS
 
 export function App() {
   const [tab, setTab] = useState<Tab>('decision')
+  // 등록 화면이 고른 variant를 판단 화면으로 넘긴다. 등록 → 판단이 한 흐름이어야 한다.
+  const [openVariantId, setOpenVariantId] = useState<number | null>(null)
+
+  const openDecision = (variantId: number) => {
+    setOpenVariantId(variantId)
+    setTab('decision')
+  }
 
   return (
     <>
@@ -18,7 +25,11 @@ export function App() {
           </button>
         ))}
       </nav>
-      {tab === 'decision' ? <DecisionPage /> : <RegistrationPage />}
+      {tab === 'decision' ? (
+        <DecisionPage initialVariantId={openVariantId} />
+      ) : (
+        <RegistrationPage onOpenDecision={openDecision} />
+      )}
     </>
   )
 }

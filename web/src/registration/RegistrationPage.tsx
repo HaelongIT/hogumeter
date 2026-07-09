@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
-import type { ProductSummary } from '../api/types'
+import type { ProductSummary, VariantView } from '../api/types'
 import { InvalidForm, buildCommand, type AxisInput, type RegistrationForm } from './buildCommand'
 
 const EMPTY: RegistrationForm = {
@@ -11,9 +11,15 @@ const EMPTY: RegistrationForm = {
   demandAxisMode: 'GROUPED',
 }
 
-export function RegistrationPage() {
+/** 등록 직후의 갈 곳. variant가 여럿이면 **고르지 않는다** — 판단은 사람이 한다(절대 원칙 2). */
+interface JustRegistered {
+  variants: VariantView[]
+}
+
+export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variantId: number) => void } = {}) {
   const [form, setForm] = useState<RegistrationForm>(EMPTY)
   const [products, setProducts] = useState<ProductSummary[] | null>(null)
+  const [registered, setRegistered] = useState<JustRegistered | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -55,9 +61,13 @@ export function RegistrationPage() {
     setError(null)
     setBusy(true)
     try {
-      await api.registerProduct(buildCommand(form))
+      const { productId } = await api.registerProduct(buildCommand(form))
       setForm(EMPTY)
       await reload()
+
+      // variant 조회는 **덤**이다. 실패해도 등록이 취소된 건 아니므로 성공을 부정하지 않는다.
+      const variants = await api.listVariants(productId).catch(() => [])
+      setRegistered({ variants })
     } catch (failure) {
       setError(describe(failure))
     } finally {
@@ -73,6 +83,17 @@ export function RegistrationPage() {
         네이버 후보 검색은 API 키가 없어 아직 쓸 수 없습니다(docs/91 Q-3). 지금은 수동 입력만
         가능합니다 — REG-01이 인정한 폴백 경로입니다.
       </p>
+
+      {registered && (
+        <section aria-label="등록 결과">
+          <p>등록했습니다. 이제 무엇을 볼지 고르세요.</p>
+          {registered.variants.map((variant) => (
+            <button key={variant.variantId} type="button" onClick={() => onOpenDecision?.(variant.variantId)}>
+              {variant.label} 판단 보기
+            </button>
+          ))}
+        </section>
+      )}
 
       <form onSubmit={submit} aria-label="제품 등록">
         <label>

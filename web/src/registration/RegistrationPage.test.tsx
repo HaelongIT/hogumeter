@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { api } from '../api/client'
+import { ApiFailure, api } from '../api/client'
 import { RegistrationPage } from './RegistrationPage'
 
 const iphone = {
@@ -117,5 +117,58 @@ describe('RegistrationPage', () => {
     render(<RegistrationPage />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('core가 떠 있는지')
+  })
+})
+
+describe('RegistrationPage — 등록 다음에 무엇을 할지 알려준다', () => {
+  const registered = {
+    productId: 9,
+    name: '아이폰 17',
+    category: 'phone',
+    demandAxisMode: 'GROUPED' as const,
+    variants: [
+      { variantId: 91, label: '256GB', priceAxisValues: { 용량: '256GB' } },
+      { variantId: 92, label: '512GB', priceAxisValues: { 용량: '512GB' } },
+    ],
+  }
+
+  const fillAndSubmit = async () => {
+    await userEvent.type(screen.getByLabelText('제품명'), '아이폰 17')
+    await userEvent.type(screen.getByLabelText(/축 1 값/), '256GB, 512GB')
+    await userEvent.click(screen.getByRole('button', { name: '등록' }))
+  }
+
+  beforeEach(() => {
+    vi.spyOn(api, 'listProducts').mockResolvedValue([])
+    vi.spyOn(api, 'registerProduct').mockResolvedValue({ productId: 9 })
+    vi.spyOn(api, 'listVariants').mockResolvedValue(registered.variants)
+  })
+
+  it('등록에 성공하면 variant를 나열하고, 어느 것을 볼지는 사람이 고른다', async () => {
+    render(<RegistrationPage />)
+    await fillAndSubmit()
+
+    // variant가 둘인데 하나를 골라주지 않는다 — 지어내지 않는다(절대 원칙 2).
+    expect(await screen.findByRole('button', { name: '256GB 판단 보기' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '512GB 판단 보기' })).toBeInTheDocument()
+    expect(api.listVariants).toHaveBeenCalledWith(9)
+  })
+
+  it('variant를 고르면 그 variantId로 판단 화면을 연다', async () => {
+    const onOpenDecision = vi.fn()
+    render(<RegistrationPage onOpenDecision={onOpenDecision} />)
+    await fillAndSubmit()
+    await userEvent.click(await screen.findByRole('button', { name: '512GB 판단 보기' }))
+
+    expect(onOpenDecision).toHaveBeenCalledWith(92)
+  })
+
+  it('variant 조회가 실패해도 등록 성공을 부정하지 않는다', async () => {
+    vi.spyOn(api, 'listVariants').mockRejectedValue(new ApiFailure(500, 'HTTP_500'))
+    render(<RegistrationPage />)
+    await fillAndSubmit()
+
+    expect(await screen.findByText(/등록했습니다/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /판단 보기/ })).not.toBeInTheDocument()
   })
 })

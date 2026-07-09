@@ -32,9 +32,9 @@ const PERIODS = [3, 6, 12] as const
 /** core의 `GetSignalUseCase.PERIOD_MONTHS` — 신호등은 이 값으로 고정 판정한다(Q-26 잠정). */
 const SIGNAL_PERIOD_MONTHS = 6
 
-export function DecisionPage() {
+export function DecisionPage({ initialVariantId = null }: { initialVariantId?: number | null } = {}) {
   const [options, setOptions] = useState<{ variantId: number; label: string }[]>([])
-  const [variantId, setVariantId] = useState<number | null>(null)
+  const [variantId, setVariantId] = useState<number | null>(initialVariantId)
   const [periodMonths, setPeriodMonths] = useState<number>(6)
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)

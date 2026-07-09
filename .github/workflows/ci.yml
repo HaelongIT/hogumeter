@@ -19,6 +19,11 @@ jobs:
           docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest \
             detect --source=/repo --config=/repo/.gitleaks.toml --redact --no-banner --verbose
 
+      # 로컬 pre-commit 훅(선택 활성화)이 실제로 도는지 확인한다. 훅은 만들기 쉽고,
+      # 켜지 않으면 도는지 아무도 모른다. 차단만이 아니라 **통과**도 시험한다.
+      - name: pre-commit 훅 계약 테스트
+        run: bash .githooks/pre-commit.test.sh
+
   core:
     runs-on: ubuntu-latest
     defaults:
@@ -76,7 +81,7 @@ jobs:
       - name: shellcheck
         run: |
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable \
-            --severity=warning --shell=bash scripts/*.sh .claude/hooks/*.sh .githooks/pre-commit
+            --severity=warning --shell=bash scripts/*.sh .claude/hooks/*.sh .githooks/pre-commit .githooks/*.sh
 
   # REL-05: 롤백 스크립트는 사고가 나야 처음 실행된다. 모든 V에 짝이 되는 R이 있는지,
   # 역순 적용이 스키마를 비우는지, 순서를 어기면 실패하는지를 일회용 컨테이너에서 확인한다.
