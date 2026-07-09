@@ -23,7 +23,7 @@ root=$(git rev-parse --show-toplevel)
 export MSYS_NO_PATHCONV=1
 
 echo "pre-commit: 스테이징된 변경분 시크릿 스캔..."
-docker run --rm -v "${root}:/repo" ghcr.io/gitleaks/gitleaks:latest \
+docker run --rm -v "${root}:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 \
 	protect --staged --source=/repo --config=/repo/.gitleaks.toml --redact --no-banner --verbose ||
 	{
 		echo "" >&2

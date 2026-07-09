@@ -35,7 +35,7 @@ echo "--- MinIO 기동 (일회용) ---"
 docker network create "$NET" >/dev/null
 docker run -d --name "$MINIO" --network "$NET" \
 	-e MINIO_ROOT_USER=drilluser -e MINIO_ROOT_PASSWORD=drillpass123 \
-	minio/minio:latest server /data >/dev/null
+	minio/minio:RELEASE.2025-09-07T16-13-09Z server /data >/dev/null
 
 export OFFSITE_DOCKER_NETWORK="$NET"
 export BACKUP_S3_ENDPOINT="http://${MINIO}:9000"
@@ -55,7 +55,7 @@ aws() {
 		-v "${work_host}:/data" \
 		-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
 		-e AWS_EC2_METADATA_DISABLED=true -e AWS_S3_ADDRESSING_STYLE=path \
-		amazon/aws-cli:latest --endpoint-url "$BACKUP_S3_ENDPOINT" "$@"
+		amazon/aws-cli:2.35.19 --endpoint-url "$BACKUP_S3_ENDPOINT" "$@"
 }
 
 echo "--- MinIO 준비 대기 ---"

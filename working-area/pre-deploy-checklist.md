@@ -27,6 +27,8 @@
 ## D. 빌드 · 배포
 - **[필수]** 테스트 GREEN 후 빌드. `docker compose up -d` 단일 명령 기동(OPS-01). core/collector/web 계약 변경분은 **동시 배포**.
 - **[권장]** GitHub Actions CI — 테스트·빌드 자동화. CI 시크릿은 평문 커밋 금지(§B와 연결).
+- **[완료]** 의존성 고정(SEC-06) — 모든 컨테이너 이미지가 **버전 태그**다(`uv:0.11.28` · `gitleaks:v8.30.1` · `shellcheck:v0.11.0` · `aws-cli:2.35.19` · `minio:RELEASE.2025-09-07T16-13-09Z` · `postgres:16` · `python:3.12-slim` · `node:22-slim` · `nginx:1.29-alpine` · `eclipse-temurin:21-*`). `:latest`는 빌드마다 다른 바이너리를 산출물에 섞는다. `.github/dependabot.yml`(주 1회, 8개 생태계)이 갱신을 PR로 올린다 — **자동 머지 없음**.
+- **[권장]** **Dependabot PR을 주기적으로 읽을 것.** 태그를 고정한 채 방치하면 취약점이 그대로 굳는다. 특히 `gitleaks`는 **CI와 `.githooks/pre-commit` 두 곳**에 박혀 있어 한쪽만 올리면 훅과 CI가 다른 규칙으로 돈다. 스크립트 안 `docker run` 이미지(gitleaks·shellcheck·minio·aws-cli)는 Dependabot이 보지 못하므로 **사람이 본다**.
 
 ## E. 인프라 의존성
 - **[완료]** Docker Compose 서비스 전체 기동 확인 — postgres·core·**web**·collector 4서비스. `bash scripts/smoke.sh`가 빌드→기동→web 정적 자산→SPA 폴백→`/api` 프록시→등록 POST→postgres 왕복→목록 반영까지 검증한다(CI `smoke` 잡). 한글 UTF-8 왕복 포함.

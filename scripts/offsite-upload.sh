@@ -48,7 +48,7 @@ aws() {
 		-e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-ap-northeast-2}" \
 		-e AWS_EC2_METADATA_DISABLED=true \
 		-e AWS_S3_ADDRESSING_STYLE=path \
-		amazon/aws-cli:latest \
+		amazon/aws-cli:2.35.19 \
 		${BACKUP_S3_ENDPOINT:+--endpoint-url "$BACKUP_S3_ENDPOINT"} "$@"
 }
 
