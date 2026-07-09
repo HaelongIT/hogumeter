@@ -41,6 +41,6 @@
 - **[필수]** 실 네트워크 폴링 opt-in — `collector`는 `COLLECTOR_ALLOW_NETWORK=1` 없이는 어떤 요청도 보내지 않는다(정지조건의 기계적 강제). 운영 compose에서 이 환경변수를 **의도적으로** 켜야 수집이 시작된다.
 - **[완료]** 재시작·종료 계약 — 상주 3종(postgres·core·web)은 `restart: unless-stopped`, collector는 `restart: on-failure`(opt-in off의 exit 0엔 재시작 안 함). `SIGTERM`이면 현재 사이클을 마치고 종료(`stop_grace_period: 30s`). 적재 연속 3회 실패 시 `giving_up` 후 exit 1 — **수집은 되는데 저장이 안 되는 상태로 계속 돌지 않는다**.
 - **[권장]** `giving_up`·`sink_error` 이벤트를 관리 알림 chat(§B)으로 흘릴 것. 지금은 `docker logs`에만 남는다.
-- **[필수]** collector는 아직 **DB에 아무것도 쓰지 않는다**(`docs/91` Q-36). opt-in해도 화면 출력뿐이다. 적재기 없이 배포하면 수집은 도는데 기준가는 영원히 표본 0이다.
+- **[완료]** DB 적재기(Q-36 해소) — `db/raw_deal_sink.py`가 `raw_deal_post`에 `(site, post_id)` 업서트한다. `DB_HOST`가 없으면 적재하지 않고 그 사실을 `started` 이벤트에 남긴다. **운영 compose는 `DB_HOST`를 주입한다**(설정 누락 시 수집은 도는데 표본이 0으로 남으므로 기동 로그에서 `"sink":"postgres"`를 확인할 것).
 
 <!-- 각 항목은 프로젝트에 맞게 추가/삭제. 완료분은 [완료]로 표기하고 decision-log에 남긴다. -->

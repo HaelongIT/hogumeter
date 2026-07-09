@@ -44,7 +44,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
-      # 통합 테스트(-m integration)는 Postgres 컨테이너를 띄워 core의 V1__init.sql을 적용한다.
+      # 통합 테스트(-m integration)는 Postgres 컨테이너를 띄워 core의 마이그레이션을 전부 적용한다.
       # ubuntu-latest에는 Docker가 있다. 빠른 루프는 로컬에서 `-m "not integration"`.
       - name: Test (Testcontainers 포함)
         run: uv run pytest

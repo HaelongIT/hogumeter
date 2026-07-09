@@ -57,8 +57,8 @@ collector/
 
 ## DB 계약 (collector ↔ core)
 - `raw_deal_post`: collector가 `(site, post_id)` 자연키로 **업서트**. 재수집에 행 수 불변(REL-01 멱등), **상태·가격·추천수 변화는 기존 행에 반영**(BM-01 AC-2 — insert-only면 품절을 영원히 모른다). `posted_at`은 글의 발생 시각이라 **불변**이되 처음에 못 얻었으면 나중에 채운다(v1.3 C-2). core가 소비 후 매칭·병합. **[2026-07-09 정정]** 이전 서술("insert-only")은 core의 `RawDealPostUpserter`·`RawDealPostUpsertTest`가 단언하는 갱신 의미와 모순이었다.
-- `used_listing_observation`: 번개 폴링 관측 insert-only. core가 생애주기 판정.
-- 스키마 진화는 Flyway 단독 소유(core). collector는 마이그레이션 금지, 계약 테이블만 접근.
+- `used_listing_observation`: 번개 폴링 관측 insert-only. core가 생애주기 판정. **⚠️ 아직 존재하지 않는다** — V1·V2 어디에도 이 테이블은 없다(M2 중고 착수 시 core가 만든다). 계약이 아니라 **계획**이다. 그래서 `parse_bunjang`은 어디에도 배선돼 있지 않다.
+- 스키마 진화는 Flyway 단독 소유(core). collector는 마이그레이션 금지, 계약 테이블만 접근. **통합 테스트는 `db/migration/V*__*.sql`을 버전 순서대로 전부 적용**한다 — 일부만 적용하면 그것도 미러다.
 
 ## 상태 소유권
 - 기준가·알림·큐·설정 = core 소유. collector는 무상태(마지막 폴링 커서 제외).
