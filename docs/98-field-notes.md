@@ -17,11 +17,26 @@
 > **셀렉터 출처 표기**: 아래 셀렉터는 대부분 오픈소스 `krepe90/user-hotdeal-bot`(src/crawler)의 실제 파싱 코드에서 확보했다(코드 읽기 — 사이트 크롤링 아님). 실 페이지 대조 결과를 각 항목에 병기한다.
 
 ## 뽐뿌
-### 2026-07-04 리스트 셀렉터(오픈소스) + 실측 불일치 발견
+### 2026-07-04 리스트 셀렉터(오픈소스) + 실측 불일치 발견 — **⛔ 아래 2026-07-09 항목으로 정정됨**
 - **리스트 URL**: `https://www.ppomppu.co.kr/zboard/zboard.php?id=ppomppu`(뽐뿌게시판), `id=ppomppu4`(해외뽐뿌). 인코딩 **EUC-KR(cp949)** — 파싱 시 디코딩 필수.
 - **오픈소스 셀렉터**: 테이블 `table#revolution_main_table` → 행 `.baseList.bbs_new1`, 제목 `.baseList-title`, 작성자 `a.baseList-name`, 추천 `.baseList-rec`, 조회 `.baseList-views`, 종료판정 `.baseList-title.end2`, 글번호 `td:nth-child(1)`(숫자만). 글 URL = `view.php?id={board}&no={id}`.
-- **⚠️ 실측 불일치**: 저빈도 프로브(커스텀 UA `hogumeter-spike/0.1`)로 받은 83KB 응답에 `revolution_main_table`·`baseList` 계열 셀렉터가 **전무**. title 태그도 비어 옴. 차단 페이지는 아님(정상 200, EUC-KR HTML)이나 **정상 리스트 마크업이 아님** — 커스텀 UA에 다른 마크업을 준 것으로 추정.
-- **시사점**: (1) 뽐뿌는 **UA 위장 금지 원칙상 커스텀/기본 UA 그대로** 쓰되, 파서 개발 시 **실제 브라우저로 채취한 fixture**로 검증할 것. (2) 현재 `tests/fixtures/ppomppu/list_normal.html`은 불일치 응답이라 **golden으로 부적합** — M1 파서 착수 전 재채취 필요(→ `docs/91` Q-5).
+- ~~**⚠️ 실측 불일치**: 저빈도 프로브(커스텀 UA `hogumeter-spike/0.1`)로 받은 83KB 응답에 `revolution_main_table`·`baseList` 계열 셀렉터가 **전무**. title 태그도 비어 옴. **정상 리스트 마크업이 아님**~~ → **이 서술은 사실이 아니다.** 아래 참조.
+- ~~**시사점**: 현재 fixture는 **golden으로 부적합** — 재채취 필요~~ → **재채취 불필요.**
+
+### 2026-07-09 위 "실측 불일치"는 오류였다 — fixture는 정상 리스트, 파서 GREEN
+- **무엇이 틀렸나**: `baseList` 계열 셀렉터가 "전무"하다는 서술이 거짓이다. 같은 파일(83,616 B)을 bs4로 파싱하면 **딜 행 21건**이 나오고 제목·글번호·추천·URL이 전부 있다. `<title>`도 `뽐뿌 - 뽐뿌게시판`으로 정상.
+- **실제로 없는 것은 하나뿐**: `id="revolution_main_table"` **요소**가 0건이다(JS 문자열 `$('#revolution_main_table>tbody>tr…')` 안에만 등장). 오픈소스 셀렉터 체인이 그 테이블 id에서 시작하니 첫 단계에서 끊긴 것이고, 행 마크업 자체는 멀쩡했다.
+- **그래서 재채취하지 않는다**: UA 위장은 금지(절대 원칙 5)라 운영에서도 **이 응답을 받는다.** 브라우저 UA로 채취한 마크업은 우리가 결코 받지 못한다 — golden으로 쓰면 프로덕션과 어긋난다. **받는 것을 파싱한다.**
+- **확정 셀렉터**(`parsers/ppomppu.py`):
+  - 행 = `tr.baseList` 중 class에 `bbs_new*` 포함 **+ 제목 href에 `id=ppomppu`** 포함 + 글번호가 숫자
+  - 제목/링크 `a.baseList-title` · 글번호 `.baseList-numb` · 작성자 `a.baseList-name` · 조회 `.baseList-views` · 종료 `.end2`
+  - **추천 `.baseList-rec`는 `"추천 - 비추천"` 합성 문자열**(예: `3 - 0`). 신규 글은 빈 문자열 → 0.
+  - 시각 `.baseList-time`은 **당일 글 `21:10:11` / 이전 글 `26/07/03`으로 형식이 갈린다** → `postedAt` 파싱엔 "오늘"이 필요(`docs/91` Q-23의 실측 근거). 현재 파서는 `posted_at=None`.
+- **⚠️ 위젯 행 오염**: 목록 페이지에 뽐뿌마켓(`id=pmarket`)·자유게시판(`id=social`) 위젯 행 6건이 섞여 있고 **이들도 `tr.baseList.bbs_new1`을 쓴다.** 글번호가 비어 자연키를 만들 수 없다 → 게시판 id로 반드시 필터.
+- **⚠️ 인코딩 함정**: 페이지는 `charset=euc-kr`을 **선언**하지만 실제로는 EUC-KR에 없는 바이트(`\xb4\x91`)를 담아, `bytes.decode("euc-kr")`가 `illegal multibyte sequence`로 터진다. **`cp949`(EUC-KR의 확장)로 디코딩해야 한다.** `errors="replace"`로 덮으면 제목이 조용히 깨진다. 디코딩은 fetcher 책임(파서는 `str`만 받음).
+- **row0 실측**: post_id `717553`, 제목 `[옥션]1+1 소가죽 남성 핀 버클 벨트(11,800원/무료)`, 가격 `11,800`(BM-02 정규화), 추천 `3`, `.end2` 없음.
+- **미검증**: `.end2` 품절 표식이 이 스냅샷엔 0건이라 SOLD_OUT 경로는 실 fixture로 확인되지 않았다(`docs/91` Q-19).
+- **관련 테스트**: `collector/tests/test_parsers.py::test_ppomppu_*` (4건).
 
 ## 루리웹
 ### 2026-07-04 리스트 셀렉터 확보(오픈소스 + 실측 일치)

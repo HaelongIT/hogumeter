@@ -18,7 +18,7 @@ uv run pytest       # 파서 golden + 파이프라인
 ```
 src/collector/
 ├── parsers/         # 사이트별 파서. 순수 함수: html/json → DTO (네트워크 분리)
-│   ├── ruliweb.py / fmkorea.py / bunjang.py   # 뽐뿌는 재채취 대기(docs/91 Q-5)
+│   ├── ppomppu.py / ruliweb.py / fmkorea.py / bunjang.py
 │   └── models.py    # DTO
 ├── pipeline/        # 정규화(가격 추출)·적재 준비
 │   ├── price.py     # 실결제가+배송비 규칙 기반 파싱 (as-posted, 카드 역산 금지)
@@ -36,7 +36,10 @@ tests/
 - **실 HTTP fetch·DB 적재**: 스케줄러는 `fetch` 포트와 상태 커서까지만. 실 네트워크·신규 의존(psycopg 등)은 승인 대상 — `docs/91` Q-36.
 - **robots.txt 게이트**(SEC-08): 미구현. 현재 크롤링 윤리는 코드 강제 레이트 하한 + 차단 신호(403/429) 즉시 중지로만 이행 — Q-38.
 - **파싱 드리프트 감지**(REL-06): 파싱 실패를 일시 장애로 흡수만 한다 — Q-40.
-- **뽐뿌 파서**: fixture 재채취 대기 — Q-5.
+- **품절 감지 실검증**: 4사 모두 `list_normal` golden만 있어 SOLD_OUT 경로는 fixture로 확인되지 않았다 — Q-19.
+
+## 사이트별 함정
+- **뽐뿌**: `charset=euc-kr`을 선언하지만 실제로는 **cp949**로 디코딩해야 한다(`decode("euc-kr")`는 터진다). 목록에 뽐뿌마켓·자유게시판 위젯 행이 섞이므로 게시판 id로 필터. 오픈소스의 `#revolution_main_table` 셀렉터는 우리가 받는 응답에 없다 — 자세한 실측은 [`docs/98`](../docs/98-field-notes.md).
 
 ## 원칙
 - **파서는 네트워크와 완전 분리**: fetch는 scheduler, 파싱은 parsers. 파서 테스트는 fixture만.

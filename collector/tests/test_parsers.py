@@ -4,6 +4,7 @@ from pathlib import Path
 
 from collector.parsers.bunjang import parse_bunjang
 from collector.parsers.fmkorea import parse_fmkorea
+from collector.parsers.ppomppu import parse_ppomppu
 from collector.parsers.ruliweb import parse_ruliweb
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -11,6 +12,12 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 def _read(rel: str) -> str:
     return (FIXTURES / rel).read_text(encoding="utf-8")
+
+
+def _read_cp949(rel: str) -> str:
+    """뽐뿌는 `charset=euc-kr`을 선언하지만 실제로는 cp949 전용 바이트를 담는다(docs/98 실측).
+    선언대로 euc-kr로 열면 illegal multibyte sequence로 터진다. 디코딩은 호출자 책임 — 파서는 str만 받는다."""
+    return (FIXTURES / rel).read_bytes().decode("cp949")
 
 
 def test_bunjang_golden_first_item():
@@ -51,3 +58,44 @@ def test_fmkorea_golden_rows():
     assert d.reaction_score == 0
     assert d.url == "https://www.fmkorea.com/10041875674"
     assert d.status == "ACTIVE"
+
+
+def test_ppomppu_golden_rows():
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"))
+
+    assert len(deals) == 21  # docs/98 실측: 뽐뿌게시판 딜 행 21건
+    d = deals[0]
+    assert d.site == "ppomppu"
+    assert d.post_id == "717553"
+    assert d.title == "[옥션]1+1 소가죽 남성 핀 버클 벨트(11,800원/무료)"
+    assert d.headline_price == 11_800  # 제목 내 가격(BM-02 정규화)
+    assert d.reaction_score == 3  # .baseList-rec "3 - 0" = 추천 - 비추천
+    assert d.status == "ACTIVE"
+    assert d.posted_at is None  # 목록 시각은 당일/이전 형식이 갈린다(docs/98, Q-23)
+
+
+def test_ppomppu_url_is_canonical():
+    """href의 page·divpage는 페이지네이션 잔여물 — 자연키 URL은 board+no만."""
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"))
+
+    assert deals[0].url == "https://www.ppomppu.co.kr/zboard/view.php?id=ppomppu&no=717553"
+    assert all("divpage" not in d.url and "page=" not in d.url for d in deals)
+
+
+def test_ppomppu_excludes_other_board_widgets():
+    """목록 페이지엔 뽐뿌마켓(id=pmarket)·자유게시판(id=social) 위젯 행이 섞여 있고,
+    이들도 tr.baseList.bbs_new1을 쓴다. 글번호가 없어 자연키를 못 만든다 — 반드시 제외."""
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"))
+
+    assert all(d.post_id.isdigit() for d in deals)
+    assert all("id=ppomppu" in d.url for d in deals)
+    post_ids = [d.post_id for d in deals]
+    assert len(post_ids) == len(set(post_ids))  # (site, post_id) 자연키 무결성
+
+
+def test_ppomppu_missing_recommend_is_zero():
+    """신규 글은 .baseList-rec 텍스트가 비어 있다."""
+    deals = parse_ppomppu(_read_cp949("ppomppu/list_normal.html"))
+
+    assert deals[1].post_id == "717718"
+    assert deals[1].reaction_score == 0
