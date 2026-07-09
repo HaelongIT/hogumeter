@@ -6,7 +6,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from collector.__main__ import ALLOW_NETWORK_ENV, main
+from collector.__main__ import ALLOW_NETWORK_ENV, SINK_FAILURE_LIMIT, main
 from collector.scheduler.sites import hotdeal_boards
 
 
@@ -198,3 +198,118 @@ def test_alert_and_summary_output_are_console_encodable(monkeypatch, capsys):
     cycle = next(e for e in events if e["event"] == "cycle")
     assert cycle["blocked"] == 3 and sorted(cycle["stopped_sites"]) == sorted(s.name for s in hotdeal_boards())
     _assert_console_safe(out)
+
+
+# ── 상주 프로세스의 종료·실패 계약 ─────────────────────────────────────
+#
+# opt-in을 켜면 main은 영원히 돈다(max_cycles=None). 그러면 두 가지 계약이 생긴다:
+# ① `docker stop`(SIGTERM)에 어떻게 반응하는가 ② 적재가 실패하면 무엇이 죽는가.
+
+
+def test_stop_signal_finishes_the_current_cycle_and_exits_cleanly(monkeypatch, capsys):
+    """SIGTERM은 사이클 중간에 프로세스를 찢지 않는다 — 그 사이클을 마치고 나간다."""
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    stop = StopAfter(cycles=2)
+
+    exit_code = main(
+        opener=RecordingOpener(), sleep=stop.sleep, clock=lambda: NOW, should_stop=stop, max_cycles=None
+    )
+
+    assert exit_code == 0
+    events = _events(capsys.readouterr().out)
+    assert len([e for e in events if e["event"] == "cycle"]) == 2  # 2번째를 끝까지 돌았다
+    stopped = next(e for e in events if e["event"] == "stopped")
+    assert stopped["cycles"] == 2
+
+
+def test_stop_signal_interrupts_the_sleep_rather_than_waiting_it_out(monkeypatch):
+    """틱 대기 중에 신호가 오면 즉시 깬다. 안 그러면 docker가 10초 뒤 SIGKILL한다."""
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    stop = StopAfter(cycles=1)
+
+    main(opener=RecordingOpener(), sleep=stop.sleep, clock=lambda: NOW, should_stop=stop, max_cycles=None)
+
+    assert stop.slept == []  # 마지막 사이클 뒤엔 잠들지 않는다
+
+
+class StopAfter:
+    """N 사이클 뒤 SIGTERM이 온 것처럼 군다."""
+
+    def __init__(self, cycles: int):
+        self._limit = cycles
+        self._cycles = 0
+        self.slept: list[float] = []
+
+    def __call__(self) -> bool:
+        self._cycles += 1
+        return self._cycles >= self._limit
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+
+
+class BrokenSink:
+    """psycopg가 던지는 일시 장애를 흉내낸다(DB 재시작·연결 끊김)."""
+
+    def __init__(self, fail_times: int = 99):
+        self.calls = 0
+        self._fail_times = fail_times
+
+    def upsert_all(self, records):
+        self.calls += 1
+        if self.calls <= self._fail_times:
+            raise RuntimeError("connection already closed")
+        return len(records)
+
+
+def test_sink_failure_does_not_kill_the_collection_loop(monkeypatch, capsys):
+    """DB 일시장애가 수집을 멈추면 안 된다. 실패는 이벤트로 남기고 다음 틱에 계속한다."""
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    ticks = iter(NOW + timedelta(seconds=61 * i) for i in range(10))
+    sink = BrokenSink(fail_times=1)
+
+    exit_code = main(
+        opener=OneDealOpener(), sink=sink, sleep=lambda _: None, clock=lambda: next(ticks), max_cycles=2
+    )
+
+    assert exit_code == 0
+    assert sink.calls == 2  # 첫 사이클 실패 후에도 두 번째를 시도했다
+    events = _events(capsys.readouterr().out)
+    errors = [e for e in events if e["event"] == "sink_error"]
+    assert len(errors) == 1
+    assert errors[0]["dropped"] == 1  # 몇 건을 잃었는지 숨기지 않는다
+    assert "RuntimeError" in errors[0]["error"]
+    # 실패한 사이클의 written은 0이 아니라 부재다 — "0건 적재"와 "적재 못 함"은 다르다.
+    first_cycle = next(e for e in events if e["event"] == "cycle")
+    assert "written" not in first_cycle
+
+
+def test_repeated_sink_failure_stops_the_process_instead_of_spinning(monkeypatch, capsys):
+    """계속 실패하면 조용히 도는 대신 죽는다 — restart 정책과 사람이 받는다(실패를 뭉개지 않는다)."""
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    ticks = iter(NOW + timedelta(seconds=61 * i) for i in range(20))
+
+    exit_code = main(
+        opener=OneDealOpener(), sink=BrokenSink(), sleep=lambda _: None,
+        clock=lambda: next(ticks), max_cycles=None,
+    )
+
+    assert exit_code == 1
+    events = _events(capsys.readouterr().out)
+    giving_up = next(e for e in events if e["event"] == "giving_up")
+    assert giving_up["consecutive_sink_failures"] == SINK_FAILURE_LIMIT
+    _assert_console_safe(capsys.readouterr().out)
+
+
+def test_a_success_resets_the_failure_streak(monkeypatch):
+    """한 번 성공하면 카운터는 0으로. 간헐적 실패로 프로세스가 죽으면 안 된다."""
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    ticks = iter(NOW + timedelta(seconds=61 * i) for i in range(20))
+    sink = BrokenSink(fail_times=SINK_FAILURE_LIMIT - 1)
+
+    exit_code = main(
+        opener=OneDealOpener(), sink=sink, sleep=lambda _: None,
+        clock=lambda: next(ticks), max_cycles=SINK_FAILURE_LIMIT + 1,
+    )
+
+    assert exit_code == 0  # 임계 직전까지 실패했지만 성공이 끼어들어 살아남았다

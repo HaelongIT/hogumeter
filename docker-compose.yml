@@ -4,6 +4,9 @@
 services:
   postgres:
     image: postgres:16
+    # 상주 서비스 3종(postgres·core·web)은 EC2 재부팅·크래시에서 스스로 돌아와야 한다.
+    # `unless-stopped`: 사람이 명시적으로 멈춘 것만 존중한다(`docker compose stop`).
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-hogumeter}
       POSTGRES_USER: ${DB_USER:-hogumeter}
@@ -22,6 +25,7 @@ services:
 
   core:
     build: ./core
+    restart: unless-stopped
     environment:
       DB_HOST: postgres
       DB_NAME: ${DB_NAME:-hogumeter}
@@ -47,6 +51,7 @@ services:
 
   web:
     build: ./web
+    restart: unless-stopped
     # depends_on을 걸지 않는다. nginx가 요청 시점에 core를 해석하므로 core 없이도 뜬다
     # (core가 없으면 /api만 502, 정적 페이지는 정상). core 재시작에도 web이 죽지 않는다.
     environment:
@@ -75,9 +80,17 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?}
       # 실 폴링 스위치. 기본 off — 운영자가 의도적으로 켜야 수집이 시작된다(pre-deploy §F).
       COLLECTOR_ALLOW_NETWORK: ${COLLECTOR_ALLOW_NETWORK:-0}
-    # healthcheck를 걸지 않는다. collector는 상주 서비스가 아니라 1회 실행 후 종료하는
-    # 배치다(opt-in이 없으면 refused 이벤트만 내고 exit 0). 살아 있음을 물으면 항상 죽어 있다.
-    # 관측은 헬스체크가 아니라 로그 이벤트로 한다(OBS-01: cycle·alert).
+    # healthcheck를 걸지 않는다. collector의 수명은 스위치에 달렸다 —
+    #   opt-in off: refused 이벤트 1줄 내고 exit 0 (정상. 여기에 healthcheck를 걸면 항상 unhealthy)
+    #   opt-in on : 상주 루프 (15초 틱). 연속 적재 실패 3회면 exit 1로 스스로 내려온다
+    # 관측은 헬스체크가 아니라 로그 이벤트로 한다(OBS-01: started·cycle·alert·sink_error·stopped).
+    #
+    # on-failure: exit 0(정상 종료·opt-in off)엔 재시작하지 않고, exit 1(적재 연속 실패)에만 재시작한다.
+    # `always`였다면 opt-in을 꺼둔 채로 refused 메시지를 영원히 반복했을 것이다.
+    restart: on-failure
+    # SIGTERM을 받으면 현재 사이클을 마치고 나간다(틱 대기는 Event.wait이라 즉시 깬다).
+    # 사이클엔 3사 HTTP 요청이 들어 있어 docker 기본 유예(10초)로는 짧다.
+    stop_grace_period: 30s
     depends_on:
       postgres:
         condition: service_healthy

@@ -39,6 +39,8 @@
 - **[필수]** 차단 자동 중지 시 **재개 수단** 확보 — 403/429를 받으면 스케줄러가 해당 사이트를 중지한다(SEC-08). 재개 경로가 **미결**(`decisions-needed.md` D-3)이라, 이 결정 없이 커서를 영속화하면 차단당한 사이트를 다시 켤 방법이 없다. 감지는 관리 알림 chat(§B)으로 되지만 복구가 안 된다.
 - **[완료 — 단 실 대조 필요]** robots.txt 준수 게이트(SEC-08) — `scheduler/fetcher.py`의 `RobotsGate`로 구현(Q-38 해소). **⚠️ fake opener 테스트만 통과했다.** 실 수집 가동 전에 뽐뿌·루리웹·펨코의 **실제 robots.txt를 1회 조회**해 (a) 우리 리스트 URL이 Disallow인지 (b) Crawl-delay 선언이 있는지 확인하고 `docs/98`에 기록할 것. Disallow면 그 사이트는 자동 중지되며 D-3(재개 경로) 없이는 되살릴 수 없다.
 - **[필수]** 실 네트워크 폴링 opt-in — `collector`는 `COLLECTOR_ALLOW_NETWORK=1` 없이는 어떤 요청도 보내지 않는다(정지조건의 기계적 강제). 운영 compose에서 이 환경변수를 **의도적으로** 켜야 수집이 시작된다.
+- **[완료]** 재시작·종료 계약 — 상주 3종(postgres·core·web)은 `restart: unless-stopped`, collector는 `restart: on-failure`(opt-in off의 exit 0엔 재시작 안 함). `SIGTERM`이면 현재 사이클을 마치고 종료(`stop_grace_period: 30s`). 적재 연속 3회 실패 시 `giving_up` 후 exit 1 — **수집은 되는데 저장이 안 되는 상태로 계속 돌지 않는다**.
+- **[권장]** `giving_up`·`sink_error` 이벤트를 관리 알림 chat(§B)으로 흘릴 것. 지금은 `docker logs`에만 남는다.
 - **[필수]** collector는 아직 **DB에 아무것도 쓰지 않는다**(`docs/91` Q-36). opt-in해도 화면 출력뿐이다. 적재기 없이 배포하면 수집은 도는데 기준가는 영원히 표본 0이다.
 
 <!-- 각 항목은 프로젝트에 맞게 추가/삭제. 완료분은 [완료]로 표기하고 decision-log에 남긴다. -->
