@@ -5,10 +5,14 @@ description = "호구미터 수집기 — 핫딜 3사(뽐뿌/루리웹/펨코) +
 requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.15.0",
+    "psycopg[binary]>=3.2",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    "testcontainers[postgres]>=4",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -19,3 +23,5 @@ packages = ["src/collector"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Docker가 필요한 테스트. 빠른 루프는 `uv run pytest -m "not integration"`.
+markers = ["integration: Postgres 컨테이너가 필요한 테스트(Docker)"]
