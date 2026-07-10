@@ -460,3 +460,15 @@
 - **뮤테이션으로 증명**: `docker-compose.override.yml`에 `volumes: !override` + 익명 마운트를 얹어 스모크를 돌렸더니 0-2가 잡았다 — `volume:310cc00c…:/var/lib/postgresql/data`(해시 이름 = 익명). 추적 파일은 한 글자도 건드리지 않았다.
 - **곁**: compose의 `!override` 태그는 리스트를 **병합하지 않고 대체**한다. 뮤테이션 드릴에 쓸모가 있다(기본 병합이라 `volumes:`를 덮어쓸 수 없다).
 - **관련 테스트**: `scripts/smoke.sh` 0-2. 계약 테이블(`raw_deal_post`)을 쓰지 않는다 — 파이프라인이 집어가 뒤 단계의 카운터를 흔든다. 일회용 `smoke_persistence` 테이블을 만들고 지운다.
+
+---
+
+## 2026-07-10 — 돌지 않는 드릴은 드릴이 아니다 (REL-04)
+
+- **맥락**: CLAUDE.md의 빌드·테스트 명령표는 복구 스크립트들을 묶어 **"전부 CI가 돌린다"**고 적어 뒀다. `docs/99`에도 "복구 절차는 리허설로만 존재를 증명한다"는 교훈이 있다.
+- **증상(전수 대조)**: CI가 실제로 부르는 스크립트를 `ci.yml`에서 grep해 저장소의 `scripts/*.sh`와 맞춰 보니 **둘이 빠져 있었다** — `scripts/restore-drill.sh`(REL-04 복원 드릴)와 `.claude/hooks/guard.test.sh`(정지조건을 강제하는 훅의 계약 테스트). 산문이 거짓이었다.
+  - `restore-drill.sh`는 **덤프가 이미 있어야** 돈다(`backups/*.sql.gz`). CI엔 덤프가 없으니 애초에 걸 수가 없었다. 그래서 "돌릴 수 없는 모양"이 곧 "돌지 않는 이유"였다.
+- **두 번째 결함 — 드릴이 스키마만 봤다**: `restore-drill.sh`는 테이블 수(≥11)와 `flyway_schema_history` 존재를 단언하고, `product` 행 수는 **세기만 하고 단언하지 않았다.** 빈 DB를 떠서 빈 DB로 복원하면 두 단언 모두 통과한다 — **"복원됐다"를 증명하는 게 아니라 "스키마가 있다"를 증명하고 있었다.**
+- **교훈(규칙화)**: **드릴은 "돌 수 있는 모양"으로 만든다.** 사전 조건(덤프·시드 데이터)을 스스로 만들어 내지 못하는 드릴은 CI에 걸리지 않고, 걸리지 않는 드릴은 사고가 나야 처음 실행된다. 그리고 복원은 **스키마가 아니라 행**으로 단언한다.
+- **한 일**: `scripts/backup-drill.sh` 신설 — 격리 스택 기동(core가 Flyway로 스키마 생성) → **제품 1건 등록** → `backup.sh` → `restore-drill.sh`. CI `backup` 잡. `restore-drill.sh`에 `product ≥ 1` 단언 추가. `guard.test.sh`를 `lint` 잡에 추가.
+- **뮤테이션으로 증명**: 드릴 복사본에서 "행 심기" 단계만 빼고 돌렸더니 `restore-drill: product 행이 0입니다`로 FAIL했다. 그전이라면 `RESTORE DRILL PASS`였다.

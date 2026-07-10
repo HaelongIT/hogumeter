@@ -88,6 +88,11 @@ jobs:
       - name: .env.example 드리프트 게이트
         run: bash scripts/check-env-example.test.sh
 
+      # 정지조건(실 네트워크·파괴적 push)을 강제하는 훅. **훅은 만들기 쉽고, 도는지 아무도 모른다.**
+      # 오차단 회귀도 함께 시험한다 — 오차단은 사람이 게이트를 끄게 만든다.
+      - name: PreToolUse 가드 계약 테스트
+        run: bash .claude/hooks/guard.test.sh
+
   # SEC-08: robots 게이트는 fake opener 테스트만 통과했다. 실제 소켓을 만지는 경로는
   # **실 수집을 켜기 직전에 처음 실행된다.** 로컬 서버에 대고 운영과 같은 코드 경로를 리허설한다.
   # (이 드릴이 `urllib_opener`가 403/429를 예외로 던져 차단 감지가 죽어 있던 것을 잡았다.)
@@ -112,6 +117,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: 마이그레이션 롤백 리허설
         run: bash scripts/rollback-drill.sh
+
+  # REL-04: `restore-drill.sh`는 **덤프가 이미 있어야** 돌아서 CI에서 한 번도 실행된 적이 없었다
+  # (CLAUDE.md는 "전부 CI가 돌린다"고 적어 두고 있었다 — 2026-07-10 실측: 거짓).
+  # `backup-drill.sh`가 등록 → pg_dump → 격리 복원 → **행 확인**까지 왕복한다.
+  # 검증되지 않은 백업은 백업이 아니고, 돌지 않는 드릴은 드릴이 아니다.
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 백업→복원 왕복 리허설 (격리 스택 + 일회용 컨테이너)
+        run: bash scripts/backup-drill.sh
 
   # REL-04: 복구 경로는 사고가 나야 처음 실행된다. 그래서 매 커밋 리허설한다.
   # 실 AWS를 부르지 않는다 — MinIO(S3 호환)에 대고 운영과 **같은 스크립트**를 돌린다.

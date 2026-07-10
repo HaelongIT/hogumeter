@@ -58,7 +58,14 @@ query "select 1 from information_schema.tables where table_name='flyway_schema_h
 	exit 1
 }
 
+# 스키마만 살아나면 "복원됐다"가 아니다. **행**이 돌아와야 한다 —
+# 빈 DB를 떠서 빈 DB로 복원하면 위 두 단언은 전부 통과한다(테이블·flyway 이력은 스키마다).
 products=$(query "select count(*) from product")
+[ "$products" -ge 1 ] || {
+	echo "restore-drill: product 행이 0입니다. 데이터가 없는 덤프는 복원을 증명하지 못합니다." >&2
+	echo "  (드릴은 데이터가 든 덤프로 돌린다: bash scripts/backup-drill.sh)" >&2
+	exit 1
+}
 echo "restore-drill: 테이블 ${tables}개, product ${products}행 복원 확인"
 
 echo
