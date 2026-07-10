@@ -120,6 +120,7 @@ bash scripts/rollback-drill.sh     # V 전진 → R 역순 후진 → 재전진 
 bash scripts/offsite-drill.sh      # MinIO에 대고 운영과 같은 업로드 경로 리허설
 bash .claude/hooks/guard.test.sh   # 네트워크 차단 훅의 차단/통과 계약
 bash .githooks/pre-commit.test.sh  # gitleaks 훅의 차단/통과 계약
+bash scripts/check-env-example.test.sh  # compose ↔ .env.example 드리프트 게이트 (OPS-01)
 ```
 - 테스트 DB: **Testcontainers(PostgreSQL 16)** — 통합 테스트 전용. 순수 도메인은 DB 없이 단위 테스트로 검증.
 - 로컬 시크릿: 루트 `.env`(gitignore) — 텔레그램 봇 토큰·네이버 쇼핑 API 키·DB 비밀번호.

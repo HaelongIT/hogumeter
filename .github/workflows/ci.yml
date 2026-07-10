@@ -83,6 +83,11 @@ jobs:
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.11.0 \
             --severity=warning --shell=bash scripts/*.sh .claude/hooks/*.sh .githooks/pre-commit .githooks/*.sh
 
+      # OPS-01: compose에 `${NEW_VAR:-default}`를 더하고 문서화를 잊으면 운영자는 그 손잡이가
+      # 있는 줄도 모른 채 조용히 기본값으로 배포한다. 차단·통과를 둘 다 시험한다.
+      - name: .env.example 드리프트 게이트
+        run: bash scripts/check-env-example.test.sh
+
   # SEC-08: robots 게이트는 fake opener 테스트만 통과했다. 실제 소켓을 만지는 경로는
   # **실 수집을 켜기 직전에 처음 실행된다.** 로컬 서버에 대고 운영과 같은 코드 경로를 리허설한다.
   # (이 드릴이 `urllib_opener`가 403/429를 예외로 던져 차단 감지가 죽어 있던 것을 잡았다.)
