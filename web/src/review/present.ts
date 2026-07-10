@@ -47,8 +47,10 @@ export function reviewLine(item: ReviewQueueItem): ReviewLine {
     case 'OUTLIER_LOWER':
       return {
         reason: '분포 하단 이상치 — 기준가 표본에서 제외됐습니다. 원문을 보고 판단하세요.',
-        // 가격만으로는 아무것도 결정할 수 없다. **무엇의** 이상치인지 먼저 말한다.
-        detail: `${item.subject ?? '대상 미상'} · ${price(item.payload.priceFirst)}`,
+        // 가격만으로는 아무것도 결정할 수 없다. **무엇의** 이상치인지, 그리고 **왜 싸 보이는지**.
+        detail: [`${item.subject ?? '대상 미상'} · ${price(item.payload.priceFirst)}`, conditionLine(item.conditions)]
+          .filter(Boolean)
+          .join(' · '),
       }
     default:
       // 새 유형이 생겼는데 화면이 모른다. 빈 줄을 그리느니 근거를 통째로 보여준다.
@@ -67,4 +69,23 @@ function price(value: unknown): string {
 /** 사라진 제품은 core가 `#id`로 보낸다. 그대로 그린다 — 숨기면 근거가 줄어든 걸 아무도 모른다. */
 function candidateLine(candidates: string[]): string {
   return candidates.length === 0 ? '후보 없음' : `후보: ${candidates.join(', ')}`
+}
+
+/** 배송비를 모르면 저장된 가격은 실결제가가 아니라 **하한**이다(collector `SHIPPING_UNKNOWN`). */
+const SHIPPING_UNKNOWN = '배송비미상'
+
+/**
+ * 이상치가 **왜** 싸 보이는가. 조건이 없으면 빈 문자열 — 이유를 지어내지 않는다.
+ *
+ * `배송비미상`은 한 걸음 더 말한다: 그 가격은 하한이라 실제 결제가는 더 높다.
+ * 그 사실을 모르면 사람은 "정말 싸다"고 오판하고, 이상치를 정상으로 승격시킨다.
+ */
+export function conditionLine(conditions: string[]): string {
+  if (conditions.length === 0) {
+    return ''
+  }
+  const tags = `조건부: ${conditions.join(' · ')}`
+  return conditions.includes(SHIPPING_UNKNOWN)
+    ? `${tags} (배송비 미상이라 실제 결제가는 더 높습니다)`
+    : tags
 }

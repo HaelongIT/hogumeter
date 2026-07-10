@@ -11,6 +11,7 @@ const item = (over: Partial<ReviewQueueItem>): ReviewQueueItem => ({
   sourceUrl: null,
   subject: null,
   candidateProducts: [],
+  conditions: [],
   payload: {},
   ...over,
 })
@@ -148,3 +149,53 @@ describe('reviewLine — 이상치의 대상', () => {
     expect(line.detail).not.toContain('undefined')
   })
 })
+
+
+// ── 이상치는 **왜** 싸 보이는지 말해야 한다 ─────────────────────────────
+//
+// `700,000원`만 보고는 아무것도 결정할 수 없다. 그 가격이 `카할`(특정 카드 보유자만)이거나
+// `배송비미상`(저장된 값이 하한)이면 그건 이상치가 아니라 **정상**이다.
+// 조건 태그는 `deal_event.applied_conditions`까지 도달한다(Q-46 절반 해소) — 그린다.
+
+describe('reviewLine — 조건 태그는 이상치의 이유다', () => {
+  it('조건이 있으면 가격 옆에 이유를 붙인다', () => {
+    const line = reviewLine(outlier({ conditions: ['배송비미상', '카할'] }))
+
+    expect(line.detail).toContain('700,000원')
+    expect(line.detail).toContain('조건부: 배송비미상 · 카할')
+  })
+
+  it('조건이 없으면 조건 문구를 지어내지 않는다', () => {
+    const line = reviewLine(outlier({ conditions: [] }))
+
+    expect(line.detail).not.toContain('조건부')
+  })
+
+  it('배송비미상이면 그 가격이 하한이라고 말한다 — 사람이 오판하지 않게', () => {
+    const line = reviewLine(outlier({ conditions: ['배송비미상'] }))
+
+    expect(line.detail).toContain('배송비 미상이라 실제 결제가는 더 높습니다')
+  })
+
+  it('미상 항목엔 조건 문구가 없다', () => {
+    const line = reviewLine({ ...outlier({ conditions: [] }), type: 'UNCLASSIFIED', payload: { title: 'x' } })
+
+    expect(line.detail).not.toContain('조건부')
+  })
+})
+
+function outlier(over: Partial<ReviewQueueItem>): ReviewQueueItem {
+  return {
+    id: 1,
+    type: 'OUTLIER_LOWER',
+    occurrences: 1,
+    firstSeenAt: '2026-07-10T00:00:00Z',
+    lastSeenAt: '2026-07-10T00:00:00Z',
+    sourceUrl: 'https://example.invalid/1',
+    subject: '아이폰 17 — 256GB',
+    candidateProducts: [],
+    conditions: [],
+    payload: { priceFirst: 700000 },
+    ...over,
+  }
+}

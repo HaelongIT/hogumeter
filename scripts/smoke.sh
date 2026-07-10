@@ -478,6 +478,33 @@ echo "$queue" | grep -q 'https://example.invalid/olow' || fail "이상치의 원
 curl -fsS "${WEB}/api/v1/variants/${outlier_vid}/benchmark?periodMonths=6" | grep -q '"n":6' ||
 	fail "이상치가 기준가 표본에 섞였다"
 
+# 조건 없는 이상치는 빈 배열이다 — 없는 이유를 지어내지 않는다.
+echo "$queue" | grep -q '"conditions":\[\]' || fail "조건 없는 이상치가 빈 배열을 내지 않는다: $queue"
+
+# **왜 싸 보이는가.** 이미 큐에 뜬 이상치의 원문에 조건 태그가 붙으면, 큐가 그 이유를 말한다.
+#
+# 새 저가 딜을 심지 않는다: 310,000원짜리 두 번째 저가 딜을 넣으면 **Q1이 끌려 내려가 둘 다
+# 이상치가 아니게 된다**(2026-07-10 실측: 둘 다 `outlier_flag=NONE`). 임계를 넘기는 시나리오는
+# 옆의 다른 임계를 피해야 한다(docs/99). 실제 운영 흐름도 이쪽이다 — 이상치가 먼저 큐에 뜨고,
+# 다음 폴링이 원문의 조건 태그를 실어 온다.
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "조건 태그 업서트 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status, raw)
+values ('ppomppu','out-low','https://example.invalid/olow','이상치테스트 256GB 특가', 300000, now(), 'ACTIVE',
+        '{"_derived":{"applied_conditions":["카할","배송비미상"]}}'::jsonb)
+on conflict (site, post_id) do update set raw = excluded.raw, captured_at = excluded.captured_at;
+SQL
+
+for _ in $(seq 20); do
+	queue=$(curl -fsS "${WEB}/api/v1/review-queue" || true)
+	case "$queue" in
+	*'"conditions":["배송비미상","카할"]'*) conditioned=1 && break ;;
+	esac
+	sleep 2
+done
+[ "${conditioned:-0}" = 1 ] ||
+	fail "이상치가 왜 싸 보이는지 말하지 않는다 (정렬은 collate \"C\"로 고정): $queue"
+
 echo "--- 5-1g) 조건부 가격: 원문의 태그가 딜까지 도달한다 (BM-02 AC-2) ---"
 # collector는 `카할` 같은 조건 태그를 뽑아 raw._derived.applied_conditions에 싣는다(담을 컬럼이 없어서).
 # 그런데 `deal_event.applied_conditions`는 V1에 있으면서 **아무도 쓰지 않았다** — 골든 실측으로

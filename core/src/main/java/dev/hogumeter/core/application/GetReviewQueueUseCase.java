@@ -71,7 +71,8 @@ public class GetReviewQueueUseCase {
 			       g.last_seen_at,
 			       g.payload::text as payload,
 			       coalesce(post.url, outlier.url) as source_url,
-			       subject.name as subject
+			       subject.name as subject,
+			       coalesce(conditions.tags, '') as conditions
 			  from grouped g
 			  left join raw_deal_post post
 			         on g.type = 'UNCLASSIFIED'
@@ -93,6 +94,15 @@ public class GetReviewQueueUseCase {
 			        where g.type = 'OUTLIER_LOWER'
 			          and de.id = nullif(g.payload ->> 'dealEventId', '')::bigint
 			  ) subject on true
+			  left join lateral (
+			       -- **왜 싸 보이는가.** `카할`이면 특정 카드 보유자만, `배송비미상`이면 하한이다.
+			       -- 정렬은 로케일이 아니라 바이트 순서로 고정한다(같은 태그 집합이 같은 문자열이 되게).
+			       select string_agg(tag, ',' order by tag collate "C") as tags
+			         from deal_event de
+			         cross join lateral unnest(de.applied_conditions) as tag
+			        where g.type = 'OUTLIER_LOWER'
+			          and de.id = nullif(g.payload ->> 'dealEventId', '')::bigint
+			  ) conditions on true
 			 order by g.last_seen_at desc, g.id desc
 			""";
 
@@ -137,12 +147,21 @@ public class GetReviewQueueUseCase {
 				row.getTimestamp("last_seen_at").toInstant(),
 				row.getString("source_url"),
 				row.getString("subject"),
+				splitTags(row.getString("conditions")),
 				payloadOf(row.getString("payload")));
+	}
+
+	/** 빈 문자열을 {@code split}하면 {@code [""]}가 된다 — 화면이 이름 없는 태그를 그린다. */
+	private static List<String> splitTags(String aggregated) {
+		if (aggregated == null || aggregated.isBlank()) {
+			return List.of();
+		}
+		return List.of(aggregated.split(","));
 	}
 
 	/** 이름을 붙이기 전의 한 행. `payload`에서 후보 id를 꺼내는 책임도 여기 있다. */
 	private record Row(long id, ReviewQueueType type, int occurrences, Instant firstSeenAt, Instant lastSeenAt,
-			String sourceUrl, String subject, Map<String, Object> payload) {
+			String sourceUrl, String subject, List<String> conditions, Map<String, Object> payload) {
 
 		/** payload는 jsonb다 — 기대한 타입이 온다는 보장이 없다. 숫자가 아닌 값은 무시한다. */
 		List<Long> candidateIds() {
@@ -161,7 +180,7 @@ public class GetReviewQueueUseCase {
 				.map(candidateId -> names.getOrDefault(candidateId, "#" + candidateId))
 				.toList();
 			return new PendingItem(id, type, occurrences, firstSeenAt, lastSeenAt, sourceUrl, subject, candidates,
-					payload);
+					conditions, payload);
 		}
 	}
 
@@ -187,9 +206,12 @@ public class GetReviewQueueUseCase {
 	 *     {@code null}이다. 이상치인데 딜이 미상이면 역시 {@code null} — 화면이 그 사실을 말한다.
 	 * @param candidateProducts 후보 제품 이름. 사라진 제품은 {@code #id}로 남긴다 — 조용히 빼면
 	 *     "후보 2개"가 "후보 1개"가 되고 근거가 줄어든 것을 아무도 모른다.
+	 * @param conditions 이 딜의 조건 태그(BM-02 AC-2). <b>이상치가 왜 싸 보이는지</b>를 말한다 —
+	 *     `카할`이면 특정 카드 보유자만 그 가격이고, `배송비미상`이면 저장된 값이 하한이다.
+	 *     즉 이상치가 아니라 <b>정상</b>일 수 있다. 미상 항목은 딜이 없으므로 항상 빈 목록이다.
 	 */
 	public record PendingItem(long id, ReviewQueueType type, int occurrences, Instant firstSeenAt,
 			Instant lastSeenAt, String sourceUrl, String subject, List<String> candidateProducts,
-			Map<String, Object> payload) {
+			List<String> conditions, Map<String, Object> payload) {
 	}
 }

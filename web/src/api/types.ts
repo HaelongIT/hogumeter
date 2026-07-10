@@ -180,6 +180,12 @@ export interface ReviewQueueItem {
   subject: string | null
   /** 후보 제품 이름. 사라진 제품은 `#id`로 온다 — 조용히 빠지지 않는다. */
   candidateProducts: string[]
+  /**
+   * 이 딜의 조건 태그(BM-02 AC-2). **이상치가 왜 싸 보이는지**를 말한다 —
+   * `카할`이면 특정 카드 보유자만 그 가격이고, `배송비미상`이면 저장된 값이 하한이다.
+   * 즉 이상치가 아니라 정상일 수 있다. 미상 항목은 딜이 없으므로 항상 빈 배열.
+   */
+  conditions: string[]
   payload: Record<string, unknown>
 }
 

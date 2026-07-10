@@ -241,4 +241,61 @@ class GetReviewQueueUseCaseTest {
 
 		assertThat(mine(one, two)).hasSize(2).allSatisfy(item -> assertThat(item.occurrences()).isEqualTo(1));
 	}
+
+	/**
+	 * 이상치는 <b>왜</b> 싸 보이는지 말해야 한다. `700,000원`만 보고는 아무것도 결정할 수 없다 —
+	 * 그 가격이 `카할`(특정 카드 보유자만)이거나 `배송비미상`(하한)이면 이상치가 아니라 **정상**이다.
+	 *
+	 * <p>조건 태그는 `PreserveAppliedConditionsUseCase`가 원문에서 딜로 끌어올린다(BM-02 AC-2).
+	 * 여기서 보여 주지 않으면 그 값은 파이프라인 로그에만 있고, 판단하는 사람은 원문을 처음부터 읽는다.
+	 */
+	@Test
+	void outlierItemShowsWhyItLooksCheap() {
+		long postId = rawPost("rq-cond", "https://example.invalid/rq-cond", "너무 싼 딜");
+		long dealId = jdbc.queryForObject("""
+				insert into deal_event (variant_id, price_first, price_min, price_max, price_last,
+				                        origin, status, first_seen, last_seen, applied_conditions)
+				values (null, 700000, 700000, 700000, 700000, 'LIVE', 'ACTIVE', now(), now(),
+				        array['카할','배송비미상']) returning id
+				""", Long.class);
+		jdbc.update("insert into deal_event_source (deal_event_id, raw_deal_post_id, site) values (?, ?, 'ppomppu')",
+				dealId, postId);
+		long itemId = enqueue("OUTLIER_LOWER",
+				"""
+				{"priceFirst":700000,"dealEventId":%d}""".formatted(dealId), "PENDING", "2026-07-10T00:00:00Z");
+
+		PendingItem item = mine(itemId).get(0);
+
+		assertThat(item.conditions()).containsExactly("배송비미상", "카할"); // 정렬 고정(collate "C")
+	}
+
+	/** 조건 없는 이상치는 빈 목록이다. "값 없음"을 `null`로 흘리지 않는다. */
+	@Test
+	void anOutlierWithoutConditionsHasAnEmptyList() {
+		long postId = rawPost("rq-nocond", "https://example.invalid/rq-nocond", "그냥 싼 딜");
+		long dealId = jdbc.queryForObject("""
+				insert into deal_event (variant_id, price_first, price_min, price_max, price_last,
+				                        origin, status, first_seen, last_seen)
+				values (null, 700000, 700000, 700000, 700000, 'LIVE', 'ACTIVE', now(), now()) returning id
+				""", Long.class);
+		jdbc.update("insert into deal_event_source (deal_event_id, raw_deal_post_id, site) values (?, ?, 'ppomppu')",
+				dealId, postId);
+		long itemId = enqueue("OUTLIER_LOWER",
+				"""
+				{"priceFirst":700000,"dealEventId":%d}""".formatted(dealId), "PENDING", "2026-07-10T00:00:00Z");
+
+		assertThat(mine(itemId).get(0).conditions()).isEmpty();
+	}
+
+	/** 미상(UNCLASSIFIED) 항목엔 딜이 없다 — 조건도 없다. */
+	@Test
+	void unclassifiedItemsHaveNoConditions() {
+		long postId = rawPost("rq-u", "https://example.invalid/rq-u", "정체불명");
+		long itemId = enqueue("UNCLASSIFIED",
+				"""
+				{"title":"정체불명","rawDealPostId":%d,"productCandidates":[]}""".formatted(postId),
+				"PENDING", "2026-07-10T00:00:00Z");
+
+		assertThat(mine(itemId).get(0).conditions()).isEmpty();
+	}
 }

@@ -13,6 +13,7 @@ const unclassified: ReviewQueueItem = {
   sourceUrl: 'https://ppomppu/1',
   subject: null,
   candidateProducts: ['아이폰 17'],
+  conditions: [],
   payload: { title: '아이폰17 특가', productCandidates: [7] },
 }
 
@@ -88,5 +89,28 @@ describe('ReviewQueuePage', () => {
     render(<ReviewQueuePage />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('HTTP_500')
+  })
+})
+
+describe('ReviewQueuePage — 이상치는 왜 싸 보이는지 화면에 나온다', () => {
+  it('조건 태그를 그리고, 배송비 미상이면 하한임을 말한다', async () => {
+    const outlier: ReviewQueueItem = {
+      id: 9,
+      type: 'OUTLIER_LOWER',
+      occurrences: 1,
+      firstSeenAt: '2026-07-10T00:00:00Z',
+      lastSeenAt: '2026-07-10T00:00:00Z',
+      sourceUrl: 'https://ppomppu/9',
+      subject: '아이폰 17 — 256GB',
+      candidateProducts: [],
+      conditions: ['배송비미상', '카할'],
+      payload: { priceFirst: 700000 },
+    }
+    vi.spyOn(api, 'listReviewQueue').mockResolvedValue([outlier])
+
+    render(<ReviewQueuePage />)
+
+    expect(await screen.findByText(/조건부: 배송비미상 · 카할/)).toBeInTheDocument()
+    expect(screen.getByText(/실제 결제가는 더 높습니다/)).toBeInTheDocument()
   })
 })
