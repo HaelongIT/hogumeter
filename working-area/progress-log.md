@@ -16,6 +16,20 @@
 
 ---
 
+## 2026-07-10 — 🔴 세 번째 거울상: 관찰이 영원히 끝나지 않았다 (PUR-01)
+
+- **어떻게 찾았나**: NFR에서 통했던 감사(요구사항 ID 전수 grep)를 **기능 요구**에 돌렸다. 참조 0인 ID 19개 중 대부분은 M2·M3(USED/CMP)라 정상. 그런데 **PUR-06(아카이브)**이 걸렸다.
+- **🔴 결함**: `PurchaseState`는 `OBSERVING → REPORT_PENDING → CLOSED → ARCHIVED`를 정의하고 `Purchase.expire()`·`isExpired()`가 다 있으며 순수 테스트도 GREEN이다. 그런데 프로덕션에서 `purchase.state`를 **쓰는** 곳은 `RecordPurchaseUseCase` 하나뿐이고 **언제나 `OBSERVING`**을 썼다. **관찰이 영원히 끝나지 않았다.**
+  - ① "관찰 N일차"가 무한히 커진다(90일 관찰인데 500일차)
+  - ② PUR-03 "산 뒤 알림"은 `OBSERVING`에만 발화한다 → **3년 전 구매에도 계속 알림이 나갔을 것**
+  - ③ 성적 집계 대기로 넘어가지 않는다
+- **한 일**: `ExpirePurchaseObservationsUseCase`(신규 파일) + `PipelineScheduler`에 **ingest보다 먼저** 배선. 스모크 5-2b가 100일 전 구매 → `REPORT_PENDING` → `purchasesExpired=1`을 종단 증명.
+- **순서가 계약이다**: 만료가 ingest보다 뒤면, 이미 끝난 관찰이 이번 틱의 딜에 대해 알림을 한 번 더 낸다(ingest가 알림을 태우므로). 테스트로 못박았다.
+- **카운터는 오염되지 않는 쪽을 센다**: `purchasesExpired`를 `OBSERVING` 감소분으로 세면 틱 도중 REST로 들어온 새 구매가 값을 망친다. `REPORT_PENDING` **증가분**으로 센다 — 그건 스케줄러만 늘린다.
+- **⚠️ 당신이 볼 것 (Q-62 신설)**: 만료까지만 배선했다. **`REPORT_PENDING → CLOSED`는 성적표 발급(PUR-04)이 선행**하는데 성적표를 담을 테이블도 발급 유스케이스도 없다(`ReportCardCalculator`는 순수 도메인만). `CLOSED → ARCHIVED`(PUR-06)·재활성도 호출자가 없다. **구매는 REPORT_PENDING에서 영원히 멈춘다.** 화면은 "성적 집계 중"이라 정직하지만, 집계는 아무도 하지 않는다.
+- **자율로 정한 것**: 전이 판정을 하드코딩하지 않고 `purchase.expire()`가 돌려준 상태를 쓴다 — 상태기계가 허용하지 않으면 예외가 난다. 쓰기는 벌크 UPDATE(엔티티에 setter가 없고, delete+insert는 PUR-02가 동결한 스냅샷을 지운다).
+- **다음**: 같은 감사에서 남은 것 — `AL-07`(발송 단위 원칙)·`SIG-02`(신선도 3단, Q-34에 `lastPoll=now`로 잠겨 있음)의 실재를 확인할 것.
+
 ## 2026-07-10 — 푸시 제한: 끄지 않고 좁혔다. 그러다 게이트의 옆문을 찾았다
 
 - **한 일**: `permissions.deny`에서 `Bash(git push *)` 제거 → **일반 푸시 허용**. 대신 `guard.sh`가 **파괴적 푸시만** 차단한다(`--force`·`-f`·`--force-with-lease`·`--delete`·`-d`·`--mirror`·`--prune`·`+refspec`·`:refspec`). `allow`에는 넣지 않아 **매번 승인 프롬프트**가 사람의 마지막 확인으로 남는다. 사용자 결정 2택(범위=일반 푸시만 / 시점=지시할 때만).

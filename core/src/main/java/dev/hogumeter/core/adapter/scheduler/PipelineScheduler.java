@@ -2,12 +2,15 @@ package dev.hogumeter.core.adapter.scheduler;
 
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventSourceRepository;
+import dev.hogumeter.core.adapter.persistence.PurchaseRepository;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
+import dev.hogumeter.core.application.ExpirePurchaseObservationsUseCase;
 import dev.hogumeter.core.application.IngestDealsUseCase;
 import dev.hogumeter.core.application.ReprocessDealPricesUseCase;
 import dev.hogumeter.core.application.ReprocessDealStatusUseCase;
 import dev.hogumeter.core.domain.deal.DealStatus;
+import dev.hogumeter.core.domain.purchase.PurchaseState;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -25,8 +28,11 @@ import org.springframework.stereotype.Component;
  * {@link IngestDealsUseCase#ingestPending()}을 부르는 사람이 없으면 {@code deal_event}가 생기지 않고,
  * 기준가 표본은 영원히 0이며 알림도 오지 않는다(2026-07-10까지 실제로 그랬다 — docs/91 Q-27 ⑤).
  *
- * <p>순서는 <b>ingest → 가격 → 종료</b>다.
+ * <p>순서는 <b>관찰만료 → ingest → 가격 → 종료</b>다.
  * <ol>
+ * <li>관찰만료: 관찰 기간이 끝난 구매를 REPORT_PENDING으로(PUR-01). <b>ingest보다 먼저</b> 온다 —
+ * ingest는 새 딜마다 알림을 태우는데 PUR-03의 "산 뒤 알림"은 OBSERVING 관찰에만 발화한다.
+ * 나중에 돌리면 이미 끝난 관찰이 이번 틱의 딜에 대해 한 번 더 알림을 낸다.</li>
  * <li>ingest: 새 원문을 딜로 만든다. 이번 주기에 링크된 것까지 아래 두 단계가 보게 한다.</li>
  * <li>가격: 이미 링크된 원문의 새 가격을 딜에 반영한다(BM-01 AC-2, Q-27 ①).</li>
  * <li>종료: 링크된 원문이 전부 종료됐으면 딜을 ENDED로. <b>가격보다 뒤에 온다</b> — 종료된 딜의
@@ -45,6 +51,7 @@ public class PipelineScheduler {
 
 	private static final Logger log = LoggerFactory.getLogger(PipelineScheduler.class);
 
+	private final Runnable expireObservations;
 	private final Runnable ingest;
 	private final Runnable reprocessPrices;
 	private final Runnable reprocessStatus;
@@ -52,23 +59,29 @@ public class PipelineScheduler {
 	private final Consumer<PipelineTickReport> report;
 
 	@Autowired
-	PipelineScheduler(IngestDealsUseCase ingest, ReprocessDealPricesUseCase prices,
-			ReprocessDealStatusUseCase status, RawDealPostRepository rawPosts, DealEventRepository dealEvents,
-			DealEventSourceRepository sources, ReviewQueueItemRepository reviewQueue) {
-		this(ingest::ingestPending, prices::reprocessPriceChanges, status::reprocessEndedDeals,
+	PipelineScheduler(ExpirePurchaseObservationsUseCase expireObservations, IngestDealsUseCase ingest,
+			ReprocessDealPricesUseCase prices, ReprocessDealStatusUseCase status, RawDealPostRepository rawPosts,
+			DealEventRepository dealEvents, DealEventSourceRepository sources,
+			ReviewQueueItemRepository reviewQueue, PurchaseRepository purchases) {
+		this(expireObservations::expireDueObservations, ingest::ingestPending, prices::reprocessPriceChanges,
+				status::reprocessEndedDeals,
 				() -> new PipelineSnapshot(
 						rawPosts.count(),
 						sources.count(),
 						dealEvents.count(),
 						reviewQueue.count(),
 						dealEvents.findByStatusIn(List.of(DealStatus.ENDED)).size(),
-						rawPosts.findUnprocessed().size()),
+						rawPosts.findUnprocessed().size(),
+						purchases.findAll().stream()
+								.filter(p -> p.getState() == PurchaseState.REPORT_PENDING)
+								.count()),
 				tick -> log.info("pipeline tick {}", tick));
 	}
 
 	/** 테스트 seam — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
-	PipelineScheduler(Runnable ingest, Runnable reprocessPrices, Runnable reprocessStatus,
-			Supplier<PipelineSnapshot> probe, Consumer<PipelineTickReport> report) {
+	PipelineScheduler(Runnable expireObservations, Runnable ingest, Runnable reprocessPrices,
+			Runnable reprocessStatus, Supplier<PipelineSnapshot> probe, Consumer<PipelineTickReport> report) {
+		this.expireObservations = expireObservations;
 		this.ingest = ingest;
 		this.reprocessPrices = reprocessPrices;
 		this.reprocessStatus = reprocessStatus;
@@ -80,6 +93,7 @@ public class PipelineScheduler {
 			initialDelayString = "${core.pipeline.interval-ms:60000}")
 	public void tick() {
 		PipelineSnapshot before = snapshot();
+		runStep("expire-observations", expireObservations);
 		runStep("ingest", ingest);
 		runStep("reprocess-prices", reprocessPrices);
 		runStep("reprocess-status", reprocessStatus);

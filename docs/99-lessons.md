@@ -405,3 +405,15 @@
 - **교훈(규칙화)**: **게이트를 세울 때 "어떤 도구 표면이 이걸 우회하는가"를 열거한다.** 규칙이 이름으로 스코프되면, 이름을 하나 더 만드는 것만으로 우회가 된다. Q-60("훅은 `bash x.sh` 안을 못 본다")과 같은 계열이다 — **훅은 실수를 막고 고의는 못 막는다.**
 - **곁**: 차단 장치를 새로 넣었으므로 RED가 없다. **복사본에 뮤테이션**을 넣어 증명했다 — 파괴적 판정을 통째로 무력화하니 13건 FAIL, refspec 검사만 지우니 정확히 2건 FAIL. (살아 있는 훅을 잠시라도 무력화해 시험하려다 권한 분류기에 막혔다. **옳은 차단이었다** — 검증하겠다고 방어선을 내리지 않는다.)
 - **관련 테스트**: `.claude/hooks/guard.test.sh` — 차단 13 + **통과 9**(일반 푸시·`--dry-run`·`-u`·`main:main`·커밋 메시지 안의 `--force`). 이 파일의 원칙대로 "무엇을 통과시켜야 하는가"를 더 많이 시험한다.
+
+---
+
+## 2026-07-10 — 세 번째 거울상: 상태기계에 전이가 있어도 부르는 사람이 없으면 없는 것이다
+
+- **맥락**: "읽기만 하는 테이블"(`alert_policy`)과 "쓰기만 하는 테이블"(`review_queue_item`)을 잡은 뒤, 이번엔 **요구사항 ID 전수 grep**을 기능 요구(REG/BM/AL/PUR/SIG/CAD)에 돌렸다. 참조 0인 ID 19개 중 대부분은 M2·M3(USED/CMP)라 정상이었는데, **PUR-06(아카이브)**이 눈에 걸렸다.
+- **증상**: `PurchaseState`는 `OBSERVING → REPORT_PENDING → CLOSED → ARCHIVED → OBSERVING`을 정의하고, `Purchase.expire()`·`close()`·`archive()`·`reactivate()`·`isExpired(now)`가 전부 있으며 순수 테스트도 GREEN이다. 그런데 프로덕션에서 `purchase.state`를 **쓰는** 곳은 `RecordPurchaseUseCase` 하나뿐이고 **언제나 `OBSERVING`**을 쓴다. 즉 **관찰은 영원히 끝나지 않는다.**
+- **그 결과 셋**: ① "관찰 N일차"가 무한히 커진다(90일 관찰인데 500일차) ② PUR-03 "산 뒤 알림"(paidPrice 하회)은 `OBSERVING`에만 발화하므로 **3년 전 구매에 대해서도 계속 알림이 나갔을 것이다** ③ 성적 집계 대기로 넘어가지 않는다. 아무 테스트도 이걸 잡지 않았다 — 도메인 테스트는 `expire()`를 직접 부르니까.
+- **교훈(규칙화)**: **상태기계·전이 메서드는 "누가 이 전이를 프로덕션에서 부르는가"로 검사한다.** 열거형에 값이 있고 전이가 허용된다는 사실은 그 전이가 일어난다는 뜻이 아니다. 시간이 흘러야 일어나는 전이(만료·타임아웃)는 **부르는 스케줄러가 없으면 절대 일어나지 않고**, 그 부재는 어떤 단위 테스트에도 보이지 않는다.
+- **순서가 계약이다**: 만료는 `ingest`보다 **먼저** 돌아야 한다. ingest가 새 딜마다 알림을 태우는데 "산 뒤 알림"은 OBSERVING만 보기 때문이다. 나중에 돌리면 이미 끝난 관찰이 이번 틱의 딜에 대해 한 번 더 알림을 낸다. `expireRunsBeforeIngestSoEndedObservationsDoNotAlert`가 못박는다.
+- **카운터는 오염되지 않는 쪽을 센다**: `purchasesExpired`를 `OBSERVING` 감소분으로 세면 틱 도중 REST로 들어온 새 구매가 값을 망친다. `REPORT_PENDING` **증가분**으로 센다 — 그건 스케줄러만 늘린다.
+- **관련 테스트**: `ExpirePurchaseObservationsUseCaseTest`(6), `PipelineSchedulerTest`(순서·격리·카운터), `scripts/smoke.sh` 5-2b(100일 전 구매 → REPORT_PENDING → `purchasesExpired=1`).

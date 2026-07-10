@@ -10,7 +10,12 @@ class PipelineTickReportTest {
 
 	private static PipelineSnapshot snapshot(long raw, long sources, long deals, long queue, long ended,
 			long unprocessed) {
-		return new PipelineSnapshot(raw, sources, deals, queue, ended, unprocessed);
+		return snapshot(raw, sources, deals, queue, ended, unprocessed, 0);
+	}
+
+	private static PipelineSnapshot snapshot(long raw, long sources, long deals, long queue, long ended,
+			long unprocessed, long reportPending) {
+		return new PipelineSnapshot(raw, sources, deals, queue, ended, unprocessed, reportPending);
 	}
 
 	@Test
@@ -62,10 +67,24 @@ class PipelineTickReportTest {
 		assertThat(report.ended()).isEqualTo(1);
 	}
 
+	/**
+	 * PUR-01 관찰 만료. REPORT_PENDING의 증가분으로 센다 — OBSERVING 차이로 세면 틱 도중 REST로 들어온
+	 * 새 구매가 카운터를 오염시킨다(REPORT_PENDING은 스케줄러만 늘린다).
+	 */
+	@Test
+	@DisplayName("관찰 만료 — 성적 집계 대기가 늘어난 만큼이 이번 틱에 만료된 관찰이다")
+	void expiredObservations() {
+		PipelineTickReport report = PipelineTickReport.between(
+				snapshot(0, 0, 0, 0, 0, 0, 1),
+				snapshot(0, 0, 0, 0, 0, 0, 3));
+
+		assertThat(report.purchasesExpired()).isEqualTo(2);
+	}
+
 	@Test
 	@DisplayName("아무 일도 없었던 틱도 0으로 보고한다 — 0을 생략하면 \"성공했는데 0건\"이 사라진다")
 	void idleTickReportsZeros() {
-		PipelineSnapshot same = snapshot(5, 5, 3, 1, 1, 0);
+		PipelineSnapshot same = snapshot(5, 5, 3, 1, 1, 0, 2);
 
 		PipelineTickReport report = PipelineTickReport.between(same, same);
 
@@ -74,6 +93,7 @@ class PipelineTickReportTest {
 		assertThat(report.merged()).isZero();
 		assertThat(report.queued()).isZero();
 		assertThat(report.ended()).isZero();
+		assertThat(report.purchasesExpired()).isZero();
 		assertThat(report.pending()).isZero();
 		assertThat(report.rawTotal()).isEqualTo(5);
 	}

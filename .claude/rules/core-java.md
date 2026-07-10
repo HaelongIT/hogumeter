@@ -26,6 +26,8 @@ paths:
 - **`@EnableScheduling`이 없으면 `@Scheduled`는 조용히 무시된다.** 에러도 로그도 없고 그냥 안 돈다. 애노테이션 존재가 아니라 **등록 사실**을 단언하라 — `ScheduledTaskHolder.getScheduledTasks()`에 그 메서드가 있는가(`PipelineSchedulerWiringTest`). `sleep`으로 실행을 기다리지 않는다. (99: 2026-07-10)
 - **`fixedDelay`는 기본적으로 기동 즉시 1회 돈다.** 그러면 `@SpringBootTest`가 스케줄러에 오염된다(컨테이너 공유 + 롤백 없음). `initialDelay = interval`로 미루고, `src/test/resources/application.properties`가 `core.pipeline.enabled=false`로 전역 차단한다(배선 테스트만 `properties`로 되켬).
 - **주기 작업은 매 틱 무엇을 했는지 수치로 남긴다**(OBS-02). 전후 스냅샷의 **차이**를 내고 `pending`(처리되지 않고 남은 입력)을 포함한다 — 단조 증가하면 도는 척하는 것이다. 로그 문구를 테스트하지 말고 `Consumer<Report>` seam으로 **값**을 시험한다.
+- **카운터는 오염되지 않는 쪽을 센다.** `purchasesExpired`를 `OBSERVING` 감소분으로 세면 틱 도중 REST로 들어온 새 구매가 값을 망친다. **스케줄러만 늘리는 쪽**(`REPORT_PENDING` 증가분)을 센다. (99: 2026-07-10)
+- **단계 순서는 계약이다.** 관찰 만료(PUR-01)는 `ingest`보다 **먼저** 돈다 — ingest가 새 딜마다 알림을 태우는데 PUR-03 "산 뒤 알림"은 `OBSERVING`에만 발화한다. 순서를 뒤집으면 이미 끝난 관찰이 한 번 더 알림을 낸다. 순서를 테스트로 못박는다.
 - **`try/catch`로 감싼 줄만 격리된다.** 스냅샷 조회도 DB를 탄다 — `runStep` 밖에 두니 DB 단절 시 첫 줄에서 터져 **단계가 한 번도 시도되지 않았고**, 예외를 삼키는 건 Spring이라 우리 로그엔 흔적도 없었다. 격리 장치를 만들면 **그 바깥에 남은 IO를 세어 본다**. (99: 2026-07-10)
 
 ## JPA 쓰기

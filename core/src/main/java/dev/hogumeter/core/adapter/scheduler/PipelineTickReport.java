@@ -16,6 +16,7 @@ public record PipelineTickReport(
 		long merged,
 		long queued,
 		long ended,
+		long purchasesExpired,
 		long pending,
 		long rawTotal) {
 
@@ -28,6 +29,7 @@ public record PipelineTickReport(
 				postsLinked - dealsCreated,
 				after.reviewQueue() - before.reviewQueue(),
 				after.endedDeals() - before.endedDeals(),
+				after.reportPendingPurchases() - before.reportPendingPurchases(),
 				after.unprocessed(),
 				after.rawPosts());
 	}
@@ -40,6 +42,7 @@ public record PipelineTickReport(
 				+ " merged=" + merged
 				+ " queued=" + queued
 				+ " ended=" + ended
+				+ " purchasesExpired=" + purchasesExpired
 				+ " pending=" + pending
 				+ " rawTotal=" + rawTotal;
 	}

@@ -11,6 +11,8 @@ package dev.hogumeter.core.adapter.scheduler;
  * @param unprocessed 아직 딜에 붙지 않은 원문 수. {@code rawPosts - linkedSources}로 근사하지 않는다 —
  *        {@code unique (deal_event_id, raw_deal_post_id)}는 한 원문이 두 딜에 붙는 것을 막지 않으므로
  *        그 뺄셈은 가정이다. 정확한 값을 쓴다(1인용 규모라 스캔 비용은 무의미하다).
+ * @param reportPendingPurchases 관찰이 끝나 성적 집계를 기다리는 구매 수. <b>OBSERVING을 세지 않는 이유</b>:
+ *        틱 도중 REST로 새 구매가 들어오면 OBSERVING 차이가 오염된다. REPORT_PENDING은 스케줄러만 늘린다.
  */
 public record PipelineSnapshot(
 		long rawPosts,
@@ -18,5 +20,6 @@ public record PipelineSnapshot(
 		long dealEvents,
 		long reviewQueue,
 		long endedDeals,
-		long unprocessed) {
+		long unprocessed,
+		long reportPendingPurchases) {
 }
