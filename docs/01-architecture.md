@@ -56,7 +56,19 @@ collector/
 - 사이트 구조 변경 감지: 파싱 성공률이 임계 이하로 떨어지면 텔레그램 관리 알림 (20 문서).
 
 ## DB 계약 (collector ↔ core)
-- `raw_deal_post`: collector가 `(site, post_id)` 자연키로 **업서트**. 재수집에 행 수 불변(REL-01 멱등), **상태·가격·추천수 변화는 기존 행에 반영**(BM-01 AC-2 — insert-only면 품절을 영원히 모른다). `posted_at`은 글의 발생 시각이라 **불변**이되 처음에 못 얻었으면 나중에 채운다(v1.3 C-2). core가 소비 후 매칭·병합. **[2026-07-09 정정]** 이전 서술("insert-only")은 core의 `RawDealPostUpserter`·`RawDealPostUpsertTest`가 단언하는 갱신 의미와 모순이었다.
+- `raw_deal_post`: collector가 `(site, post_id)` 자연키로 **업서트**. 재수집에 행 수 불변(REL-01 멱등), **상태·가격·추천수 변화는 기존 행에 반영**(BM-01 AC-2 — insert-only면 품절을 영원히 모른다). `posted_at`은 글의 발생 시각이라 **불변**이되 처음에 못 얻었으면 나중에 채운다(v1.3 C-2). **[2026-07-09 정정]** 이전 서술("insert-only")은 core의 `RawDealPostUpserter`·`RawDealPostUpsertTest`가 단언하는 갱신 의미와 모순이었다.
+
+### 누가 언제 소비하는가 (파이프라인 트리거)
+
+**"core가 소비한다"는 서술만으로는 시스템이 돌지 않는다.** 2026-07-10까지 `ingestPending()`을 프로덕션에서 부르는 곳이 하나도 없어, collector가 아무리 적재해도 `deal_event`가 생기지 않았다(docs/91 Q-27 ⑤).
+
+`core/adapter/scheduler/PipelineScheduler`가 `core.pipeline.interval-ms`(기본 60초)마다 **세 단계를 순서대로** 돈다:
+
+1. **ingest**(`IngestDealsUseCase.ingestPending()`) — 아직 딜에 링크되지 않은 원문 → 매칭 → `deal_event` 생성/병합 → 이상치 판정 → 알림 판정.
+2. **가격**(`ReprocessDealPricesUseCase`) — 이미 링크된 원문의 새 가격을 딜에 반영. `priceFirst`는 불변(기준가 분포가 그 위에 선다), `priceLast`는 **활성** 원문 중 최신 관측, `priceMin`은 품절 원문까지 포함한 최저(Q-27 ①).
+3. **종료**(`ReprocessDealStatusUseCase`) — 링크된 원문이 **전부** 종료면 딜을 `ENDED`로. 가격 뒤에 와야 닫히기 직전의 마지막 가격까지 반영된다.
+
+한 단계가 터져도 뒤 단계와 다음 주기는 산다(로그에 단계명과 함께 남긴다, Q-56). 매 틱 `PipelineTickReport`(OBS-02)를 남긴다 — **조용히 도는 스케줄러는 아무것도 처리하지 않는 스케줄러와 구별되지 않는다.**
 - `used_listing_observation`: 번개 폴링 관측 insert-only. core가 생애주기 판정. **⚠️ 아직 존재하지 않는다** — V1·V2 어디에도 이 테이블은 없다(M2 중고 착수 시 core가 만든다). 계약이 아니라 **계획**이다. 그래서 `parse_bunjang`은 어디에도 배선돼 있지 않다.
 - 스키마 진화는 Flyway 단독 소유(core). collector는 마이그레이션 금지, 계약 테이블만 접근. **통합 테스트는 `db/migration/V*__*.sql`을 버전 순서대로 전부 적용**한다 — 일부만 적용하면 그것도 미러다.
 

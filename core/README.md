@@ -35,6 +35,20 @@ dev.hogumeter.core
 
 > 2차 기획 도메인 모듈(`purchase`·`digest`·`watch`·`priority`)은 M5/M6 착수 시 추가 — [`../docs/01-architecture.md`](../docs/01-architecture.md), [`../docs/15-feature-purchase.md`](../docs/15-feature-purchase.md) 등.
 
+## 파이프라인 트리거 (`adapter/scheduler`)
+
+**유스케이스가 옳게 동작하는 것과, 프로덕션에서 누군가 그걸 부르는 것은 다른 문제다.** 2026-07-10까지 `ingestPending()`을 부르는 곳이 하나도 없어 `deal_event`가 생기지 않았다(`docs/91` Q-27 ⑤).
+
+`PipelineScheduler.tick()`이 `core.pipeline.interval-ms`(기본 60초)마다 **ingest → 가격 → 종료** 순으로 돈다.
+
+- **종료가 마지막**이라 딜이 닫히기 직전의 마지막 가격까지 반영된다.
+- **단계별 예외 격리**: 하나가 터져도 뒤 단계·다음 주기는 산다. 뭉개지 않고 단계명과 함께 `log.error`(Q-56).
+- **`initialDelay = interval`**: 기동 즉시 돌지 않는다. `fixedDelay`는 기본적으로 시작하자마자 1회 실행되는데, 그러면 `@SpringBootTest`들이 오염된다. 테스트는 `src/test/resources/application.properties`가 `core.pipeline.enabled=false`로 전역 차단하고, 배선 테스트만 되켠다.
+- **매 틱 `PipelineTickReport`**(OBS-02): `postsLinked·dealsCreated·merged·queued·ended·pending·rawTotal`. 0을 생략하지 않는다 — 조용히 도는 스케줄러는 죽은 스케줄러와 구별되지 않는다.
+- 로그는 **JSON(ECS)**. `LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`를 compose가 넘긴다(OBS-01) — core 파일은 건드리지 않는다.
+
+`@EnableScheduling`이 빠지면 `@Scheduled`는 **조용히 무시된다.** 그래서 `PipelineSchedulerWiringTest`는 애노테이션 존재가 아니라 `ScheduledTaskHolder`에 태스크가 **등록됐는지**를 단언한다.
+
 ## 규칙 (지킬 것)
 - `domain`은 프레임워크 애노테이션을 갖지 않는다. 시간은 `Clock` 주입, 난수 금지.
 - 모든 판정 로직은 "입력 → 결과" 순수 함수 시그니처. 예: `AlertDecision decide(DealEvent, AlertPolicy, BenchmarkView)`.

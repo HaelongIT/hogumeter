@@ -166,6 +166,14 @@ tick=$(compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep 'dea
 echo "$tick" | grep -q 'merged=0' || fail "병합이 아닌데 merged가 0이 아니다: $tick"
 echo "$tick" | grep -q 'pending=0' || fail "원문을 다 처리했는데 pending이 남았다: $tick"
 
+# OBS-01: core 로그도 구조화(JSON)여야 한다. collector는 이미 JSON Lines다 —
+# 두 컨테이너의 로그가 같은 모양이어야 한 곳에서 읽는다. 형식은 조용히 되돌아가므로 매번 본다.
+# ECS는 필드를 중첩한다: {"ecs":{"version":"8.11"}}, {"log":{"level":"INFO", ...}}
+echo "$tick" | grep -q '^{' || fail "core 로그가 JSON이 아니다(첫 글자가 { 가 아님): $tick"
+echo "$tick" | grep -q '"ecs":{"version"' || fail "core 로그에 ECS 필드가 없다: $tick"
+echo "$tick" | grep -q '"log":{"level":"INFO"' || fail "core 로그에 구조화된 레벨이 없다: $tick"
+echo "$tick" | grep -q '"@timestamp"' || fail "core 로그에 타임스탬프가 없다: $tick"
+
 echo "--- 5-1c) 가격 변경 재처리: raw 업서트 -> deal_event.price_last (BM-01 AC-2) ---"
 # 수집기 재폴링을 흉내낸다 — 같은 원문의 가격이 내렸다. 이미 링크된 원문이라 ingest는 다시 안 읽는다.
 # 그래서 별개 경로(ReprocessDealPricesUseCase)가 필요하다(docs/91 Q-27 ①).

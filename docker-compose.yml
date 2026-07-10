@@ -38,6 +38,10 @@ services:
       # 이게 없으면 수집된 원문을 아무도 소비하지 않는다(docs/91 Q-27). Spring 완화 바인딩:
       # CORE_PIPELINE_INTERVAL_MS -> core.pipeline.interval-ms
       CORE_PIPELINE_INTERVAL_MS: ${CORE_PIPELINE_INTERVAL_MS:-60000}
+      # OBS-01 구조화 로그(JSON). Spring Boot 4.1 내장(`logging.structured.format.console`).
+      # collector는 이미 JSON Lines를 낸다 — 두 컨테이너의 로그가 같은 모양이어야 한 곳에서 읽는다.
+      # core 파일을 하나도 건드리지 않고 환경변수로만 켠다(application.yml은 상대 영역).
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ${CORE_LOG_FORMAT:-ecs}
     depends_on:
       postgres:
         condition: service_healthy

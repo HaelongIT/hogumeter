@@ -16,6 +16,14 @@
 
 ---
 
+## 2026-07-10 — OBS-01 core JSON 로그 (Q-57 ① 해소) + 문서 드리프트 정정
+
+- **한 일**: ① Spring Boot 4.1 내장 구조화 로그를 **환경변수로만** 켰다 — `LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`(compose `CORE_LOG_FORMAT`). `application.yml`도 `logback-spring.xml`도 만들지 않았다(**core 파일 무수정**). 이제 core도 collector처럼 JSON을 낸다. 스모크 5-1b가 매번 확인한다(형식은 조용히 되돌아간다). ② `docs/01`·`README`·`core/README`가 **"누가 언제 `raw_deal_post`를 소비하는가"를 말하지 않았다** — 바로 그 침묵이 시스템을 죽여뒀다. 파이프라인 트리거 절을 셋 다 신설.
+- **자율로 정한 것**: 로그 형식 기본값 `ecs`(가장 널리 읽히는 스키마). `CORE_LOG_FORMAT=`(빈 값)으로 텍스트 로그로 되돌릴 수 있다 — seam 1곳.
+- **발견**: 첫 스모크가 실패했는데 코드가 아니라 **내 단언이 틀렸다**. ECS는 필드를 중첩한다(`{"ecs":{"version":…}}`, `{"log":{"level":…}}`). 대상보다 하네스를 먼저 의심하라는 규칙을 또 확인했다.
+- **⚠️ 당신이 볼 것**: 없음.
+- **다음**: 남은 미추적 요구 계속 훑기.
+
 ## 2026-07-10 — 무중단이 끊기던 진짜 이유 (지침 개정)
 
 - **한 일**: 정지 원인을 트랜스크립트로 실측(`ExitPlanMode` 11 + `AskUserQuestion` 12 = 23회 강제 정지)하고 CLAUDE.md를 개정 — 턴 규율 / 질문 규율(`AskUserQuestion`은 정지조건에만) / 정지조건 정밀화(보안 게이트를 **넓히는** 변경만 정지) / **모듈 소유권 절 신설**(core=상대, additive 신규 파일은 자율) / Git 규칙 현실화.
