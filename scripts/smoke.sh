@@ -577,6 +577,49 @@ done
 [ "${unknown:-0}" -ge 1 ] ||
 	fail "배송비 미상 표식이 deal_event에 도달하지 않았다 — core는 표본 오염률을 영원히 0으로 본다"
 
+echo "--- 5-1h) 병합·교차검증(BM-04): 두 사이트의 같은 딜이 하나로 병합되고 VERIFIED가 된다 ---"
+# 병합 경로는 **일어나는 쪽**이 종단으로 한 번도 검증된 적이 없었다 — 스모크는 `merged=0`(병합 안 됨)만 봤다.
+# `DealMergePolicy`(±2% / 48h)는 단위 테스트만 있었다. 임계를 **넘기는** 시나리오를 하나 만든다(docs/99).
+# 별도 제품으로 격리 — 다른 단계의 원문과 섞이면 분포가 흔들린다.
+merge_payload=$(mktemp)
+cat >"$merge_payload" <<'JSON'
+{"name":"병합테스트 제품","category":"test","demandAxisMode":"GROUPED",
+ "axes":[{"axisType":"PRICE","name":"용량","allowedValues":["256GB"]}],
+ "variants":[{"label":"256GB","priceAxisValues":{"용량":"256GB"}}],
+ "aliases":["병합테스트"]}
+JSON
+merge_product=$(curl -fsS -X POST "${WEB}/api/v1/products" -H 'Content-Type: application/json' \
+	-d @"$merge_payload") || fail "병합용 제품 등록 실패"
+rm -f "$merge_payload"
+merge_pid=$(echo "$merge_product" | sed 's/.*"productId"[: ]*\([0-9]*\).*/\1/')
+merge_vid=$(curl -fsS "${WEB}/api/v1/products/${merge_pid}/variants" | sed 's/[^0-9]*\([0-9]*\).*/\1/')
+
+# 900,000 vs 910,000 → 차 10,000 ≤ max(900000×0.02=18,000, 5,000). 같은 captured_at → 48h 이내.
+# 서로 다른 사이트(ppomppu·ruliweb)라 병합 시 sites 2개 → ACTIVE→VERIFIED 교차검증 전이.
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "병합용 원문 삽입 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status) values
+ ('ppomppu','merge-a','https://example.invalid/ma','병합테스트 256GB 특가', 900000, now(), 'ACTIVE'),
+ ('ruliweb','merge-b','https://example.invalid/mb','병합테스트 256GB 특가', 910000, now(), 'ACTIVE');
+SQL
+
+# 두 원문이 하나의 딜로 병합돼 VERIFIED가 될 때까지 기다린다. 카운터가 아니라 **결과 행**을 본다
+# ("무엇을 출력했는가"로 "어떻게 끝났는가"를 단언하지 않는다 — docs/99).
+for _ in $(seq 20); do
+	merge_state=$(compose exec -T postgres psql -qAt -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" -c "
+		select count(*) || ':' || coalesce(max(status),'none') || ':' || coalesce(bool_or(cross_verified)::text,'false')
+		  from deal_event where variant_id = ${merge_vid}" 2>/dev/null | tr -d '\r' | head -1) || true
+	[ "$merge_state" = "1:VERIFIED:true" ] && break
+	sleep 2
+done
+[ "$merge_state" = "1:VERIFIED:true" ] ||
+	fail "두 사이트 딜이 병합되지 않았다 (기대 '1:VERIFIED:true' = 딜 1개·교차검증). 실제: '${merge_state:-없음}'"
+
+# 병합됐으니 표본은 1건인데 **교차검증 m=1**이다 — "n건(교차 m건)"의 m이 여기서 산다(절대 원칙 1).
+mbench=$(curl -fsS "${WEB}/api/v1/variants/${merge_vid}/benchmark?periodMonths=6")
+echo "$mbench" | grep -q '"n":1' || fail "병합 후 표본이 1건이 아니다(딜이 안 합쳐졌다): $mbench"
+echo "$mbench" | grep -q '"m":1' || fail "병합됐는데 교차검증 m이 1이 아니다: $mbench"
+
 echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
 # 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.
 purchase=$(mktemp)
