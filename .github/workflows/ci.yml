@@ -83,6 +83,22 @@ jobs:
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.11.0 \
             --severity=warning --shell=bash scripts/*.sh .claude/hooks/*.sh .githooks/pre-commit .githooks/*.sh
 
+  # SEC-08: robots 게이트는 fake opener 테스트만 통과했다. 실제 소켓을 만지는 경로는
+  # **실 수집을 켜기 직전에 처음 실행된다.** 로컬 서버에 대고 운영과 같은 코드 경로를 리허설한다.
+  # (이 드릴이 `urllib_opener`가 403/429를 예외로 던져 차단 감지가 죽어 있던 것을 잡았다.)
+  robots:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: robots 게이트 리허설 (로컬 서버, 실 사이트 미접촉)
+        run: bash scripts/check-robots-drill.sh
+
   # REL-05: 롤백 스크립트는 사고가 나야 처음 실행된다. 모든 V에 짝이 되는 R이 있는지,
   # 역순 적용이 스키마를 비우는지, 순서를 어기면 실패하는지를 일회용 컨테이너에서 확인한다.
   rollback:

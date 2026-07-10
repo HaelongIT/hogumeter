@@ -186,3 +186,56 @@ def test_registry_excludes_bunjang():
 
 def test_registry_returns_a_fresh_list():
     assert hotdeal_boards() is not hotdeal_boards()
+
+
+# ── Opener 포트 계약: 상태를 **돌려준다**. 예외로 바꾸지 않는다 ──────────────
+#
+# `urlopen`은 4xx·5xx에서 HTTPError를 던진다. 그걸 그대로 두면 `_poll`이 예외를 TRANSIENT로
+# 삼켜 **`classify_status`가 403/429를 영원히 못 본다** — SEC-08의 자동 중지가 죽는다.
+# fake opener는 `(403, b"")`를 돌려주는데 실 opener는 던졌다. 부품별 GREEN이 경계에서 거짓말한 것.
+
+import urllib.error  # noqa: E402
+import urllib.request  # noqa: E402
+
+from collector.scheduler.fetcher import urllib_opener  # noqa: E402
+
+
+def _raise_http_error(status: int, body: bytes = b""):
+    def fake_urlopen(request, timeout=None):
+        raise urllib.error.HTTPError(request.full_url, status, "blocked", {}, io.BytesIO(body))
+
+    return fake_urlopen
+
+
+import io  # noqa: E402
+
+
+@pytest.mark.parametrize("status", [403, 429, 404, 500])
+def test_urllib_opener_returns_status_instead_of_raising(monkeypatch, status):
+    monkeypatch.setattr(urllib.request, "urlopen", _raise_http_error(status, b"nope"))
+
+    assert urllib_opener("https://example.invalid/x") == (status, b"nope")
+
+
+def test_urllib_opener_still_raises_on_transport_failures(monkeypatch):
+    """DNS·타임아웃은 상태가 없다. 이건 예외로 남아 TRANSIENT가 된다(재시도 대상)."""
+
+    def boom(request, timeout=None):
+        raise urllib.error.URLError("연결 거부")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+
+    with pytest.raises(urllib.error.URLError):
+        urllib_opener("https://example.invalid/x")
+
+
+def test_block_signal_reaches_classify_status():
+    """403은 BLOCKED여야 한다 — 이 경로가 프로덕션에서 실제로 이어지는지 좁게 관통한다."""
+    from collector.scheduler.policy import Outcome, classify_status
+
+    status, _ = urllib_opener_stub_403()
+    assert classify_status(status) is Outcome.BLOCKED
+
+
+def urllib_opener_stub_403():
+    return (403, b"")

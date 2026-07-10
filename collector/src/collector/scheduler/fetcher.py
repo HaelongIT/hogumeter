@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -32,10 +33,22 @@ _ROBOTS_DISALLOWED = 403
 
 
 def urllib_opener(url: str, timeout: float = 10.0) -> tuple[int, bytes]:
-    """실 HTTP GET. **테스트에서 호출 금지** — 이 함수만이 네트워크를 만진다."""
+    """실 HTTP GET. **테스트에서 호출 금지** — 이 함수만이 네트워크를 만진다.
+
+    `urlopen`은 4xx·5xx에서 `HTTPError`를 던진다. 그대로 두면 `run_cycle._poll`이 예외를
+    `TRANSIENT`로 삼켜 **`classify_status`가 403·429를 영원히 못 본다** — SEC-08의 자동 중지가
+    죽고, 차단당한 사이트를 백오프하며 계속 두드리게 된다(원칙 5 위반).
+
+    그래서 상태 코드는 **던지지 않고 돌려준다.** 포트 계약(`Opener`)이 `(status, bytes)`이고,
+    fake opener는 처음부터 그렇게 행동했다 — 실 구현만 계약을 어기고 있었다.
+    전송 실패(DNS·타임아웃)는 상태가 없으므로 예외로 남긴다 → 그건 진짜 `TRANSIENT`다.
+    """
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-        return response.status, response.read()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+            return response.status, response.read()
+    except urllib.error.HTTPError as error:  # 상태가 있는 실패 — 판정은 classify_status의 몫
+        return error.code, error.read()
 
 
 @dataclass

@@ -16,6 +16,14 @@
 
 ---
 
+## 2026-07-10 — 🔴 SEC-08 차단 감지가 죽어 있었다 (robots 도구를 만들다 발견)
+
+- **한 일**: `pre-deploy §F`가 사람에게 시키던 "실 robots.txt 1회 대조"를 명령 하나로 만들었다 — `ALLOW_REAL_ROBOTS=1 bash scripts/check-robots.sh`. `docs/98`에 붙일 블록을 출력하고, DISALLOW가 있으면 exit 1. 도구의 실 소켓 경로는 `scripts/check-robots-drill.sh`가 로컬 서버로 리허설한다(CI `robots` 잡 신설).
+- **🔴 그 드릴이 진짜 결함을 잡았다**: `urllib_opener`가 4xx·5xx에서 **예외를 던지고 있었다.** `_poll`이 모든 예외를 `TRANSIENT`로 흡수하므로 `classify_status`는 **403·429를 프로덕션에서 영원히 볼 수 없었다.** 즉 SEC-08의 "차단 신호 → 자동 중지 + 재시도 금지"가 죽어 있었고, 차단당한 사이트를 백오프하며 계속 두드렸을 것이다(절대 원칙 5 위반). **테스트는 전부 GREEN이었다** — fake opener는 `(403, b"")`를 돌려주는데 실 구현만 계약을 어겼다. 수정: 상태 있는 실패는 값으로 돌려주고, 전송 실패(DNS·타임아웃)만 예외로 남긴다.
+- **⚠️ 당신이 볼 것**: `docs/91` **Q-60 신설** — `.claude/hooks/guard.sh`는 **Bash 명령 문자열만** 본다. `bash scripts/x.sh` 안의 네트워크 호출은 훅에 보이지 않는다. 그래서 네트워크로 나가는 스크립트는 **자기 자신에게도 opt-in 게이트를 건다**(다층 방어). 훅은 실수를 막고 고의는 못 막는다 — 정지조건은 결국 지침의 몫.
+- **자율로 정한 것**: 드릴 서버를 별도 프로세스가 아니라 **같은 프로세스의 스레드 + 포트 0**으로 띄운다. `(cmd) &` 뒤의 `kill $!`가 서브셸만 죽이고 python 자식이 살아남아 고정 포트를 문 채 빈 디렉토리를 서빙하는 사고를 실제로 겪었다.
+- **다음**: 인수인계 지점 유지. `ALLOW_REAL_ROBOTS=1`은 **사람이** 실 수집을 켜기 전에 한 번 돌린다.
+
 ## 2026-07-10 — 지침·문서 전수 감사 (거짓말 18건 정정, Q-59 신설)
 
 - **한 일**: 해소된 Q 11개를 역참조로 훑어 **현재형으로 거짓을 말하는 곳**을 전부 고쳤다. 코드 주석 5곳(`scheduler/__init__.py`가 "DB 적재는 아직 없다"고 했다) · 규칙 파일 2곳 · `docs/01` 패키지 트리(없는 `used/watch/priority`를 실재처럼 그림, 있는 `signal/cadence/dealset/review/time` 누락, `adapter/scheduler` 설명이 "알림 평가·캐시 만료") · `CLAUDE.md`(첫머리가 "현재 개발 대상=benchmark, 선행 M0", 빌드 명령에 scripts 6종 누락, 문서 지도에 progress-log·rules 없음) · `README`(스택 표, 저장소 구조에 scripts/.github/.githooks/.claude 누락) · `docs/README` · `docs/31`.
