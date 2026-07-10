@@ -388,3 +388,51 @@ def test_ruliweb_no_price_count_is_ten():
     deals = parse_ruliweb(_read("ruliweb/list_normal.html"), NOW)
 
     assert sum(1 for d in deals if d.headline_price is None) == 10
+
+
+# ── 번개: `free_shipping: false`는 "배송비 0"이 아니라 "금액 미상"이다 ────────
+#
+# golden 20건 중 12건이 `free_shipping: false`인데 배송비 0을 더하고 태그도 없었다.
+# 뽐뿌의 `유배`와 **정확히 같은 부류**다 — 저장된 가격은 실결제가가 아니라 하한이다(BM-02).
+#
+# `parse_bunjang`은 아직 프로덕션 호출자가 0이다(M2). 죽은 채로 썩지 않게 지금 잠근다.
+
+
+def test_bunjang_free_shipping_adds_nothing_and_tags_nothing():
+    payload = _bunjang_payload(free_shipping=True, price="800000")
+
+    (deal,) = parse_bunjang(payload, NOW)
+
+    assert deal.headline_price == 800_000
+    assert deal.applied_conditions == []
+
+
+def test_bunjang_paid_shipping_of_unknown_amount_is_marked():
+    """개인간 거래의 배송비는 응답에 금액이 없다. 0을 더하고 침묵하면 조용한 거짓말이다."""
+    payload = _bunjang_payload(free_shipping=False, price="800000")
+
+    (deal,) = parse_bunjang(payload, NOW)
+
+    assert deal.headline_price == 800_000  # 지어내지 않는다
+    assert SHIPPING_UNKNOWN in deal.applied_conditions
+    assert '유료배송(금액미상)' in deal.applied_conditions
+
+
+def test_bunjang_golden_marks_every_paid_shipping_item():
+    deals = parse_bunjang(_read("bunjang/find_v2_iphone.json"), NOW)
+
+    marked = [d for d in deals if SHIPPING_UNKNOWN in d.applied_conditions]
+    assert len(marked) == 12  # golden 20건 중 free_shipping=false가 12건
+    assert all(not d.raw['free_shipping'] for d in marked)
+
+
+def _bunjang_payload(*, free_shipping: bool, price: str) -> str:
+    import json as _json
+
+    return _json.dumps({
+        "list": [{
+            "pid": 1, "name": "아이폰15pro 256 S급", "price": price,
+            "update_time": 1783167297, "num_faved": "0", "status": "0",
+            "ad": False, "bizseller": False, "free_shipping": free_shipping,
+        }]
+    })

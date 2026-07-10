@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+from ..pipeline.price import PAID_SHIPPING_UNKNOWN, SHIPPING_UNKNOWN
 from .models import ParsedDeal
 
 
@@ -21,6 +22,7 @@ def parse_bunjang(payload: str, now: datetime | None = None) -> list[ParsedDeal]
     for item in data.get("list", []):
         pid = str(item["pid"])
         price_raw = str(item.get("price", "")).strip()
+        free_shipping = bool(item.get("free_shipping", False))
         deals.append(
             ParsedDeal(
                 site="bunjang",
@@ -31,6 +33,10 @@ def parse_bunjang(payload: str, now: datetime | None = None) -> list[ParsedDeal]
                 headline_price=int(price_raw) if price_raw.isdigit() else None,
                 posted_at=datetime.fromtimestamp(int(item["update_time"]), tz=timezone.utc),
                 status="ACTIVE" if str(item.get("status")) == "0" else "SOLD_OUT",
+                # `free_shipping: false`는 "배송비 0"이 아니라 **금액 미상**이다 — 응답에 금액이 없다.
+                # 뽐뿌의 `유배`와 같은 부류다: 저장된 가격은 실결제가가 아니라 하한이다(BM-02).
+                # golden 20건 중 12건이 여기 해당한다. 지어내지 않고 그 사실을 태그로 실어 보낸다.
+                applied_conditions=[] if free_shipping else [PAID_SHIPPING_UNKNOWN, SHIPPING_UNKNOWN],
                 # SEC-07 개인정보 최소화: 응답에는 `uid`(판매자 식별자)·`location`(동 단위 주소)·
                 # `imp_id`(광고 추적자)도 온다. **담지 않는다.** `raw`는 jsonb라 `item`을 통째로
                 # 넣기 쉬우므로, 허용집합을 `tests/test_privacy.py`가 golden 전수로 잠근다.

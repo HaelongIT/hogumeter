@@ -94,7 +94,8 @@ _CARD = re.compile(
     rf"|{_NOT_COMPOUND}[A-Z]카드"
     rf"|{_NOT_COMPOUND}카드\s*(?:{_CARD_CONTEXT}))"
 )
-_PAID_SHIPPING_UNKNOWN = "유료배송(금액미상)"
+# 사람이 읽는 설명 태그. 번개(`free_shipping: false`)도 같은 부류라 이 상수를 **참조**한다 — 사본 금지.
+PAID_SHIPPING_UNKNOWN = "유료배송(금액미상)"
 
 # **안정된 표식.** 배송비를 모른 채 0을 더한 가격은 실결제가가 아니라 **하한**이다.
 #
@@ -162,7 +163,7 @@ def classify_shipping(text: str) -> tuple[int, list[str]]:
         return value, []  # 금액을 안다 → 더하면 끝
 
     if "유배" in stripped:
-        return 0, [_PAID_SHIPPING_UNKNOWN, SHIPPING_UNKNOWN]
+        return 0, [PAID_SHIPPING_UNKNOWN, SHIPPING_UNKNOWN]
 
     if "무료" in stripped or "무배" in stripped:
         # 조건을 충족하는지 우리는 모른다 — 멤버십 여부·장바구니 합계를 알아야 한다.
@@ -207,7 +208,7 @@ def _extract_conditions(text: str) -> list[str]:
     conditions = [re.sub(r"\s+", "", tag) for tag in _CARD.findall(text)]
     if "유배" in text:
         # 설명 + 표식을 함께. 표식만으로는 왜인지 모르고, 설명만으로는 기계가 못 읽는다.
-        conditions += [_PAID_SHIPPING_UNKNOWN, SHIPPING_UNKNOWN]
+        conditions += [PAID_SHIPPING_UNKNOWN, SHIPPING_UNKNOWN]
     return list(dict.fromkeys(conditions))
 
 
