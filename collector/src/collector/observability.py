@@ -56,5 +56,16 @@ def counters(result: CycleResult) -> dict:
         "shipping_unknown": sum(
             1 for deal in result.deals if SHIPPING_UNKNOWN in deal.applied_conditions
         ),
+        # **사이트마다 편향이 다르다.** golden 실측: 번개 60% · 펨코 15% · 뽐뿌 4.8% · 루리웹 0%.
+        # 합산 하나로 내면 그 사실이 사라지고, 사이트 간 기준가를 섞어도 되는지 판단할 수 없다.
+        # 루리웹의 0%는 좋은 소식이 아니다 — 배송 무표기를 태그하지 않는다는 뜻이다(docs/91 Q-64).
+        "shipping_unknown_by_site": {
+            observation.site: sum(
+                1
+                for deal in result.deals
+                if deal.site == observation.site and SHIPPING_UNKNOWN in deal.applied_conditions
+            )
+            for observation in result.observations
+        },
         "stopped_sites": sorted(name for name, state in result.states.items() if state.stopped),
     }

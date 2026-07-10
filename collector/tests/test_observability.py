@@ -80,6 +80,7 @@ def test_counters_report_yield_per_site():
         "no_price": 0,
         "conditional": 0,
         "shipping_unknown": 0,
+        "shipping_unknown_by_site": {"ppomppu": 0, "ruliweb": 0, "fmkorea": 0},
         "stopped_sites": [],
     }
 
@@ -192,3 +193,30 @@ def test_no_price_zero_is_not_omitted():
 def _priceless(post_id: str) -> ParsedDeal:
     return ParsedDeal(site="ruliweb", post_id=post_id, title="가격 없는 글", url="u",
                       headline_price=None)
+
+
+def test_shipping_unknown_is_broken_down_by_site():
+    """사이트마다 편향이 다르다 — 합산 하나로는 그 사실이 사라진다.
+
+    golden 실측: 번개 60% · 펨코 15% · 뽐뿌 4.8% · 루리웹 0%. 폴링을 켠 사람은 "어느 사이트의
+    표본이 얼마나 하한인가"를 알아야 사이트 간 기준가를 섞을지 판단할 수 있다.
+    **0도 센다** — 루리웹의 0%는 좋은 소식이 아니라 배송 무표기를 태그하지 않는다는 뜻이다(Q-64).
+    """
+    result = _result(
+        [SiteObservation("ppomppu", Outcome.OK, 2), SiteObservation("ruliweb", Outcome.OK, 1)],
+        deals=[
+            _deal("a", [SHIPPING_UNKNOWN]),
+            _deal("b", ["카할"]),
+            ParsedDeal(site="ruliweb", post_id="c", title="t", url="u", headline_price=1000),
+        ],
+    )
+
+    c = counters(result)
+    assert c["shipping_unknown_by_site"] == {"ppomppu": 1, "ruliweb": 0}
+    assert c["shipping_unknown"] == 1  # 합산도 그대로 낸다
+
+
+def test_shipping_unknown_by_site_lists_every_polled_site_even_at_zero():
+    result = _result([SiteObservation("fmkorea", Outcome.OK, 0)], deals=[])
+
+    assert counters(result)["shipping_unknown_by_site"] == {"fmkorea": 0}
