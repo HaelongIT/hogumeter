@@ -31,6 +31,8 @@ paths:
 
 ## 스크립트가 지는 책임
 
-- **네트워크로 나가는 스크립트는 자기 자신에게도 opt-in 게이트를 건다**(`ALLOW_REAL_ROBOTS`·`COLLECTOR_ALLOW_NETWORK`). `.claude/hooks/guard.sh`는 **Bash 명령 문자열만** 보므로 `bash scripts/x.sh` 안의 호출을 못 본다(docs/91 Q-60).
+- **네트워크로 나가는 스크립트는 자기 자신에게도 opt-in 게이트를 건다**(`ALLOW_REAL_ROBOTS`·`COLLECTOR_ALLOW_NETWORK`). `.claude/hooks/guard.sh`는 **명령 문자열만** 보므로 `bash scripts/x.sh` 안의 호출을 못 본다(docs/91 Q-60).
+- **훅은 도구 이름으로 스코프된다.** `settings.json`의 `matcher`에 없는 도구로 같은 명령을 보내면 훅은 붙지 않는다 — `"Bash"`만 적어 둔 탓에 `PowerShell` 도구가 네트워크 가드와 push deny를 통째로 우회하고 있었다(현재 `"Bash|PowerShell"`). 게이트를 세울 땐 **어떤 도구 표면이 우회하는가를 열거한다.** (99: 2026-07-10)
+- **`guard.sh`는 파괴적 `git push`도 막는다** — `--force`·`-f`·`--force-with-lease`·`--delete`·`-d`·`--mirror`·`--prune`·`+refspec`·`:refspec`. 일반 푸시는 통과한다. 판정은 **세그먼트 단위**이고 `push`가 git의 서브커맨드일 때만 본다(그래야 `git commit -m "... --force ..."`나 `grep "git push --force"`가 오차단되지 않는다).
 - **드릴은 전용 프로젝트 이름·전용 포트·일회용 컨테이너에서 돈다.** 운영/개발 스택에 `docker compose down -v` 금지.
 - **출력 라벨은 ASCII로.** 한글은 콘솔 인코딩에 따라 깨지고, 깨진 로그는 읽히지 않는다. 문구를 `grep`하는 대신 마커(`REFUSED reason=...`)나 JSON을 본다.

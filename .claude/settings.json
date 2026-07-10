@@ -15,7 +15,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
@@ -28,9 +28,6 @@
     ]
   },
   "permissions": {
-    "deny": [
-      "Bash(git push *)"
-    ],
     "allow": [
       "Bash(uv run pytest:*)",
       "Bash(uv run python -m pytest:*)",
