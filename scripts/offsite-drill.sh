@@ -101,4 +101,25 @@ if aws s3api head-object --bucket "$BUCKET" --key "postgres/nonexistent.sql.gz" 
 	fail "없는 객체를 head 했는데 성공했다"
 fi
 
-echo "OFFSITE DRILL PASS: 업로드 -> 확인 -> 왕복 무결성 -> 미설정 경고"
+echo "--- 5) 오프사이트 신선도 게이트 (돌 수 있는 모양으로) ---"
+# **오프사이트는 조용히 꺼진다.** `.env`에서 `BACKUP_S3_BUCKET` 한 줄이 사라지면 업로드는
+# exit 0으로 넘어가고 로컬 신선도 게이트도 초록이다. 그 침묵을 잡는 게이트를 여기서 돌린다 —
+# 실 AWS 없이 MinIO에 대고. 사전 조건(방금 올린 객체)은 위 1~2단계가 이미 만들어 뒀다.
+BACKUP_S3_BUCKET="$BUCKET" bash "$root/scripts/check-offsite-freshness.sh" 26 ||
+	fail "방금 올렸는데 신선도 게이트가 실패한다"
+
+# 차단: 미설정이면 조용히 통과하지 않는다 ("설정을 지웠는데 게이트가 초록"이 가장 나쁘다).
+if BACKUP_S3_BUCKET='' bash "$root/scripts/check-offsite-freshness.sh" 26 >/dev/null 2>&1; then
+	fail "BACKUP_S3_BUCKET이 비었는데 신선도 게이트가 통과한다"
+fi
+# 차단: 객체가 없는 prefix면 실패한다 (업로드가 한 번도 성공하지 않은 상태).
+if BACKUP_S3_BUCKET="$BUCKET" BACKUP_S3_PREFIX="empty-prefix" \
+	bash "$root/scripts/check-offsite-freshness.sh" 26 >/dev/null 2>&1; then
+	fail "객체가 없는 prefix인데 신선도 게이트가 통과한다"
+fi
+# 차단: 한계를 0시간으로 좁히면 방금 올린 것도 오래됐다고 봐야 한다(나이 계산이 실제로 돈다).
+if BACKUP_S3_BUCKET="$BUCKET" bash "$root/scripts/check-offsite-freshness.sh" -1 >/dev/null 2>&1; then
+	fail "한계를 -1시간으로 줘도 통과한다 — 나이 계산이 돌지 않는다"
+fi
+
+echo "OFFSITE DRILL PASS: 업로드 -> 확인 -> 왕복 무결성 -> 미설정 경고 -> 신선도 게이트(통과 1 + 차단 3)"

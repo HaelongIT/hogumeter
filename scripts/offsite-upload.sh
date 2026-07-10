@@ -39,18 +39,11 @@ case "$(uname -s)" in
 MINGW* | MSYS*) host_dir=$(cd "$(dirname "$file")" && pwd -W) ;;
 esac
 
-aws() {
-	# MSYS_NO_PATHCONV: `-v host:/data`의 컨테이너 쪽 `/data`를 Git Bash가 변환하지 못하게 막는다.
-	MSYS_NO_PATHCONV=1 docker run --rm \
-		${OFFSITE_DOCKER_NETWORK:+--network "$OFFSITE_DOCKER_NETWORK"} \
-		-v "${host_dir}:/data" \
-		-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
-		-e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-ap-northeast-2}" \
-		-e AWS_EC2_METADATA_DISABLED=true \
-		-e AWS_S3_ADDRESSING_STYLE=path \
-		amazon/aws-cli:2.35.19 \
-		${BACKUP_S3_ENDPOINT:+--endpoint-url "$BACKUP_S3_ENDPOINT"} "$@"
-}
+# docker 인자 목록은 `check-offsite-freshness.sh`와 **한 곳에서** 공유한다 — 사본은 드리프트한다.
+export AWS_CLI_MOUNT="${host_dir}:/data"
+# shellcheck source=scripts/lib/aws-cli.sh
+. "$(dirname "$0")/lib/aws-cli.sh"
+aws() { aws_cli "$@"; }
 
 echo "offsite: s3://${BACKUP_S3_BUCKET}/${key} <- $(basename "$file") (${local_size} bytes)"
 aws s3 cp "/data/$(basename "$file")" "s3://${BACKUP_S3_BUCKET}/${key}" --only-show-errors
