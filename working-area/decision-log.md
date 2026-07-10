@@ -50,3 +50,13 @@
 - **왜 사본을 두나**: 계약이 DB(`deal_event.applied_conditions`)를 건너가므로 core가 문자열을 알아야 센다. 공유 스키마 파일을 만들 만큼 크지 않다(값 하나).
 - **드리프트 방어**: `scripts/check-tag-contract.sh`(CI `lint`). 사본 쪽 테스트는 자기일관적이라 드리프트를 못 잡는다는 것을 뮤테이션으로 확인했다.
 - **되돌리기**: 표식을 바꾸려면 DB의 기존 배열도 마이그레이션해야 한다(게이트는 리터럴만 본다). `DealTags` javadoc에 명시.
+
+## 2026-07-10 — 무중단 턴 종료 조건에서 "컨텍스트 한계"(③)를 삭제한다
+
+- **결정**: `CLAUDE.md` Autonomous 모드의 턴 종료 조건을 **셋에서 둘로** 줄인다. 삭제된 것은 ③ "컨텍스트가 한계에 가깝다".
+- **왜**: 이 도구의 시스템 프롬프트가 정반대를 말한다 — *"When the conversation grows long, some or all of the current context is summarized; the summary … is provided in the next context window so work can continue — **you don't need to wrap up early or hand off mid-task.**"* CLAUDE.md는 "OVERRIDE any default behavior"로 주입되므로 에이전트는 ③을 따랐고, 실제로 그 문장으로 턴을 끝냈다("컨텍스트가 한계에 가까워 이번 배치를 마칩니다"). 사용자는 세션마다 "이어서 진행하자"를 열 번 넘게 쳐야 했다.
+- **더 근본적으로**: ③은 **검증 불가능한 자기판정**이다. 남은 컨텍스트를 에이전트가 정확히 알 수 없으므로 언제든 발동할 수 있는 **만능 탈출구**였다. 저장소 자신의 규칙대로다 — *문서와 실행되는 계약이 모순이면 실행되는 쪽이 진실이다.*
+- **함께 고친 것**: ① "배치 매듭이면 보고"·"채팅 보고는 턴 마지막에 한 번" — 도구 호출 없는 메시지가 곧 턴 종료이므로 이 의식은 **보고를 쓰는 행위 자체를 종료 행위로** 만들었다. ② "일감이 없다"(②)에 4단계 탐색 절차를 달았다(절차 없는 조항은 두 번째 탈출구가 된다). ③ 기계적 규칙 신설: **정지조건이 아니면 모든 메시지는 도구 호출을 포함한다.**
+- **강제 장치**: 지침은 실행 가능한 계약이 아니라 강제할 수 없다. 그래서 **위반을 보이게** 만들었다 — 턴을 끝낼 때 `progress-log`에 `TURN-END: ①|② …` 마커를 남긴다. `grep 'TURN-END' working-area/progress-log.md`로 사후 감사한다. 컨텍스트를 사유로 든 항목이 하나라도 있으면 위반이고, 마커 없는 종료도 위반이다.
+- **되살리지 말 것**: ③이 "안전장치"처럼 보이면 이 항목을 다시 읽어라. 컨텍스트가 차면 하네스가 요약한다. 요약 뒤의 나를 위한 장치는 `progress-log`이지 턴 종료가 아니다.
+- **지침으로 못 고치는 것**: plan mode(Shift+Tab)가 켜지면 편집·커밋이 금지되고 `ExitPlanMode` 승인 왕복이 강제된다 — 무중단은 지침과 무관하게 끊긴다. `.claude/settings.json`에 `defaultMode`는 없다(세션 토글). 무중단 중 `EnterPlanMode`를 자발적으로 호출하지 않는다는 조항만 추가했다.
