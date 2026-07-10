@@ -16,6 +16,14 @@
 
 ---
 
+## 2026-07-10 — 스모크가 이벤트만 보고 종료 코드를 안 봤다 (프로세스 밖 계약)
+
+- **🔴 결함**: compose 주석도 규칙 파일도 계약을 또렷이 적어 뒀다 — "`restart: always`였다면 opt-in을 꺼둔 채로 refused 메시지를 영원히 반복했을 것이다." 그런데 **아무것도 그걸 강제하지 않았다.** 스모크 6단계는 `compose logs | tail -1`에서 `"event":"refused"`를 grep할 뿐이라, `always`로 바뀌어 무한 반복해도 **마지막 줄은 여전히 refused이므로 통과**한다. `test_main.py`는 `main()`이 0을 돌려주는 것까지만 본다 — **compose가 그 0을 어떻게 대접하는지는 프로세스 밖의 계약**이다.
+- **한 일**: 스모크 6-1 신설 — `docker inspect`로 `exitCode:restartCount:policy == 0:0:on-failure`를 직접 보고, `refused` 이벤트가 **정확히 1회**인지 센다(재시작 루프는 이벤트가 여러 번 나는 것으로도 잡힌다).
+- **뮤테이션으로 증명**: `docker-compose.override.yml`(untracked)로 `restart: always`를 덮어씌워 스모크를 돌렸더니 **6-1에서 FAIL**했다(`status=restarting`) — 정책 문자열이 아니라 **실제 동작**에서 잡혔다. 추적 파일은 한 글자도 건드리지 않았다.
+- **규칙 승격**: "**무엇을 출력했는가**로 **어떻게 끝났는가**를 단언하지 않는다."
+- **곁**: `.env.example` ↔ compose 환경변수 드리프트도 점검했다. 누락 0건(추가분 4개는 스크립트·미래 어댑터용).
+
 ## 2026-07-10 — 못 고치는 결함은 세어서 노출한다 (`cycle.conditional`)
 
 - **한 일**: collector의 `cycle` 이벤트에 **`conditional=N`** 카운터 추가(조건부 가격 딜 수, 0도 센다). Q-46(조건 태그가 `deal_event`에 도달하지 않는다)은 core 기존 파일이라 우리가 못 고친다. 그렇다고 조용히 두면 폴링을 켠 사람은 표본이 오염되는 줄 모른다.

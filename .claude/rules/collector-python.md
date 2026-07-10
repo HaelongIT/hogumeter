@@ -25,7 +25,7 @@ paths:
 
 ## 프로세스 수명 (compose가 이 계약을 읽는다)
 
-- **종료 코드로 말한다.** 정상 종료(opt-in off·SIGTERM) = `0`, 포기(적재 연속 실패) = `1`. `restart: on-failure`가 이 구분에 기댄다 — `always`로 바꾸면 opt-in 꺼진 컨테이너가 refused 메시지를 영원히 반복한다.
+- **종료 코드로 말한다.** 정상 종료(opt-in off·SIGTERM) = `0`, 포기(적재 연속 실패) = `1`. `restart: on-failure`가 이 구분에 기댄다 — `always`로 바꾸면 opt-in 꺼진 컨테이너가 refused 메시지를 영원히 반복한다. **로그로 수명을 단언하지 않는다**: 스모크 6-1이 `exitCode:restartCount:policy == 0:0:on-failure`와 `refused` 정확히 1회를 직접 본다(99: 2026-07-10).
 - **신호는 현재 사이클을 마치고 받는다.** 틱 대기는 `time.sleep`이 아니라 `Event.wait`다 — `time.sleep`은 신호 처리 후 **남은 시간을 마저 자서**(PEP 475) docker 유예를 넘긴다. 신호 등록 같은 부작용은 `__main__` 가장자리에만 두고 `main()`은 주입받는다.
 - **적재 실패는 뭉개지도 죽지도 않는다.** `sink_error`로 유실 건수를 남기고 계속하되, 연속 `SINK_FAILURE_LIMIT`회면 스스로 내려온다. "수집은 되는데 저장이 안 되는 상태"로 도는 것이 최악이다. 실패 사이클의 `written`은 `0`이 아니라 **부재**여야 한다. (99: 2026-07-09)
 

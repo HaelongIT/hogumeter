@@ -428,3 +428,13 @@
 - **교훈(규칙화)**: **"컬럼이 있다"는 "값이 도달한다"가 아니다.** DDL → 엔티티 매핑 → 도메인 필드 → 생성 지점 → 표시까지, **다섯 구간 중 하나만 끊겨도 값은 사라진다.** 그리고 끊긴 구간은 예외도 로그도 남기지 않는다. 저장 계약이 있는 필드는 **DDL이 아니라 화면(또는 최종 소비처)에서 거꾸로** 추적한다.
 - **보드가 또 틀렸다**: Q-46의 재개 트리거는 "`raw_deal_post`에 컬럼 추가"였다. **컬럼을 더해도 `DealEvent`에 필드가 없어 값은 여전히 도달하지 않는다.** 구현 수단을 적어 두면 다음 세션이 그걸 요구사항의 제약으로 읽는다 — Q-50·Q-48·Q-34에 이어 **네 번째**다. 재개 트리거는 언제나 "무엇이 참이 되어야 하는가"로 쓴다.
 - **관련 기록**: `docs/98`(비율 실측 표), `pre-deploy §F`([필수·선결] — 폴링을 켜는 순간 표본이 조용히 오염된다), `docs/30` M1 블로커 0-2.
+
+---
+
+## 2026-07-10 — 스모크가 이벤트만 보고 **종료 코드를 안 봤다** (프로세스 밖 계약)
+
+- **맥락**: `docker-compose.yml`의 collector 주석은 계약을 또렷이 적어 뒀다 — "`on-failure`: exit 0(정상 종료·opt-in off)엔 재시작하지 않고, exit 1(적재 연속 실패)에만 재시작한다. `always`였다면 opt-in을 꺼둔 채로 refused 메시지를 영원히 반복했을 것이다." `.claude/rules/collector-python.md`에도 같은 경고가 있다.
+- **증상**: **아무것도 그걸 강제하지 않았다.** 스모크 6단계는 `compose logs | tail -1`에서 `"event":"refused"`를 grep할 뿐이다. `restart: always`로 바뀌면 collector는 refused를 무한 반복하는데 — **마지막 줄은 여전히 refused이므로 스모크는 통과한다.** `test_main.py`는 `main()`이 0을 돌려주는 것까지만 본다. **compose가 그 0을 어떻게 대접하는지는 프로세스 밖의 계약**이라 어떤 단위 테스트도 보지 않는다.
+- **교훈(규칙화)**: **"프로세스가 무엇을 출력했는가"와 "프로세스가 어떻게 끝났는가"는 다른 계약이다.** 로그를 grep해 수명을 단언하지 않는다 — 종료 코드·재시작 횟수·재시작 정책을 **직접** 본다(`docker inspect -f '{{.State.ExitCode}}:{{.RestartCount}}:{{.HostConfig.RestartPolicy.Name}}'`). 그리고 재시작 루프는 **이벤트가 여러 번 나는 것**으로도 잡힌다(`refused`가 정확히 1번).
+- **뮤테이션으로 증명**: `docker-compose.override.yml`로 `restart: always`를 덮어씌워 스모크를 돌렸더니 **6-1에서 FAIL**했다(`status=restarting`). 추적 파일은 한 글자도 건드리지 않았다 — compose는 override 파일을 자동으로 읽는다.
+- **관련 테스트**: `scripts/smoke.sh` 6-1 — `exitCode:restartCount:policy == 0:0:on-failure` + `refused` 이벤트 정확히 1회.

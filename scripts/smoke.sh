@@ -399,6 +399,31 @@ collector_log=$(compose logs --no-log-prefix collector 2>&1 | grep '^{' | tail -
 echo "$collector_log" | grep -q '"event":"refused"' || fail "collector가 refused 이벤트를 내지 않았다: $collector_log"
 echo "$collector_log" | grep -q '"reason":"network_opt_in_missing"' || fail "정지 사유가 기록되지 않았다"
 
+echo "--- 6-1) collector 수명 계약: exit 0 · 재시작 없음 · on-failure (프로세스 밖 계약) ---"
+# 어떤 단위 테스트도 이걸 못 본다. `main()`이 0을 돌려주는 것은 `test_main.py`가 보지만,
+# **compose가 그 0을 어떻게 대접하는가**는 프로세스 밖의 계약이다.
+# `restart: always`로 바뀌면 opt-in 꺼진 컨테이너가 refused를 영원히 반복한다 — 그런데
+# 위의 `tail -1` grep은 그때도 통과한다. 그래서 종료 코드와 재시작 횟수를 직접 본다.
+collector_cid=$(compose ps -aq collector)
+[ -n "$collector_cid" ] || fail "collector 컨테이너를 찾지 못했다"
+
+# 정상 종료를 기다린다(빌드 직후엔 아직 running일 수 있다).
+for _ in $(seq 30); do
+	collector_state=$(docker inspect -f '{{.State.Status}}' "$collector_cid" 2>/dev/null || echo "?")
+	[ "$collector_state" = "exited" ] && break
+	sleep 1
+done
+[ "$collector_state" = "exited" ] || fail "opt-in이 꺼졌는데 collector가 종료하지 않았다(status=$collector_state)"
+
+collector_facts=$(docker inspect \
+	-f '{{.State.ExitCode}}:{{.RestartCount}}:{{.HostConfig.RestartPolicy.Name}}' "$collector_cid")
+[ "$collector_facts" = "0:0:on-failure" ] ||
+	fail "collector 수명 계약 위반 (exitCode:restartCount:policy = $collector_facts, 기대: 0:0:on-failure)"
+
+# 재시작 루프면 refused가 여러 줄이다. 여기선 `grep -c`가 맞다 — 이벤트가 줄당 하나이므로.
+refused_count=$(compose logs --no-log-prefix collector 2>&1 | grep -c '"event":"refused"')
+[ "$refused_count" = 1 ] || fail "refused 이벤트가 ${refused_count}번 났다 — 재시작 루프를 도는 중이다"
+
 echo "--- 7) SEC-02 Basic Auth: 켜면 막고, 끄면 열린다 ---"
 # 위 1~6은 auth 미설정(기본 off) 경로였다. 이제 켠 경로를 같은 이미지로 검증한다.
 #
