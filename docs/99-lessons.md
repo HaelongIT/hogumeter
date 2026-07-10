@@ -472,3 +472,13 @@
 - **교훈(규칙화)**: **드릴은 "돌 수 있는 모양"으로 만든다.** 사전 조건(덤프·시드 데이터)을 스스로 만들어 내지 못하는 드릴은 CI에 걸리지 않고, 걸리지 않는 드릴은 사고가 나야 처음 실행된다. 그리고 복원은 **스키마가 아니라 행**으로 단언한다.
 - **한 일**: `scripts/backup-drill.sh` 신설 — 격리 스택 기동(core가 Flyway로 스키마 생성) → **제품 1건 등록** → `backup.sh` → `restore-drill.sh`. CI `backup` 잡. `restore-drill.sh`에 `product ≥ 1` 단언 추가. `guard.test.sh`를 `lint` 잡에 추가.
 - **뮤테이션으로 증명**: 드릴 복사본에서 "행 심기" 단계만 빼고 돌렸더니 `restore-drill: product 행이 0입니다`로 FAIL했다. 그전이라면 `RESTORE DRILL PASS`였다.
+
+---
+
+## 2026-07-10 — compose의 수명 선언은 **사고가 나야** 효력이 드러난다
+
+- **맥락**: `docker-compose.yml`은 수명 계약을 넷 선언한다 — 상주 3종 `restart: unless-stopped`, collector `restart: on-failure` + `stop_grace_period: 30s`. 주석도 왜 그런지 적어 뒀다.
+- **증상**: collector 것만(6-1) 확인하고 있었다. 나머지 셋은 아무도 안 봤다. `restart: no`로 바뀌면 **core가 한 번 죽고 영영 돌아오지 않는데**, 그 사실은 실제로 죽는 날에야 드러난다. `stop_grace_period`를 지우면 docker 기본 10초로 떨어져 collector의 사이클(3사 HTTP 요청)이 SIGKILL에 찢긴다.
+- **교훈(규칙화)**: **"사고가 나야 효력이 드러나는 설정"은 평상시에 단언한다.** 재시작 정책·종료 유예·볼륨 종류·헬스체크 명령이 그렇다. 코드가 아니라 **런타임 객체**를 본다(`docker inspect -f '{{.HostConfig.RestartPolicy.Name}}'`, `'{{.Config.StopTimeout}}'`). 선언을 grep하는 것으로는 충분치 않다 — override·기본값·오타가 실제 값을 바꾼다.
+- **뮤테이션으로 증명**: override로 ① `core: restart: "no"` ② `collector: stop_grace_period: 10s`를 각각 얹어 돌렸더니 0-3이 둘 다 잡았다(`'no'` / `'10'`).
+- **관련 테스트**: `scripts/smoke.sh` 0-3.

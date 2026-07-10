@@ -142,6 +142,23 @@ for _ in $(seq 30); do
 done
 [ "${core_back:-0}" = 1 ] || fail "postgres 재생성 후 core가 UP으로 복귀하지 않는다"
 
+echo "--- 0-3) 수명 정책: 상주 3종은 unless-stopped, collector는 유예 30초 ---"
+# compose의 `restart:`·`stop_grace_period:`는 **사고가 나야** 효력이 드러난다. 그때까지는
+# 아무도 틀렸는지 모른다. `restart: no`로 바뀌면 core가 한 번 죽고 영영 돌아오지 않는다.
+for service in postgres core web; do
+	service_cid=$(compose ps -aq "$service")
+	[ -n "$service_cid" ] || fail "$service 컨테이너를 찾지 못했다"
+	restart_policy=$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' "$service_cid")
+	[ "$restart_policy" = "unless-stopped" ] ||
+		fail "$service 의 재시작 정책이 unless-stopped가 아니다: '$restart_policy' — 죽으면 안 돌아온다"
+done
+
+# collector의 한 사이클엔 3사 HTTP 요청이 들어 있다. docker 기본 유예(10초)로는 짧아
+# SIGKILL이 사이클을 찢는다. `stop_grace_period: 30s` → 컨테이너의 StopTimeout.
+collector_grace=$(docker inspect -f '{{.Config.StopTimeout}}' "$(compose ps -aq collector)")
+[ "$collector_grace" = "30" ] ||
+	fail "collector 종료 유예가 30초가 아니다: '$collector_grace' (docker 기본 10초면 사이클이 찢긴다)"
+
 echo "--- 1) 정적 자산이 서빙된다 ---"
 curl -fsS "${WEB}/" | grep -q '<div id="root">' || fail "index.html이 아니다"
 

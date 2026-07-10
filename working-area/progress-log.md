@@ -16,6 +16,13 @@
 
 ---
 
+## 2026-07-10 — 사고가 나야 드러나는 설정을 평상시에 단언한다 (스모크 0-3)
+
+- **🔴 결함**: compose가 수명 계약을 넷 선언하는데(상주 3종 `unless-stopped`, collector `on-failure` + `stop_grace_period: 30s`) **collector 것만 검증하고 있었다.** `restart: no`로 바뀌면 core가 한 번 죽고 **영영 돌아오지 않는데**, 그 사실은 실제로 죽는 날에야 드러난다.
+- **한 일**: 스모크 0-3 — 상주 3종의 `RestartPolicy.Name == unless-stopped`, collector의 `Config.StopTimeout == 30`을 `docker inspect`로 직접 본다. **선언을 grep하지 않고 런타임 객체를 본다** — override·기본값·오타가 실제 값을 바꾼다.
+- **뮤테이션으로 증명**: override로 ① `core: restart: "no"` ② `collector: stop_grace_period: 10s`를 각각 얹었더니 둘 다 잡혔다(`'no'` / `'10'`).
+- **다음**: `프로세스 밖 계약` 렌즈가 다섯 번 연속 통했다(collector 수명 · env 드리프트 · 볼륨 영속 · CI 커버리지 · 수명 정책).
+
 ## 2026-07-10 — 🔴 돌지 않는 드릴은 드릴이 아니다 (REL-04 복원 드릴이 CI에 없었다)
 
 - **어떻게 찾았나**: CLAUDE.md의 명령표가 복구 스크립트를 묶어 **"전부 CI가 돌린다"**고 적어 뒀다. `ci.yml`이 실제로 부르는 것을 grep해 `scripts/*.sh`와 전수 대조했다.
