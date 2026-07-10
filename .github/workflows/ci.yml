@@ -11,7 +11,7 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: gitleaks (히스토리 전체)
@@ -30,7 +30,7 @@ jobs:
       run:
         working-directory: core
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -45,7 +45,7 @@ jobs:
       run:
         working-directory: collector
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
@@ -60,7 +60,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -77,7 +77,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: shellcheck
         run: |
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.11.0 \
@@ -102,7 +102,7 @@ jobs:
       run:
         working-directory: .
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
@@ -114,7 +114,7 @@ jobs:
   rollback:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: 마이그레이션 롤백 리허설
         run: bash scripts/rollback-drill.sh
 
@@ -125,7 +125,7 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: 백업→복원 왕복 리허설 (격리 스택 + 일회용 컨테이너)
         run: bash scripts/backup-drill.sh
 
@@ -134,7 +134,7 @@ jobs:
   offsite:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: 오프사이트 백업 리허설 (MinIO)
         run: bash scripts/offsite-drill.sh
 
@@ -145,6 +145,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [core, collector, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: 종단 스모크 (web -> nginx -> core -> postgres)
         run: bash scripts/smoke.sh
