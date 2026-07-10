@@ -43,6 +43,17 @@ _FREE_SHIPPING = re.compile(r"무료\s*배송|무배")
 _CARD = re.compile(r"(카할|[A-Za-z0-9가-힣]+카드)")
 _PAID_SHIPPING_UNKNOWN = "유료배송(금액미상)"
 
+# **안정된 표식.** 배송비를 모른 채 0을 더한 가격은 실결제가가 아니라 **하한**이다.
+#
+# `카할`(카드할인)과 섞이면 안 된다: 카할은 확정본 AC-2가 허용한 as-posted 값이고(그 카드
+# 보유자에겐 정확하다), 이쪽은 BM-02의 저장 기준("실결제가 + 배송비") 자체를 못 지킨 값이다.
+# 표본이 실제보다 **낮게** 편향되므로 기준가가 내려가고, 진짜 좋은 딜이 판정을 못 받는다(놓침).
+#
+# 설명 태그(`유료배송(금액미상)`·`조건부무료배송:와우무배`)는 사람이 읽으라고 있고, 소비처는
+# 이 표식 하나만 보면 된다 — 산문을 substring 매칭하게 만들지 않는다. 값을 지어내지 않는 대신
+# **모른다는 사실을 값 옆에 실어 보낸다.**
+SHIPPING_UNKNOWN = "배송비미상"
+
 
 @dataclass
 class NormalizedPrice:
@@ -103,7 +114,8 @@ def _extract_conditions(text: str) -> list[str]:
     # 카드명·카드할인 등 조건 태그만 보존(역산 금지). 중복 제거·순서 유지.
     conditions = list(_CARD.findall(text))
     if "유배" in text:
-        conditions.append(_PAID_SHIPPING_UNKNOWN)
+        # 설명 + 표식을 함께. 표식만으로는 왜인지 모르고, 설명만으로는 기계가 못 읽는다.
+        conditions += [_PAID_SHIPPING_UNKNOWN, SHIPPING_UNKNOWN]
     return list(dict.fromkeys(conditions))
 
 

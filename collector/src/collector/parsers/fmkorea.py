@@ -6,7 +6,7 @@ from datetime import datetime
 
 from bs4 import BeautifulSoup
 
-from ..pipeline.price import normalize_price
+from ..pipeline.price import SHIPPING_UNKNOWN, normalize_price
 from ..pipeline.timestamps import parse_board_time
 from .models import ParsedDeal
 
@@ -76,8 +76,11 @@ def _hotdeal_price(li) -> tuple[int | None, list[str]]:
 
     conditions = list(normalized.applied_conditions)
     if _is_conditional_free_shipping(shipping_text):
-        conditions.append(f"조건부무료배송:{shipping_text}")
-    return normalized.headline_price, conditions
+        # 조건부 무료배송에 0을 더했다. 조건을 충족하는지 우리는 모른다 — `와우무배`·`네멤무료`는
+        # 멤버십 여부를, `1만5천원무료`는 장바구니 합계를 알아야 한다(실측: 10,980원 딜에 붙어 있었다).
+        # 그러므로 이 값은 실결제가가 아니라 **하한**이다. 설명 + 안정된 표식을 함께 단다.
+        conditions += [f"조건부무료배송:{shipping_text}", SHIPPING_UNKNOWN]
+    return normalized.headline_price, list(dict.fromkeys(conditions))
 
 
 def _is_conditional_free_shipping(shipping_text: str) -> bool:

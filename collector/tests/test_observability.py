@@ -9,6 +9,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from collector.observability import counters, event
+from collector.pipeline.price import SHIPPING_UNKNOWN
 from collector.parsers.models import ParsedDeal
 from collector.scheduler.loop import CycleResult, SiteObservation
 from collector.scheduler.policy import Alert, Outcome, SiteState
@@ -77,6 +78,7 @@ def test_counters_report_yield_per_site():
         "blocked": 0,
         "alerts": 0,
         "conditional": 0,
+        "shipping_unknown": 0,
         "stopped_sites": [],
     }
 
@@ -117,9 +119,9 @@ def test_zero_yield_is_visible_not_hidden():
 def test_counters_count_conditional_prices():
     """조건부 가격(`카할`·`유료배송(금액미상)`)은 **무조건 가격이 아니다.**
 
-    그 태그는 `raw._derived`까지만 가고 `deal_event`에 도달하지 않는다(docs/91 Q-46) — 즉
-    기준가 표본이 조용히 오염된다. 고칠 수 없는 결함은 **세어서 노출한다**. 폴링을 켜는 사람이
-    `docker logs`에서 오염률을 바로 본다(골든 실측: 뽐뿌 9.5% · 펨코 15%).
+    태그는 이제 `raw._derived` → `deal_event.applied_conditions`까지 도달한다(Q-46 절반 해소,
+    `PreserveAppliedConditionsUseCase`). 그래도 여기서 세는 이유: 폴링을 켜는 사람이 `docker logs`에서
+    비율을 즉시 본다(골든 실측: 뽐뿌 9.5% · 펨코 15%). 화면·알림 표시는 아직 없다.
     """
     result = _result(
         [SiteObservation("ppomppu", Outcome.OK, 3)],
@@ -143,3 +145,22 @@ def test_counters_serialize_cleanly_as_an_event():
 
     line.encode("cp949")
     assert json.loads(line)["by_site"] == {"ppomppu": 21}
+
+
+def test_shipping_unknown_is_a_strict_subset_of_conditional():
+    """배송비를 모른 채 0을 더한 딜만 따로 센다. `카할`은 as-posted로 옳은 값이라 여기 들지 않는다.
+
+    이 수가 0이 아니면 표본이 실제보다 **낮게** 편향돼 있다는 뜻이다(기준가가 내려가 좋은 딜을 놓친다).
+    폴링을 켠 사람이 `docker logs`에서 오염률을 바로 본다 — 로그에도 없으면 아무도 모른다.
+    """
+    result = _result(
+        [SiteObservation("ppomppu", Outcome.OK, 3)],
+        deals=[
+            _deal("a", ["카할"]),
+            _deal("b", ["유료배송(금액미상)", SHIPPING_UNKNOWN]),
+            _deal("c", ["조건부무료배송:와우무배", SHIPPING_UNKNOWN]),
+        ],
+    )
+
+    assert counters(result)["conditional"] == 3
+    assert counters(result)["shipping_unknown"] == 2  # 카할은 배송비 문제가 아니다

@@ -135,3 +135,46 @@ def test_paid_shipping_of_unknown_amount_is_tagged():
     assert result is not None
     assert result.headline_price == 16_450
     assert "유료배송(금액미상)" in result.applied_conditions
+
+
+# ── 배송비를 모른 채 0을 더한 가격은 "하한"이지 "실결제가"가 아니다 ──────────
+#
+# BM-02의 저장 기준은 **실결제가 + 배송비**다. `유배`(유료배송 금액미상)는 배송비를 알 수 없어
+# 0을 더한다 — 즉 저장된 값은 실제보다 **낮다.** `카할`(카드할인)과는 성질이 완전히 다르다:
+# 카할은 확정본이 허용한 as-posted 가격이고(그 카드 보유자에겐 정확하다), 이쪽은 **틀린 값**이다.
+#
+# 둘이 같은 `applied_conditions` 목록에 문자열로 섞여 있으면 소비처가 구별할 수 없다.
+# 안정된 표식(`배송비미상`)을 함께 단다 — 산문을 substring 매칭하게 만들지 않는다.
+
+from collector.pipeline.price import SHIPPING_UNKNOWN  # noqa: E402
+
+
+def test_paid_shipping_of_unknown_amount_is_marked_as_a_lower_bound():
+    result = normalize_price("[롯데온]폴햄 기본 면반팔 3+1팩 (16,450원/유배)")
+
+    assert result.headline_price == 16450  # 배송비를 지어내지 않는다
+    assert SHIPPING_UNKNOWN in result.applied_conditions
+    assert "유료배송(금액미상)" in result.applied_conditions  # 사람이 읽을 설명도 남긴다
+
+
+def test_card_discount_is_not_a_shipping_problem():
+    """`카할`은 as-posted로 옳은 값이다(확정본 AC-2). 배송비 표식을 달면 안 된다 — 오차단."""
+    result = normalize_price("(카할180만원대/무료)")
+
+    assert result.applied_conditions == ["카할"]
+    assert SHIPPING_UNKNOWN not in result.applied_conditions
+
+
+def test_known_paid_shipping_is_added_and_not_marked():
+    """금액을 아는 유료배송은 더하면 끝이다. 표식은 '모른다'는 뜻이지 '유료'라는 뜻이 아니다."""
+    result = normalize_price("(13,490원/3,000원)")
+
+    assert result.headline_price == 16490
+    assert SHIPPING_UNKNOWN not in result.applied_conditions
+
+
+def test_unconditional_free_shipping_is_not_marked():
+    result = normalize_price("(11,800원/무료)")
+
+    assert result.headline_price == 11800
+    assert result.applied_conditions == []

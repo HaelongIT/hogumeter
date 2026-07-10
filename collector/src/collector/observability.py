@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
+from .pipeline.price import SHIPPING_UNKNOWN
 from .scheduler.loop import CycleResult
 from .scheduler.policy import Outcome
 
@@ -46,5 +47,11 @@ def counters(result: CycleResult) -> dict:
         "blocked": sum(1 for o in result.observations if o.outcome is Outcome.BLOCKED),
         "alerts": len(result.alerts),
         "conditional": sum(1 for deal in result.deals if deal.applied_conditions),
+        # `conditional`의 부분집합. 배송비를 모른 채 0을 더한 딜 — 저장된 가격은 실결제가가
+        # 아니라 **하한**이고 기준가를 아래로 끈다(BM-02, docs/91 Q-46). 폴링을 켠 사람이
+        # `docker logs`에서 이 비율을 바로 본다. 0도 센다(OBS-02).
+        "shipping_unknown": sum(
+            1 for deal in result.deals if SHIPPING_UNKNOWN in deal.applied_conditions
+        ),
         "stopped_sites": sorted(name for name, state in result.states.items() if state.stopped),
     }
