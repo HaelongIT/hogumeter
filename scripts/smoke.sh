@@ -159,6 +159,27 @@ collector_grace=$(docker inspect -f '{{.Config.StopTimeout}}' "$(compose ps -aq 
 [ "$collector_grace" = "30" ] ||
 	fail "collector 종료 유예가 30초가 아니다: '$collector_grace' (docker 기본 10초면 사이클이 찢긴다)"
 
+echo "--- 0-4) SEC-02: 공개 포트는 전부 루프백에만 바인딩된다 ---"
+# `"127.0.0.1:${CORE_PORT}:8080"`에서 접두사 하나가 빠지면 **인증 없는 core REST가 0.0.0.0에 열린다**
+# (인증은 nginx에만 있다). postgres도 마찬가지다. compose 파일을 grep하는 것으로는 부족하다 —
+# override·기본값이 실제 바인딩을 바꾼다. 런타임 객체를 본다.
+for service in postgres core web; do
+	service_cid=$(compose ps -q "$service")
+	[ -n "$service_cid" ] || fail "$service 컨테이너를 찾지 못했다"
+	port_binds=$(docker inspect \
+		-f '{{range $p, $conf := .NetworkSettings.Ports}}{{range $conf}}{{$p}}={{.HostIp}} {{end}}{{end}}' \
+		"$service_cid")
+	[ -n "$port_binds" ] || fail "$service 에 공개 포트가 없다(스모크가 접근하려면 있어야 한다)"
+	case "$port_binds" in
+	*=0.0.0.0*) fail "$service 가 모든 인터페이스에 열려 있다: $port_binds (인증은 nginx에만 있다)" ;;
+	*=::*) fail "$service 가 IPv6 전역에 열려 있다: $port_binds" ;;
+	esac
+	case "$port_binds" in
+	*=127.0.0.1*) ;;
+	*) fail "$service 의 바인딩이 루프백이 아니다: $port_binds" ;;
+	esac
+done
+
 echo "--- 1) 정적 자산이 서빙된다 ---"
 curl -fsS "${WEB}/" | grep -q '<div id="root">' || fail "index.html이 아니다"
 
