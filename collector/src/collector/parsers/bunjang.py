@@ -31,6 +31,9 @@ def parse_bunjang(payload: str, now: datetime | None = None) -> list[ParsedDeal]
                 headline_price=int(price_raw) if price_raw.isdigit() else None,
                 posted_at=datetime.fromtimestamp(int(item["update_time"]), tz=timezone.utc),
                 status="ACTIVE" if str(item.get("status")) == "0" else "SOLD_OUT",
+                # SEC-07 개인정보 최소화: 응답에는 `uid`(판매자 식별자)·`location`(동 단위 주소)·
+                # `imp_id`(광고 추적자)도 온다. **담지 않는다.** `raw`는 jsonb라 `item`을 통째로
+                # 넣기 쉬우므로, 허용집합을 `tests/test_privacy.py`가 golden 전수로 잠근다.
                 raw={
                     "ad": item.get("ad", False),
                     "bizseller": item.get("bizseller", False),
