@@ -13,7 +13,6 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 fail=0
-case_no=0
 
 # fake_root <디렉토리> — 최소 트리(마이그레이션 1개 + 보드 + 빈 allowlist)
 fake_root() {
@@ -40,9 +39,11 @@ check() { # expected_exit  label  root
 	fi
 }
 
-new_case() { # 라벨 없이 다음 일회용 root 경로를 찍는다
-	case_no=$((case_no + 1))
-	printf '%s/r%s' "$work" "$case_no"
+new_case() { # 다음 **일회용** root 경로를 찍는다
+	# `$(new_case)`는 명령 치환 = **서브셸**이라 `case_no=$((case_no+1))`이 부모로 돌아오지 않는다.
+	# 카운터로 이름을 지으면 모든 케이스가 `r1`을 재사용하고, 앞 케이스가 남긴 마이그레이션 파일이
+	# 뒤 케이스에 섞여 **의도하지 않은 이유로 통과**한다(2026-07-10 실측).
+	mktemp -d "$work/rXXXXXX"
 }
 
 echo "── 통과해야 함 (exit 0) — 오차단은 게이트를 꺼지게 만든다 ──"

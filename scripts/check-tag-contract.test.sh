@@ -11,12 +11,14 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 fail=0
-case_no=0
 
 # fake <python값> <java값> <web값> — 빈 문자열이면 그 모듈이 상수를 아예 쓰지 않는다.
+#
+# **`mktemp`로 매번 새 디렉토리.** `$(fake …)`는 명령 치환 = 서브셸이라 카운터 증가가 부모로
+# 돌아오지 않는다 — 카운터로 이름을 지으면 모든 케이스가 같은 디렉토리를 재사용한다(2026-07-10 실측).
 fake() {
-	case_no=$((case_no + 1))
-	local r="$work/r$case_no"
+	local r
+	r=$(mktemp -d "$work/rXXXXXX")
 	mkdir -p "$r/collector/src/collector/pipeline" "$r/core/src/main/java/dev/hogumeter/core/domain/deal" \
 		"$r/web/src/review"
 	if [ -n "$1" ]; then
