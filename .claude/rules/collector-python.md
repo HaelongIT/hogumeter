@@ -46,3 +46,7 @@ paths:
 - 사이트 셀렉터·차단 징후·fixture 채취일의 실측은 `docs/98-field-notes.md`에 기록한다.
 - **배송비를 모르면 가격은 "하한"이다.** `유배`(뽐뿌)·`조건부무료배송:*`(펨코 — 멤버십·장바구니 임계)는 배송비 0을 더한 값이라 BM-02의 "실결제가 + 배송비"를 못 지킨다. 값을 지어내지 않고 안정된 표식 `SHIPPING_UNKNOWN`(`pipeline/price.py`)을 설명 태그 옆에 함께 단다. `카할`은 **여기 들지 않는다** — 확정본 AC-2가 허용한 as-posted 값이다. 카운터도 `conditional`과 `shipping_unknown`으로 나눈다(후자는 전자의 진부분집합). golden 실측 69딜 중 4건(5.8%). (99·98: 2026-07-10)
 - **SEC-07: `raw`(jsonb)에 담는 키는 허용집합 안에서만 늘린다.** 번개 응답에는 `uid`(판매자 식별자)·`location`(동 단위 주소)·`imp_id`(광고 추적자)가 온다 — `raw={**item}` 한 줄이면 전부 DB로 간다. `tests/test_privacy.py`가 golden 전수로 키와 **값**을 함께 잠근다(키 이름만 바꾼 우회도 잡는다). (99: 2026-07-10)
+
+## 파일 패치
+
+- **`pathlib.Path.write_text`는 Windows에서 `\n`을 `\r\n`으로 번역한다**(`newline=None` 기본). `read_text`가 반대로 번역하므로 읽고 쓰는 동안엔 티가 안 난다 — `.java`·`.sh`를 그렇게 패치하면 줄끝이 통째로 바뀐다. 바이트로 다루거나(`read_bytes`/`write_bytes`) `newline=""`을 명시한다. **애초에 소스 패치는 `Edit` 도구로 한다.** (99: 2026-07-10)
