@@ -58,6 +58,8 @@ describe('DecisionPage', () => {
     expect(screen.getByLabelText('기준가')).toHaveTextContent('핫딜 기준가 820,000원')
     expect(screen.getByLabelText('기준가')).toHaveTextContent('12건(교차 3건)')
     expect(screen.getByLabelText('갭')).toHaveTextContent('70,000원 비쌈')
+    // "기준가보다 비싸다"만으로는 기다릴지 말지 못 정한다 — 이 기간에 얼마까지 내려갔었나.
+    expect(screen.getByLabelText('기간 최저')).toHaveTextContent('기간 최저 780,000원 (2026-05-02)')
     expect(screen.getByLabelText('딜 주기')).toHaveTextContent('간격 median 28일')
     expect(screen.getByRole('link', { name: '원문' })).toHaveAttribute('href', 'https://ppomppu/1')
   })

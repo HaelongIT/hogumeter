@@ -3,7 +3,7 @@ import { ApiFailure, api } from '../api/client'
 import type { BenchmarkView, CadenceView, ProductSummary, SignalView } from '../api/types'
 import { AlertPolicyPanel } from '../policy/AlertPolicyPanel'
 import { PurchasePanel } from '../purchase/PurchasePanel'
-import { benchmarkLine, cadenceLine, gapLine, signalBadge } from './present'
+import { benchmarkLine, cadenceLine, gapLine, lowestLine, signalBadge } from './present'
 
 interface Loaded {
   signal: SignalView
@@ -124,6 +124,8 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
 
           <p aria-label="기준가">{benchmarkLine(loaded.benchmark)}</p>
           <p aria-label="갭">{gapLine(loaded.benchmark)}</p>
+          {/* "기준가보다 비싸다"만으로는 기다릴지 말지 못 정한다 — 이 기간에 얼마까지 내려갔었나. */}
+          {lowestLine(loaded.benchmark) && <p aria-label="기간 최저">{lowestLine(loaded.benchmark)}</p>}
           <p aria-label="딜 주기">{cadenceLine(loaded.cadence)}</p>
 
           {loaded.benchmark.latestDeal && (

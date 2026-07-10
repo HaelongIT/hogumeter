@@ -38,6 +38,33 @@ export function benchmarkLine(view: BenchmarkView): string {
   return `핫딜 기준가 ${won(view.benchmarkPrice)}${goodDeal} · ${sample}${expanded}`
 }
 
+/**
+ * 기간 최저가와 그 날짜. **"기준가보다 비싸다"만으로는 기다릴지 말지 못 정한다** —
+ * 이 기간에 얼마까지 내려간 적이 있는지, 그게 언제였는지가 "지금 살까"의 근거다.
+ *
+ * `periodLowest`는 관측된 사실(실제 딜)이라 표본이 적어도 그대로 말한다. 다만 **현재가 미확립(0)이면
+ * 갭을 그리지 않는다**(`gapLine`과 같은 규칙, Q-53).
+ *
+ * @returns 관측된 최저가가 없으면 `null` — "0원"이나 "최저 없음"을 지어내지 않는다.
+ */
+export function lowestLine(view: BenchmarkView): string | null {
+  const lowest = view.periodLowest
+  if (lowest === null) {
+    return null
+  }
+  const observed = `기간 최저 ${won(lowest.price)} (${lowest.date})`
+
+  const leg = view.gap.vsLowest
+  if (view.currentPrice === CURRENT_PRICE_UNAVAILABLE || leg === null) {
+    return observed
+  }
+  if (leg.won === 0) {
+    return `${observed} — 현재가가 기간 최저와 같습니다`
+  }
+  const direction = leg.won > 0 ? '비쌈' : '쌈'
+  return `${observed} — 현재가가 ${won(Math.abs(leg.won))} ${direction} (${pct(leg.pct)})`
+}
+
 export function gapLine(view: BenchmarkView): string {
   if (view.currentPrice === CURRENT_PRICE_UNAVAILABLE) {
     // core는 0을 기준으로 갭을 계산해 보낸다(−100%). 그걸 그리면 "공짜"라고 말하는 셈이다.
