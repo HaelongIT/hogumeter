@@ -12,18 +12,19 @@ import org.junit.jupiter.api.Test;
 /**
  * 파이프라인 트리거의 순수 계약. mock 대신 람다 seam을 쓴다(이 프로젝트 테스트는 실객체를 쓴다).
  *
- * <p>중요한 것 셋: <b>순서</b>(관찰만료 → ingest → 가격 → 종료), <b>한 단계의 실패가 뒤 단계와 다음
+ * <p>중요한 것 셋: <b>순서</b>(관찰만료 → ingest → 조건태그 → 가격 → 종료), <b>한 단계의 실패가 뒤 단계와 다음
  * 주기를 죽이지 않는다</b>, 그리고 <b>무슨 일이 있었는지 남긴다</b>.
  */
 class PipelineSchedulerTest {
 
-	private static final PipelineSnapshot EMPTY = new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0);
+	private static final PipelineSnapshot EMPTY = new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 0);
 
 	private final List<String> calls = new ArrayList<>();
 	private final AtomicReference<PipelineTickReport> reported = new AtomicReference<>();
 
 	private final Runnable expire = () -> calls.add("expire");
 	private final Runnable ingest = () -> calls.add("ingest");
+	private final Runnable conditions = () -> calls.add("conditions");
 	private final Runnable prices = () -> calls.add("prices");
 	private final Runnable status = () -> calls.add("status");
 
@@ -34,15 +35,15 @@ class PipelineSchedulerTest {
 	}
 
 	private PipelineScheduler scheduler(Runnable ingest, Runnable prices, Runnable status) {
-		return new PipelineScheduler(expire, ingest, prices, status, () -> EMPTY, reported::set);
+		return new PipelineScheduler(expire, ingest, conditions, prices, status, () -> EMPTY, reported::set);
 	}
 
 	@Test
-	@DisplayName("관찰만료 → ingest → 가격 → 종료. 만료가 먼저라 끝난 관찰이 \"산 뒤 알림\"을 내지 않는다")
+	@DisplayName("관찰만료 → ingest → 조건태그 → 가격 → 종료. 만료가 먼저라 끝난 관찰이 \"산 뒤 알림\"을 내지 않는다")
 	void runsStepsInOrder() {
 		scheduler(ingest, prices, status).tick();
 
-		assertThat(calls).containsExactly("expire", "ingest", "prices", "status");
+		assertThat(calls).containsExactly("expire", "ingest", "conditions", "prices", "status");
 	}
 
 	@Test
@@ -51,7 +52,7 @@ class PipelineSchedulerTest {
 		PipelineScheduler scheduler = scheduler(boom("DB 연결 끊김"), prices, status);
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
-		assertThat(calls).containsExactly("expire", "prices", "status");
+		assertThat(calls).containsExactly("expire", "conditions", "prices", "status");
 	}
 
 	@Test
@@ -60,7 +61,7 @@ class PipelineSchedulerTest {
 		PipelineScheduler scheduler = scheduler(ingest, boom("낙관적 락 충돌"), status);
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
-		assertThat(calls).containsExactly("expire", "ingest", "status");
+		assertThat(calls).containsExactly("expire", "ingest", "conditions", "status");
 	}
 
 	@Test
@@ -69,7 +70,7 @@ class PipelineSchedulerTest {
 		PipelineScheduler scheduler = scheduler(ingest, prices, boom("종료 실패"));
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
-		assertThat(calls).containsExactly("expire", "ingest", "prices");
+		assertThat(calls).containsExactly("expire", "ingest", "conditions", "prices");
 	}
 
 	@Test
@@ -85,9 +86,9 @@ class PipelineSchedulerTest {
 	@DisplayName("틱마다 전후 스냅샷을 찍어 차이를 보고한다 (OBS-02)")
 	void reportsWhatTheTickDid() {
 		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
-				new PipelineSnapshot(1, 0, 0, 0, 0, 1, 0),
-				new PipelineSnapshot(1, 1, 1, 0, 0, 0, 0)));
-		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, prices, status,
+				new PipelineSnapshot(1, 0, 0, 0, 0, 1, 0, 0),
+				new PipelineSnapshot(1, 1, 1, 0, 0, 0, 0, 0)));
+		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, conditions, prices, status,
 				() -> snapshots.remove(0), reported::set);
 
 		scheduler.tick();
@@ -116,19 +117,19 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("스냅샷 조회 실패(DB 단절)는 틱을 죽이지 않는다 — 단계는 그래도 시도된다")
 	void probeFailureDoesNotSkipTheSteps() {
-		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, prices, status, () -> {
+		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, conditions, prices, status, () -> {
 			throw new IllegalStateException("connection refused");
 		}, reported::set);
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
 
-		assertThat(calls).containsExactly("expire", "ingest", "prices", "status");
+		assertThat(calls).containsExactly("expire", "ingest", "conditions", "prices", "status");
 	}
 
 	/** 스냅샷을 못 읽었으면 보고하지 않는다. 0으로 채운 리포트는 "아무 일도 없었다"는 거짓말이다. */
 	@Test
 	void probeFailureReportsNothingRatherThanZeroes() {
-		new PipelineScheduler(expire, ingest, prices, status, () -> {
+		new PipelineScheduler(expire, ingest, conditions, prices, status, () -> {
 			throw new IllegalStateException("connection refused");
 		}, reported::set).tick();
 
@@ -150,21 +151,59 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("관찰 만료가 터져도 파이프라인은 돈다 — 딜 수집이 구매 기록에 인질로 잡히지 않는다")
 	void expireFailureDoesNotStopThePipeline() {
-		PipelineScheduler scheduler = new PipelineScheduler(boom("만료 실패"), ingest, prices, status,
+		PipelineScheduler scheduler = new PipelineScheduler(boom("만료 실패"), ingest, conditions, prices, status,
 				() -> EMPTY, reported::set);
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
-		assertThat(calls).containsExactly("ingest", "prices", "status");
+		assertThat(calls).containsExactly("ingest", "conditions", "prices", "status");
 	}
 
 	/** OBS-02: 만료 건수도 센다. REPORT_PENDING의 증가분이라 동시에 들어온 새 구매에 오염되지 않는다. */
 	@Test
 	void reportsHowManyObservationsExpired() {
 		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
-				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 1),
-				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 3)));
-		new PipelineScheduler(expire, ingest, prices, status, () -> snapshots.remove(0), reported::set).tick();
+				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 1, 0),
+				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 3, 0)));
+		new PipelineScheduler(expire, ingest, conditions, prices, status, () -> snapshots.remove(0), reported::set).tick();
 
 		assertThat(reported.get().purchasesExpired()).isEqualTo(2);
+	}
+
+	/**
+	 * 조건 태그 보존이 <b>ingest 바로 뒤</b>인 이유: ingest가 방금 만든 링크({@code deal_event_source})가
+	 * 있어야 원문의 태그를 딜로 끌어올릴 수 있다. 앞에 두면 새 딜은 다음 틱까지 무조건 가격 행세를 한다.
+	 */
+	@Test
+	void conditionsRunRightAfterIngestSoNewDealsAreTaggedInTheSameTick() {
+		scheduler(ingest, prices, status).tick();
+
+		assertThat(calls.indexOf("conditions")).isEqualTo(calls.indexOf("ingest") + 1);
+		assertThat(calls.indexOf("conditions")).isLessThan(calls.indexOf("prices"));
+	}
+
+	@Test
+	@DisplayName("조건 태그 단계가 터져도 가격·종료는 돈다 — 태그는 표시용이고 파이프라인의 인질이 아니다")
+	void conditionsFailureDoesNotStopThePipeline() {
+		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, boom("배열 변환 실패"), prices, status,
+				() -> EMPTY, reported::set);
+
+		assertThatCode(scheduler::tick).doesNotThrowAnyException();
+		assertThat(calls).containsExactly("expire", "ingest", "prices", "status");
+	}
+
+	/**
+	 * OBS-02: 조건부 딜은 <b>차이와 절대 수를 함께</b> 낸다. 태그가 붙은 딜은 기준가 표본 안에 그대로
+	 * 있으므로(as-posted), 그 절대 수가 이 사실을 볼 수 있는 유일한 창이다(화면 표시는 미구현, Q-46).
+	 */
+	@Test
+	void reportsConditionalDealsTaggedAndTheRunningTotal() {
+		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
+				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 2),
+				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 5)));
+		new PipelineScheduler(expire, ingest, conditions, prices, status, () -> snapshots.remove(0), reported::set)
+				.tick();
+
+		assertThat(reported.get().conditionsTagged()).isEqualTo(3);
+		assertThat(reported.get().conditionalTotal()).isEqualTo(5);
 	}
 }

@@ -7,6 +7,7 @@ import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
 import dev.hogumeter.core.application.ExpirePurchaseObservationsUseCase;
 import dev.hogumeter.core.application.IngestDealsUseCase;
+import dev.hogumeter.core.application.PreserveAppliedConditionsUseCase;
 import dev.hogumeter.core.application.ReprocessDealPricesUseCase;
 import dev.hogumeter.core.application.ReprocessDealStatusUseCase;
 import dev.hogumeter.core.domain.deal.DealStatus;
@@ -18,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -33,7 +35,9 @@ import org.springframework.stereotype.Component;
  * <li>관찰만료: 관찰 기간이 끝난 구매를 REPORT_PENDING으로(PUR-01). <b>ingest보다 먼저</b> 온다 —
  * ingest는 새 딜마다 알림을 태우는데 PUR-03의 "산 뒤 알림"은 OBSERVING 관찰에만 발화한다.
  * 나중에 돌리면 이미 끝난 관찰이 이번 틱의 딜에 대해 한 번 더 알림을 낸다.</li>
- * <li>ingest: 새 원문을 딜로 만든다. 이번 주기에 링크된 것까지 아래 두 단계가 보게 한다.</li>
+ * <li>ingest: 새 원문을 딜로 만든다. 이번 주기에 링크된 것까지 아래 단계들이 보게 한다.</li>
+ * <li>조건 태그: 원문의 조건부 가격 태그를 딜로 끌어올린다(BM-02 AC-2). <b>ingest 바로 뒤</b>에 온다 —
+ * 방금 링크된 원문의 태그가 같은 틱에 보존된다. 이게 없어 표본의 약 1할이 무조건 가격 행세를 했다.</li>
  * <li>가격: 이미 링크된 원문의 새 가격을 딜에 반영한다(BM-01 AC-2, Q-27 ①).</li>
  * <li>종료: 링크된 원문이 전부 종료됐으면 딜을 ENDED로. <b>가격보다 뒤에 온다</b> — 종료된 딜의
  * 가격은 더 이상 갱신되지 않으므로, 종료 직전의 마지막 가격까지 반영하고 닫는다.</li>
@@ -53,6 +57,7 @@ public class PipelineScheduler {
 
 	private final Runnable expireObservations;
 	private final Runnable ingest;
+	private final Runnable preserveConditions;
 	private final Runnable reprocessPrices;
 	private final Runnable reprocessStatus;
 	private final Supplier<PipelineSnapshot> probe;
@@ -60,11 +65,12 @@ public class PipelineScheduler {
 
 	@Autowired
 	PipelineScheduler(ExpirePurchaseObservationsUseCase expireObservations, IngestDealsUseCase ingest,
-			ReprocessDealPricesUseCase prices, ReprocessDealStatusUseCase status, RawDealPostRepository rawPosts,
+			PreserveAppliedConditionsUseCase conditions, ReprocessDealPricesUseCase prices,
+			ReprocessDealStatusUseCase status, RawDealPostRepository rawPosts,
 			DealEventRepository dealEvents, DealEventSourceRepository sources,
-			ReviewQueueItemRepository reviewQueue, PurchaseRepository purchases) {
-		this(expireObservations::expireDueObservations, ingest::ingestPending, prices::reprocessPriceChanges,
-				status::reprocessEndedDeals,
+			ReviewQueueItemRepository reviewQueue, PurchaseRepository purchases, JdbcTemplate jdbc) {
+		this(expireObservations::expireDueObservations, ingest::ingestPending, conditions::preserveTags,
+				prices::reprocessPriceChanges, status::reprocessEndedDeals,
 				() -> new PipelineSnapshot(
 						rawPosts.count(),
 						sources.count(),
@@ -74,15 +80,21 @@ public class PipelineScheduler {
 						rawPosts.findUnprocessed().size(),
 						purchases.findAll().stream()
 								.filter(p -> p.getState() == PurchaseState.REPORT_PENDING)
-								.count()),
+								.count(),
+						// DealEventEntity는 applied_conditions를 매핑하지 않는다(상대 소유). SQL로 센다.
+						jdbc.queryForObject(
+								"select count(*) from deal_event where cardinality(applied_conditions) > 0",
+								Long.class)),
 				tick -> log.info("pipeline tick {}", tick));
 	}
 
 	/** 테스트 seam — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
-	PipelineScheduler(Runnable expireObservations, Runnable ingest, Runnable reprocessPrices,
-			Runnable reprocessStatus, Supplier<PipelineSnapshot> probe, Consumer<PipelineTickReport> report) {
+	PipelineScheduler(Runnable expireObservations, Runnable ingest, Runnable preserveConditions,
+			Runnable reprocessPrices, Runnable reprocessStatus, Supplier<PipelineSnapshot> probe,
+			Consumer<PipelineTickReport> report) {
 		this.expireObservations = expireObservations;
 		this.ingest = ingest;
+		this.preserveConditions = preserveConditions;
 		this.reprocessPrices = reprocessPrices;
 		this.reprocessStatus = reprocessStatus;
 		this.probe = probe;
@@ -95,6 +107,7 @@ public class PipelineScheduler {
 		PipelineSnapshot before = snapshot();
 		runStep("expire-observations", expireObservations);
 		runStep("ingest", ingest);
+		runStep("preserve-conditions", preserveConditions);
 		runStep("reprocess-prices", reprocessPrices);
 		runStep("reprocess-status", reprocessStatus);
 		PipelineSnapshot after = snapshot();

@@ -1,3 +1,48 @@
+## 2026-07-10 — 조건부 가격 태그가 딜에 도달한다 (BM-02 AC-2, Q-46 절반 해소)
+
+**한 일**: 보드가 "core 기존 파일이라 조율"로 봉인해 둔 M1 블로커를 **검증**했더니 또 거짓이었다(세 번째).
+딜은 이미 있고 `deal_event_source`가 원문을 가리킨다 — 상대 파일 한 줄 안 고치고 신규 파일로 끝났다.
+
+- `PreserveAppliedConditionsUseCase`(신규) — `raw._derived.applied_conditions` → `deal_event.applied_conditions`.
+  멱등(2회차 0건), 병합 딜은 합집합, 태그 없으면 NULL 유지(빈 배열 아님).
+- `PipelineScheduler`에 `preserve-conditions` 단계 — **ingest 바로 뒤**(방금 링크된 원문이 같은 틱에 태그된다).
+- **소비자를 같은 커밋에 넣었다**: `PipelineTickReport.conditionsTagged` + `conditionalTotal`.
+  안 그러면 이번 주 내내 사냥한 "쓰기만 하는 컬럼"을 새로 만드는 셈이다.
+- 스모크 5-1g: 종단으로 태그 도달 + `base_price`가 NULL임(= 역산 없음) 확인.
+
+**자율 결정**:
+- 분포는 건드리지 않았다. 확정본 AC-2가 as-posted를 명시한다("890,000이 **그대로** 분포 입력").
+  → 보드에 있던 "표본 1할 오염" 서술을 **과하다고 정정**했다. 결함은 오염이 아니라 표시 누락이었다.
+- 정렬을 `collate "C"`로 고정. 기본 정렬은 서버 로케일이 정한다(postgres:16 실측: 한글이 코드포인트
+  순서와 다르게 나온다) → 로케일이 다른 DB에선 매 틱 UPDATE가 돌며 카운터가 "일하는 척"한다.
+
+**core 소유권**: 수정한 core 파일은 전부 우리가 만든 `adapter/scheduler/`(1a269c0·fd0221a).
+상대의 `IngestDealsUseCase`·`DealEventEntity`·`BenchmarkCalculator`는 무수정.
+
+⚠️ **남은 블로커(실 폴링 전 필수)**: `유료배송(금액미상)` 딜에 **배송비 0을 더한다.** 태그로 보이게 됐을
+뿐 값은 여전히 하향 편향이다(기준가가 낮아져 진짜 좋은 딜을 놓친다). → `docs/91` Q-46 재개 트리거 ②.
+⚠️ 화면·알림은 아직 태그를 말하지 않는다(`BenchmarkView` = core 기존 파일).
+
+**다음**: 남은 M1 블로커 Q-27 ③(품절 딜 오알림)의 "core 기존 파일" 봉인도 같은 방식으로 검증.
+
+---
+
+## 2026-07-10 — 죽은 테이블을 막는 게이트 (`130d477`)
+
+**한 일**: SEC-08을 찾은 감사를 넓게 돌렸다. collector 함수·web export는 깨끗했고, **테이블에서 둘**이 나왔다
+(`price_history`·`global_setting` — 엔티티도 읽기도 쓰기도 없음. `FlywayMigrationTest`가 존재만 GREEN으로 잠금).
+둘 다 막혀서 안 만든 것이지 결함은 아니었으나 **그 사실이 어디에도 없었다.**
+
+- `scripts/check-table-wiring.sh` + `table-wiring-allowlist.txt` + 계약 테스트 11건 → CI `lint` 잡.
+- **면제에 만료 조건**: 인용한 Q가 docs/91에서 닫히면 면제가 만료되고, 이미 배선된 테이블이 목록에
+  남아 있어도 차단한다. 변명이 코드보다 오래 살지 못하게 한다.
+- 만들자마자 `check-ci-coverage.sh`가 "CI에 없다"고 스스로를 잡았다.
+
+**자율 결정**: 게이트는 "이름이 나타나는가"만 본다(필요조건). 읽기만/쓰기만 하는 테이블은 여전히 통과한다 —
+그 한계를 스크립트 주석과 교훈에 명시했다.
+
+---
+
 ## 2026-07-10 — SEC-08: robots의 Crawl-delay를 실제로 따르게 했다 (`223936a`)
 
 **한 일**: "소비처 0" 감사를 API 타입이 아니라 **코드**에 돌려 죽은 함수를 찾았다.

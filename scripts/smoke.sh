@@ -478,6 +478,41 @@ echo "$queue" | grep -q 'https://example.invalid/olow' || fail "이상치의 원
 curl -fsS "${WEB}/api/v1/variants/${outlier_vid}/benchmark?periodMonths=6" | grep -q '"n":6' ||
 	fail "이상치가 기준가 표본에 섞였다"
 
+echo "--- 5-1g) 조건부 가격: 원문의 태그가 딜까지 도달한다 (BM-02 AC-2) ---"
+# collector는 `카할` 같은 조건 태그를 뽑아 raw._derived.applied_conditions에 싣는다(담을 컬럼이 없어서).
+# 그런데 `deal_event.applied_conditions`는 V1에 있으면서 **아무도 쓰지 않았다** — 골든 실측으로
+# 뽐뿌 9.5% · 펨코 15%가 조건부인데 전부 무조건 가격의 얼굴을 하고 있었다(docs/91 Q-46).
+# 분포는 as-posted가 맞다(역산 금지). **태그가 남는가**를 종단으로 본다.
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "조건부 원문 삽입 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status, raw)
+values ('ppomppu', 'cond-e2e', 'https://example.invalid/cond', '이상치테스트 256GB 특가', 980000, now(), 'ACTIVE',
+        '{"_derived":{"applied_conditions":["카할"]}}'::jsonb);
+SQL
+
+# 파이프라인이 ingest → 조건태그 순으로 돌아 같은 틱에 태그가 붙는다.
+for _ in $(seq 20); do
+	tagged=$(compose exec -T postgres psql -qAt -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" -c "
+		select coalesce(array_to_string(de.applied_conditions, ','), '')
+		  from deal_event de
+		  join deal_event_source des on des.deal_event_id = de.id
+		  join raw_deal_post rp on rp.id = des.raw_deal_post_id
+		 where rp.post_id = 'cond-e2e'" 2>/dev/null | tr -d '\r' | head -1) || true
+	[ "$tagged" = "카할" ] && break
+	sleep 2
+done
+[ "${tagged:-}" = "카할" ] ||
+	fail "조건 태그가 원문에서 딜로 도달하지 않았다 (raw._derived → deal_event.applied_conditions): '${tagged:-없음}'"
+
+# 조건부여도 가격은 그대로 분포에 들어간다 — as-posted, base_price 역산 없음(BM-02 AC-2).
+base_price=$(compose exec -T postgres psql -qAt -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" -c "
+	select coalesce(de.base_price::text, 'NULL')
+	  from deal_event de
+	  join deal_event_source des on des.deal_event_id = de.id
+	  join raw_deal_post rp on rp.id = des.raw_deal_post_id
+	 where rp.post_id = 'cond-e2e'" 2>/dev/null | tr -d '\r' | head -1) || true
+[ "$base_price" = "NULL" ] || fail "조건부 가격을 역산했다(base_price=$base_price). AC-2는 역산을 금지한다"
+
 echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
 # 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.
 purchase=$(mktemp)
