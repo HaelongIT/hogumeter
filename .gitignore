@@ -22,3 +22,6 @@ __pycache__/
 
 # 백업 산출물 (REL-04) — 절대 커밋 금지
 backups/
+# compose 로컬 오버라이드 — compose가 자동으로 읽는다. 뮤테이션 드릴에 쓰고 지운다(docs/99).
+# 공유가 필요하면 `-f extra.yml`로 명시한다. 실수로 커밋되면 스택이 조용히 달라진다.
+docker-compose.override.yml
