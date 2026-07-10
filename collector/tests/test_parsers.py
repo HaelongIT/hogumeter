@@ -265,3 +265,56 @@ def test_fmkorea_missing_shipping_cell_is_unknown_too():
 
     assert deal.headline_price == 10_980
     assert SHIPPING_UNKNOWN in deal.applied_conditions
+
+
+# ── 루리웹 `[종료]` 마커는 제목 바깥에 있다 ────────────────────────────────
+#
+# 마크업: <div class="title_wrapper">[게임S/W] <span style=...>[종료]</span> <a class="subject_link">제목</a></div>
+# 파서는 `.title_wrapper a`의 텍스트만 제목으로 읽으므로 **마커를 절대 볼 수 없다.**
+# golden 28딜 중 3건이 `[종료]`인데 전부 ACTIVE로 파싱됐다 — 루리웹 딜은 영원히 닫히지 않고,
+# 종료된 딜에 "지금 사라" 알림이 나간다.
+#
+# 그렇다고 제목 substring으로 잡으면 `특가 종료 임박` 같은 정상 딜을 품절로 오독한다.
+
+
+def test_ruliweb_golden_has_three_sold_out_deals():
+    deals = parse_ruliweb(_read("ruliweb/list_normal.html"), NOW)
+
+    sold_out = [d for d in deals if d.status == "SOLD_OUT"]
+    assert len(sold_out) == 3, [d.title[:30] for d in sold_out]
+
+
+def _ruliweb_row(marker_html: str, title: str) -> str:
+    return f"""
+    <table class="board_list_table"><tr class="table_body normal">
+      <td><input class="info_article_id" value="999"></td>
+      <td><div class="col_9 text_wrapper"><a>
+        <div class="title_wrapper subject relative">[게임S/W]
+          {marker_html}
+          <a class="subject_link deco" href="https://bbs.ruliweb.com/market/board/1020/read/999">{title}</a>
+        </div></a></div></td>
+      <td class="recomd"><strong>5</strong></td>
+      <td class="time">21:10</td>
+    </tr></table>
+    """
+
+
+def test_ruliweb_end_marker_outside_the_anchor_is_seen():
+    marker = '<span style="background-color: #ff4444;">[종료]</span>'
+    (deal,) = parse_ruliweb(_ruliweb_row(marker, "닌텐도 스위치2 (759,600원/무료)"), NOW)
+
+    assert deal.status == "SOLD_OUT"
+
+
+def test_ruliweb_the_word_end_inside_the_title_is_not_a_sold_out_marker():
+    """`특가 종료 임박`은 아직 살아 있는 딜이다. 오차단은 조용히 표본을 지운다."""
+    (deal,) = parse_ruliweb(_ruliweb_row("", "특가 종료 임박! 스위치2 (759,600원/무료)"), NOW)
+
+    assert deal.status == "ACTIVE"
+
+
+def test_ruliweb_other_end_markers():
+    for word in ("품절", "매진", "마감"):
+        marker = f'<span style="color:red">[{word}]</span>'
+        (deal,) = parse_ruliweb(_ruliweb_row(marker, "스위치2 (759,600원/무료)"), NOW)
+        assert deal.status == "SOLD_OUT", word
