@@ -40,7 +40,32 @@ _PAREN_PRICE_SHIPPING = re.compile(
 _SHIPPING = re.compile(r"배송비\s*([\d,]+)\s*원?")
 _FREE_SHIPPING = re.compile(r"무료\s*배송|무배")
 # `카할` = 카드할인 축약(뽐뿌 관례). 조건부 가격임을 잃지 않도록 태그로 남긴다.
-_CARD = re.compile(r"(카할|[A-Za-z0-9가-힣]+카드)")
+#
+# **`X카드`는 대부분 상품이다.** `[A-Za-z0-9가-힣]+카드`로 잡으면 그래픽카드·메모리카드·SD카드·
+# 기프트카드·교통카드가 전부 "카드할인 조건"이 된다(그래픽카드는 핫딜에서 가장 흔한 품목 중 하나다).
+# 오탐은 표본 오염률(`conditional`)을 조용히 부풀리고, 무조건 가격을 "조건부"라고 화면에 쓴다.
+#
+# 그래서 셋 중 하나여야 한다:
+#   ① 발급사 + `카드`가 **붙어 있다** (`신한카드`) — `삼성 메모리카드`는 사이에 공백이 있어 안 걸린다
+#   ② 한 글자 자리표시자 + `카드` (`N카드`) — 확정본 AC-2가 쓰는 표기. `SD카드`는 두 글자라 안 걸린다
+#   ③ `카드`가 합성명사의 꼬리가 아니고(왼쪽 경계) 뒤에 **할인 문맥**이 온다 (`카드할인`·`카드 결제 시`)
+#
+# `가`를 문맥에 넣지 않는다 — `그래픽카드가 899,000원`이 "카드 적용가"로 읽힌다. 그 태그 누락은
+# 감수한다: **거짓 태그보다 낫다.** 목록에 없는 발급사가 할인 문맥 없이 단독으로 나오는 경우도 놓친다.
+# 태그 누락은 하류가 원문 링크로 넘기지만(절대 원칙 6), 거짓 태그는 무조건 가격을 조건부라 말한다.
+_CARD_ISSUERS = (
+    "KB국민|NH농협|IBK기업|SC제일|카카오뱅크|케이뱅크|우체국|새마을|"
+    "신한|국민|롯데|현대|삼성|농협|우리|하나|비씨|씨티|전북|광주|수협|신협|토스|"
+    "KB|NH|IBK|BC"
+)
+_CARD_CONTEXT = "할인|결제|적용"
+_NOT_COMPOUND = r"(?<![A-Za-z0-9가-힣])"
+_CARD = re.compile(
+    rf"(카할"
+    rf"|{_NOT_COMPOUND}(?:{_CARD_ISSUERS})카드"
+    rf"|{_NOT_COMPOUND}[A-Z]카드"
+    rf"|{_NOT_COMPOUND}카드\s*(?:{_CARD_CONTEXT}))"
+)
 _PAID_SHIPPING_UNKNOWN = "유료배송(금액미상)"
 
 # **안정된 표식.** 배송비를 모른 채 0을 더한 가격은 실결제가가 아니라 **하한**이다.
@@ -112,7 +137,8 @@ def _extract_main_price(text: str) -> int | None:
 
 def _extract_conditions(text: str) -> list[str]:
     # 카드명·카드할인 등 조건 태그만 보존(역산 금지). 중복 제거·순서 유지.
-    conditions = list(_CARD.findall(text))
+    # `카드 결제` → `카드결제`: 공백은 표기 차이일 뿐 다른 조건이 아니다(같은 태그가 둘로 갈리지 않게).
+    conditions = [re.sub(r"\s+", "", tag) for tag in _CARD.findall(text)]
     if "유배" in text:
         # 설명 + 표식을 함께. 표식만으로는 왜인지 모르고, 설명만으로는 기계가 못 읽는다.
         conditions += [_PAID_SHIPPING_UNKNOWN, SHIPPING_UNKNOWN]

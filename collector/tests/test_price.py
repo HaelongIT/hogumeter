@@ -178,3 +178,55 @@ def test_unconditional_free_shipping_is_not_marked():
 
     assert result.headline_price == 11800
     assert result.applied_conditions == []
+
+
+# ── `X카드`는 대부분 상품이지 할인 조건이 아니다 ──────────────────────────
+#
+# `[A-Za-z0-9가-힣]+카드`는 **그래픽카드·메모리카드·SD카드·기프트카드·교통카드**를 전부
+# "카드할인 조건"으로 읽는다. 그래픽카드는 핫딜에서 가장 흔한 품목 중 하나다.
+# 오탐은 조용히 표본 오염률(`conditional`)을 부풀리고, 무조건 가격을 "조건부"라고 화면에 쓴다.
+#
+# 차단 장치는 **무엇을 통과시켜야 하는가**를 먼저·더 많이 시험한다(CLAUDE.md).
+
+
+def _tags(title: str) -> list[str]:
+    result = normalize_price(title)
+    return result.applied_conditions if result else []
+
+
+# --- 태그가 붙으면 안 되는 것들 (오탐 = 정직성 위반) ---
+
+def test_graphics_card_is_a_product_not_a_discount():
+    assert _tags("[다나와]MSI RTX 5070 그래픽카드 (899,000원/무료)") == []
+
+
+def test_memory_and_sd_cards_are_products():
+    assert _tags("[쿠팡]샌디스크 마이크로SD카드 128GB (12,900원/무료)") == []
+    assert _tags("[G마켓]삼성 메모리카드 (9,900원/2,500원)") == []
+
+
+def test_gift_and_transit_cards_are_products():
+    assert _tags("[SSG]스타벅스 기프트카드 5만원권 (45,000원/무료)") == []
+    assert _tags("[티몬]교통카드 충전 (10,000원/무료)") == []
+
+
+def test_a_product_noun_ending_in_card_followed_by_a_particle_is_not_a_price_condition():
+    """`그래픽카드가 899,000원` — `카드가`가 "카드 적용가"로 읽히면 안 된다."""
+    assert _tags("[다나와]그래픽카드가 899,000원") == []
+
+
+# --- 태그가 붙어야 하는 것들 (진짜 조건) ---
+
+def test_ppomppu_card_discount_abbreviation():
+    assert _tags("[지마켓]삼성 로봇청소기 (카할180만원대/무료)") == ["카할"]
+
+
+def test_issuer_card_is_a_discount_condition():
+    assert _tags("[11번가]LG TV (1,290,000원/무료) 신한카드 할인") == ["신한카드"]
+    assert _tags("[SSG]다이슨 (599,000원/무료) 현대카드 청구할인") == ["현대카드"]
+
+
+def test_card_with_an_explicit_discount_context_is_a_condition():
+    """발급사를 안 밝혀도 `카드할인`·`카드 결제 시`는 조건이다(확정본 AC-2의 "N카드 할인")."""
+    assert _tags("[옥션]에어팟 (199,000원/무료) 카드할인 적용") == ["카드할인"]
+    assert _tags("[11번가]TV (1,000,000원/무료) 카드 결제 시") == ["카드결제"]
