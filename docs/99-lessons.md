@@ -350,3 +350,19 @@
 2. **예외 메시지를 헬스 응답에 실으면 관측이 곧 유출이다.** JDBC 예외 메시지는 접속 URL·사용자명을 담고, 헬스 엔드포인트는 인증 없이 노출되는 것이 정상이다. 예외의 **타입 이름만** 싣는다(`SQLException`). 스모크가 응답 본문에 `password`·`jdbc:`·실제 비밀번호가 없음을 단언한다.
 3. **`try/catch`로 격리한 줄만 격리된다.** `PipelineScheduler.tick()`은 단계마다 `runStep`으로 감쌌지만 **전후 스냅샷 조회(`probe.get()`)는 밖에 있었다.** DB가 끊기면 첫 줄에서 터져 **단계는 한 번도 시도되지 않았고**, 그 예외를 삼키는 것은 Spring이라 우리 로그에는 흔적조차 없었다. 격리 장치를 만들었으면 **그 장치 바깥에 남은 IO가 무엇인지** 한 번 세어 본다.
 - 빈 컴포넌트 집합의 `allMatch`는 `true`다. 아무것도 검사하지 않고 "UP"을 반환하는 헬스체크가 되므로 `HealthReport.of({})`는 예외를 던진다(`refusesToCallNothingHealthy`).
+
+---
+
+## 2026-07-10 — 읽는 코드는 있는데 쓰는 코드가 없었다 (`alert_policy`, REG-03)
+
+- **맥락**: Q-48을 "core 소유 영역이라 상대와 조율"로 분류해 뒀다(또 재개 트리거가 봉인했다). 실제로 열어 보니 `AlertPolicyEntity`·`AlertPolicyRepository`는 이미 있고, `EvaluateAlertOnDealUseCase`가 매 딜마다 `policies.findByVariantId(variantId)`로 **읽고** 있었다.
+- **증상**: 그 테이블에 행을 넣는 프로덕션 코드가 **없다.** 등록도 만들지 않고 REST도 없다. 즉 확정본 §107의 "OR [사용자 목표가 이하]" 트리거와 방해금지(AL-04)는 **구조적으로 발화할 수 없었다.** 그런데 `EvaluateAlertOnDealUseCaseTest`는 GREEN이다 — 테스트가 `policies.save(new AlertPolicyEntity(...))`로 손수 행을 넣기 때문이다.
+- **원인**: `PipelineScheduler`(트리거 없음)·`urllib_opener`(포트 계약 위반)와 **같은 계열**이다. 테스트가 생산자 역할을 대신 해 주면, 프로덕션에 생산자가 없다는 사실이 영원히 드러나지 않는다.
+- **교훈(규칙화)**: **읽기만 하는 테이블·큐·포트를 발견하면 "누가 여기에 쓰는가"를 프로덕션 코드에서 찾아 이름을 댄다.** 못 대면 그 기능은 죽어 있다. 테스트의 `save(...)`·fake의 반환값은 생산자가 아니다. 종단 스모크로 **쓰기→읽기 한 바퀴**를 관통시킨다.
+- **관련 테스트**: `AlertPolicySettingsUseCaseTest`, `AlertPolicyEndpointTest`, `scripts/smoke.sh` 5-1d(`intensity=TARGET`이 곧 "정책 행을 읽었다"는 증거 — 표본 1건이면 정책 없이도 `GOOD`은 나가므로).
+
+### 곁가지 셋
+
+1. **`set -o pipefail` + `set -e`에서 재시도 루프의 `grep`은 스크립트를 죽인다.** `x=$(cmd | grep foo | tail -1)`에서 grep이 못 찾으면 pipefail이 그 1을 파이프라인 상태로 올리고, 대입문이 실패하고, `set -e`가 **아무 메시지도 없이** 종료한다. 실제로 겪었다 — FAIL 한 줄 없이 exit 1이라 원인이 안 보였다. **실패가 정상인 grep에는 `|| true`를 붙인다.** (`tail`이 마지막이라 안전할 것 같지만, 안전한 건 pipefail이 **없을 때**다.)
+2. **미매핑 컬럼이 있는 테이블의 갱신은 delete+insert로 하지 않는다.** 엔티티가 모르는 컬럼이 DB 기본값으로 조용히 되돌아간다. 지금은 아무도 안 써서 아무도 모르고, 누군가 매핑을 붙이는 날 데이터가 사라진다. 벌크 UPDATE로 **아는 컬럼만** 건드리고, "미매핑 컬럼이 살아남는다"를 테스트로 못박는다.
+3. **JPA 벌크 UPDATE는 영속성 컨텍스트를 우회한다** — 방금 고친 행을 같은 트랜잭션에서 다시 읽으면 캐시된 옛 값이 나온다. `clear()`는 남의 엔티티까지 날리므로 해당 엔티티만 `refresh()`한다.

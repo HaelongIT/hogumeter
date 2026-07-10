@@ -16,6 +16,16 @@
 
 ---
 
+## 2026-07-10 — 🔴 `alert_policy`를 읽는 코드는 있는데, 쓰는 코드가 없었다
+
+- **한 일**: REG-03 알림 정책 REST. `GET/PUT /api/v1/variants/{id}/alert-policy`. **신규 파일 8개, core 기존 파일 수정 0건.**
+- **🔴 왜 중요한가**: `EvaluateAlertOnDealUseCase`는 매 딜마다 `policies.findByVariantId(variantId)`로 정책을 **읽고 있었다.** 그런데 그 테이블에 행을 넣는 프로덕션 코드가 **없었다** — 등록도 안 만들고 REST도 없었다. 즉 확정본 §107의 **"OR [사용자 목표가 이하]" 트리거와 방해금지(AL-04)는 구조적으로 발화할 수 없었다.** `EvaluateAlertOnDealUseCaseTest`는 GREEN이다 — 테스트가 `policies.save(...)`로 손수 행을 넣기 때문이다. `PipelineScheduler`(트리거 없음)·`urllib_opener`(포트 계약 위반)와 **같은 계열**. → CLAUDE.md에 규칙 승격: *읽기만 하는 테이블·포트를 보면 프로덕션의 생산자 이름을 대라.*
+- **증거는 스모크 5-1d**: 목표가를 PUT하고 그보다 싼 원문을 넣으면 `intensity=TARGET` 알림이 뜬다. (표본 1건이면 tier=SPARSE라 정책 없이도 `GOOD`은 나간다 — 그래서 `TARGET`이 곧 "정책 행을 읽었다"는 증거다.)
+- **또 Q-48이 잘못 봉인돼 있었다**: 재개 트리거에 "core 소유 영역이라 상대와 조율"이라 적혀 있었지만, 엔티티·리포지토리는 이미 있었고 필요한 건 신규 파일뿐이었다. Q-50에 이어 **두 번째**다. 이번엔 재개 트리거를 "무엇이 참이 되어야 하는가"로 다시 썼다.
+- **⚠️ 당신이 볼 것 (Q-48 잔여)**: `AlertPolicyEntity`가 `k_display`·`exclude_keywords`·`demand_axis_filter`를 매핑하지 않아 REG-03 6항목 중 **넷만** 저장된다. 갱신을 **벌크 UPDATE**로 한 이유가 이것이다 — delete+insert였다면 미매핑 컬럼이 DB 기본값으로 되돌아가고, 누군가 매핑을 붙이는 날 데이터가 사라진다(`updatePreservesColumnsTheEntityDoesNotMap`이 못박는다). 그리고 미설정 variant의 GET은 `periodMonths: null`이다 — 판정이 쓰는 기본 6개월은 상대 유스케이스의 **private 상수**라 어댑터가 읽을 수 없고, 지어내면 세 번째 사본이 된다.
+- **곁가지**: `set -o pipefail` + `set -e`에서 재시도 루프의 `grep` 실패가 스크립트를 **FAIL 한 줄 없이** 죽였다. 원인을 못 짚어 한 번 헤맸다 → `.claude/rules/shell-scripts.md` 신설(셸 함정이 이미 넷 쌓여 있었다: CRLF 셰뱅·MSYS_NO_PATHCONV·좀비 프로세스·pipefail).
+- **다음**: web REG-03 설정 화면(이 REST 위에). 그 전에 "막힘"으로 적어 둔 나머지(Q-27 ②③④·Q-49·Q-57)도 주장부터 재현해 볼 것 — 두 번 연속 틀렸다.
+
 ## 2026-07-10 — Q-50은 막힌 게 아니었다. 내 보드가 그렇게 적어 뒀을 뿐
 
 - **한 일**: OBS-04 전용 헬스 엔드포인트. `GET /api/v1/health` → `{"status":"UP","components":{"db":{"status":"UP"}}}`, DOWN이면 **503**. compose healthcheck가 이제 비즈니스 엔드포인트(`/api/v1/products`) 대신 이걸 친다.

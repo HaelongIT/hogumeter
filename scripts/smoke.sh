@@ -224,6 +224,62 @@ done
 # priceFirst는 불변(기준가 분포가 그 위에 선다) / priceMin은 지나간 기회 / priceLast는 "지금"
 [ "${refreshed:-0}" = 1 ] || fail "가격 변경이 deal_event에 반영되지 않았다 (first/min/last=$prices)"
 
+echo "--- 5-1d) 알림 정책 쓰기 → 새 딜 → intensity=TARGET (REG-03, 확정본 §107) ---"
+# `alert_policy`는 `EvaluateAlertOnDealUseCase`가 **읽지만** 프로덕션에 writer가 없었다.
+# 즉 "OR [사용자 목표가 이하]" 트리거는 발화할 수 없었고, 테스트만 손수 행을 넣어 GREEN이었다.
+#
+# 왜 intensity=TARGET이 증거인가: 표본 1건이면 tier=SPARSE라 정책이 없어도 GOOD 알림은 나간다.
+# 목표가 우선순위가 GOOD보다 높으므로(§103), `intensity=TARGET`은 **정책 행을 읽었다는 뜻**이다.
+# 별칭이 '스모크'와 겹치지 않는 새 제품을 쓴다 — 겹치면 두 제품에 매칭돼 미상 큐로 빠진다.
+alert_payload=$(mktemp)
+cat >"$alert_payload" <<'JSON'
+{"name":"알림테스트 제품","category":"test","demandAxisMode":"GROUPED",
+ "axes":[{"axisType":"PRICE","name":"용량","allowedValues":["256GB"]}],
+ "variants":[{"label":"256GB","priceAxisValues":{"용량":"256GB"}}],
+ "aliases":["알림테스트"]}
+JSON
+alert_product=$(curl -fsS -X POST "${WEB}/api/v1/products" -H 'Content-Type: application/json' \
+	-d @"$alert_payload") || fail "알림용 제품 등록 실패"
+rm -f "$alert_payload"
+alert_pid=$(echo "$alert_product" | sed 's/.*"productId"[: ]*\([0-9]*\).*/\1/')
+alert_variants=$(curl -fsS "${WEB}/api/v1/products/${alert_pid}/variants") || fail "알림용 variant 조회 실패"
+alert_vid=$(echo "$alert_variants" | sed 's/[^0-9]*\([0-9]*\).*/\1/')
+[ -n "$alert_vid" ] || fail "알림용 variant를 찾지 못했다: $alert_variants"
+
+# 미설정은 404가 아니라 configured:false다 — "정책 없음"과 "variant 없음"은 다른 사건이다.
+curl -fsS "${WEB}/api/v1/variants/${alert_vid}/alert-policy" | grep -q '"configured":false' ||
+	fail "미설정 정책이 configured:false를 내지 않는다"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "${WEB}/api/v1/variants/999999/alert-policy")" = 404 ] ||
+	fail "없는 variant의 정책 조회가 404가 아니다"
+
+policy=$(mktemp)
+echo '{"targetPrice":1000000,"periodMonths":6}' >"$policy"
+curl -fsS -X PUT "${WEB}/api/v1/variants/${alert_vid}/alert-policy" \
+	-H 'Content-Type: application/json' -d @"$policy" | grep -q '"targetPrice":1000000' ||
+	fail "정책 PUT이 저장값을 되돌려주지 않는다"
+# 잘못된 입력이 500이 아니라 400 + 도메인 코드로 거절되는지 (curl로 직접 치는 경우, Q-49의 교훈)
+echo '{"targetPrice":0,"periodMonths":6}' >"$policy"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${WEB}/api/v1/variants/${alert_vid}/alert-policy" \
+	-H 'Content-Type: application/json' -d @"$policy")" = 400 ] || fail "목표가 0원이 400이 아니다"
+rm -f "$policy"
+
+# 목표가(1,000,000) 아래의 딜을 새로 넣는다. 알림 판정은 딜 생성 시점에 돈다.
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "알림용 raw_deal_post 삽입 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status)
+values ('ppomppu', 'smoke-alert', 'https://example.invalid/2', '알림테스트 256GB 초특가', 950000, now(), 'ACTIVE');
+SQL
+
+# `|| true`가 필요하다: `set -o pipefail` + `set -e`에서 첫 회차의 grep 실패(아직 알림 없음)가
+# 파이프라인 상태로 올라와 스크립트를 **아무 메시지도 없이** 죽인다. 재시도 루프의 grep은 실패가 정상이다.
+for _ in $(seq 20); do
+	alert_log=$(compose logs --no-log-prefix core 2>&1 | grep 'STUB alert' | grep 'intensity=TARGET' | tail -1 || true)
+	[ -n "$alert_log" ] && alerted=1 && break
+	sleep 2
+done
+[ "${alerted:-0}" = 1 ] || fail "목표가를 저장했는데 TARGET 알림이 발화하지 않았다 (정책이 판정에 닿지 않는다). 최근 알림: $(compose logs --no-log-prefix core 2>&1 | grep 'STUB alert' | tail -3 || true)"
+echo "$alert_log" | grep -q 'price=950000' || fail "알림이 딜 가격을 싣지 않았다: $alert_log"
+
 echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
 # 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.
 purchase=$(mktemp)

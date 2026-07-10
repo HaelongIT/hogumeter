@@ -310,10 +310,12 @@ _(Q-50. OBS-04 전용 헬스 엔드포인트 — **해소됨 2026-07-10**: `adap
 - **잠정값**: 미수정. web이 클라이언트 검증으로 가린다. `ApiExceptionHandler`는 이 예외들을 매핑하지 않으므로 `{code,message}`도 못 준다 → 클라이언트는 `HTTP_500`으로 처리.
 - **재개 트리거**: `RegistrationController`/`RegisterProductCommand`는 **기존 core 파일**이라 상대와 조율 대상. 착수 시 — `@Valid` + `@NotBlank`/`@NotEmpty` 또는 record 컴팩트 생성자 검증, `MethodArgumentNotValidException`·`IllegalArgumentException`을 `ApiExceptionHandler`에 400으로 매핑(신규 code 필요, 예: `REG_INVALID_COMMAND`).
 
-## [열림] Q-48. 알림 정책 설정(REG-03) 화면을 만들 REST가 없다
-- **맥락**: 확정본 §7의 web 최소 슬라이스는 "등록 + 후보선택 + **variant/키워드/목표가 설정**"이다. `alert_policy` 테이블·`AlertPolicyEntity`·`AlertPolicyRepository`는 있으나 **컨트롤러가 없다** — 목표가·기간 P·K_display·제외 키워드·quiet hours를 화면에서 저장할 수 없다.
-- **잠정값**: web은 등록+목록만. 설정은 미구현. 사용자 승인은 "**읽기 전용** 조회 API 추가"까지였고 정책 저장은 쓰기 API라 범위 밖.
-- **재개 트리거**: `AlertPolicyController`(GET/PUT) 착수 시 — core 소유 영역이라 상대와 조율. 그때 REG-03 화면.
+## [열림] Q-48. 알림 정책(REG-03) — REST는 생겼으나 **엔티티가 매핑하지 않는 필드 셋**이 남았다
+- **해소된 부분(2026-07-10)**: `AlertPolicyController`(GET/PUT `/api/v1/variants/{id}/alert-policy`) + `AlertPolicySettingsUseCase` + `AlertPolicySettings`(순수 검증) + `InvalidAlertPolicyException` + `AlertPolicyExceptionHandler` — **전부 신규 파일**, core 기존 파일 무수정. 이전까지 `alert_policy`에는 **프로덕션 writer가 없었다** — `EvaluateAlertOnDealUseCase`가 읽기는 했으나 행이 영원히 생기지 않아 확정본 §107의 "OR [사용자 목표가 이하]" 트리거와 방해금지(AL-04)가 발화할 수 없었다. 스모크 5-1d가 `intensity=TARGET`으로 정책이 판정에 닿는 것을 증명한다.
+- **남은 것**: `AlertPolicyEntity`가 `k_display`·`exclude_keywords`·`demand_axis_filter`를 **매핑하지 않는다**(⚠️라벨 토글도 컬럼 부재). 그래서 REG-03의 6개 항목 중 넷(targetPrice·기간 P·quiet hours 2개)만 저장된다. 갱신은 **벌크 UPDATE**라 미매핑 컬럼을 보존한다(delete+insert였다면 DB 기본값으로 되돌아가 매핑을 붙이는 날 데이터가 사라진다 — `updatePreservesColumnsTheEntityDoesNotMap`이 못박는다).
+- **또 하나**: 미설정 variant의 GET은 `periodMonths: null`을 낸다. 알림 판정이 쓰는 기본 6개월은 `EvaluateAlertOnDealUseCase`의 **private 상수**라 어댑터가 읽을 수 없다. 지어내 채우면 그 값이 세 번째 사본이 되고 사본은 드리프트한다.
+- **잠정값**: 위 넷만. web REG-03 화면은 이 REST 위에 올린다(별건).
+- **재개 트리거**: ① `AlertPolicyEntity`에 세 컬럼이 매핑되어야 한다 ② `DEFAULT_PERIOD_MONTHS`가 한 곳에서 소유되어 어댑터도 읽을 수 있어야 한다 ③ 예외 핸들러가 한 곳으로 합쳐져야 한다. 셋 다 **core 기존 파일**이라 상대와 조율. (구현 수단은 여러 가지다 — 위 셋은 "무엇이 참이 되어야 하는가"이지 방법이 아니다.)
 
 ## [열림] Q-46. 조건 태그(`applied_conditions`)를 담을 컬럼이 `raw_deal_post`에 없다
 - **맥락**: BM-02 AC-2는 "카드·쿠폰 조건가는 as-posted(역산 금지), **태그만 보존**"을 요구한다. `normalize_price`는 `카할`(카드할인)·`유배`(유료배송 금액미상)·`N카드` 태그를 계산해왔으나 **아무도 저장하지 않아 전부 버려지고 있었다**(2026-07-09 발견). 펨코의 `와우무배`·`네멤무료`·`1만5천원무료`(조건부 무료배송)도 마찬가지.

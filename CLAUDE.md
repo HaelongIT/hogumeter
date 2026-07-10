@@ -53,6 +53,7 @@
 
 ### 테스트를 짜는 법
 - **부품별 GREEN은 계약을 보장하지 않는다.** 값이 부품 사이를 흐르면 그 경로를 관통하는 좁은 테스트를 하나 둔다(`B(A())`). 소비처의 허용집합은 손으로 만든 값이 아니라 **생산자가 실제로 낼 수 있는 값 전부**로 시험한다.
+- **읽기만 하는 테이블·큐·포트를 보면 "누가 여기에 쓰는가"를 프로덕션 코드에서 찾아 이름을 댄다.** 못 대면 그 기능은 죽어 있다 — 테스트의 `save(...)`나 fake의 반환값은 생산자가 아니다. `alert_policy`는 읽히기만 해서 목표가 알림이 발화할 수 없었고, 트리거가 없어 `raw_deal_post`는 소비되지 않았으며, 모든 테스트는 GREEN이었다.
 - **모듈 테스트가 전부 GREEN이어도 스택은 안 뜬다.** 컨테이너 경계·포트·프록시 DNS·argv 인코딩은 프로세스 밖의 계약이라 어떤 단위 테스트도 안 본다. 종단 스모크를 스크립트로 만들고 CI에 건다.
 - **차단·필터 장치는 "무엇을 통과시켜야 하는가"를 먼저·더 많이 테스트한다.** 오차단은 조용히 작업을 마비시키지만 미차단은 다른 방어선이 받는다.
 - **저장소 전체를 훑는 일괄 변환을 손으로 돌리지 않는다.** 무엇이 바이너리인지는 git이 안다(`.gitattributes`) — `tr`·`sed`는 모른다(jar에서 `0x0D`를 지웠다). 손으로 해야 하면 대상을 화이트리스트로 열거하고, 그 전에 **"정말 고칠 게 있는가"를 `git diff`로 먼저 묻는다.** 광범위한 되돌리기(`checkout -- .`)도 파괴다.
@@ -156,5 +157,5 @@ bash .githooks/pre-commit.test.sh  # gitleaks 훅의 차단/통과 계약
 - `docs/benchmark/00~07` 기준가 엔진 모듈 상세 — 개요·아키텍처·데이터모델·API·**04 인수조건(=TDD 기준)**·비기능·TDD·에러코드
 - `docs/91-open-questions.md` 기술 보류 보드(잠정값+재개 트리거) / `docs/98-field-notes.md` 사이트별 실측 / `docs/99-lessons.md` 교훈 누적
 - `working-area/` 작업 보드 — `progress-log`(무중단 중 사용자에게 알릴 것, 최신 위)·`decisions-needed`(정할 것)·`decision-log`(정한 것)·`pre-deploy-checklist`(운영 배포 갭)·`review-template/`(코드리뷰 틀, 복사해서 사용)
-- `.claude/rules/<scope>.md` 언어·디렉토리 한정 규칙(`paths:` frontmatter — 해당 파일을 열 때만 로드). `core-java`·`collector-python`·`web-react`
+- `.claude/rules/<scope>.md` 언어·디렉토리 한정 규칙(`paths:` frontmatter — 해당 파일을 열 때만 로드). `core-java`·`collector-python`·`web-react`·`shell-scripts`
 - `.claude/hooks/` `session-brief`(SessionStart: 열린 보드·드리프트 지표 주입)·`guard`(PreToolUse: 실 네트워크 차단) + 각 `*.test.sh`

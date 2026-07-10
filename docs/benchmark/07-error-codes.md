@@ -4,10 +4,12 @@
 
 | code | 의미 | 상황 |
 |---|---|---|
-| BM_VARIANT_NOT_FOUND | 대상 없음 | 기준가 조회 시 variant 부재 |
-| BM_INVALID_PERIOD | 기간 파라미터 비정상 | periodMonths ≤ 0 또는 비숫자 |
+| BM_VARIANT_NOT_FOUND | 대상 없음 | 기준가 조회 시 variant 부재. **알림 정책(REG-03) 조회·저장의 variant 부재에도 같은 코드** |
+| BM_INVALID_PERIOD | 기간 파라미터 비정상 | periodMonths ≤ 0 또는 비숫자. **알림 정책의 기간 P에도 같은 코드** — 같은 값이므로 코드를 늘리지 않는다 |
+| REG_INVALID_ALERT_POLICY | 알림 정책 입력 비정상 | targetPrice ≤ 0(0은 "미설정"이 아니라 "공짜여야 알림") / quiet hours가 0~23 밖이거나 한쪽만 설정 / periodMonths 누락 |
 
 - 에러 응답 형식 = `{ "code": "...", "message": "..." }` (Q-2 해소, `ApiExceptionHandler` `@RestControllerAdvice`).
+- `REG_INVALID_ALERT_POLICY`는 **별도 advice**(`AlertPolicyExceptionHandler`)가 매핑한다 — 응답 모양은 동일. 소유권 때문에 갈라져 있을 뿐이며 합쳐야 한다(docs/91 Q-48).
 
 ## FE(web) 처리 — 확정 (2026-07-09, M1 web 최소 슬라이스)
 
