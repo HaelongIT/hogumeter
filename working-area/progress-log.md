@@ -16,6 +16,13 @@
 
 ---
 
+## 2026-07-10 — Q-27 ① 가격 변경 재처리 (BM-01 AC-2 나머지 절반)
+
+- **한 일**: 수집기가 업서트한 새 가격이 `deal_event`까지 가지 못하던 것을 뚫었다. 순수 `PriceRefresh`(산술) + 신규 `ReprocessDealPricesUseCase`(IO). 스케줄러가 **ingest → 가격 → 종료** 순으로 돈다. **기존 core 파일 무수정**(`DealEventMapper.toDomain`으로 crossVerified를 복원해 `applyMerge`를 그대로 씀). 스모크 5-1c가 `999000/899000/899000`(first 불변 / min 갱신 / last 갱신)을 증명한다.
+- **자율로 정한 것**(되돌리기 쉬움, decision-log 참조): ① `priceLast`의 후보는 **활성 원문뿐** — 방금 품절된 800,000원을 "지금 가격"이라 말하지 않는다. ② 그래도 그 800,000원은 `priceMin`("지나간 기회")에 남는다. ③ 동시각 관측이 여럿이면 더 싼 쪽. ④ 종료 단계를 가격 뒤에 둬서 닫히기 직전의 마지막 가격까지 반영. ⑤ 바뀐 게 없으면 쓰지 않는다(빈 갱신이 lastSeen만 흔들면 "언제 실제로 변했나"를 잃는다).
+- **⚠️ 당신이 볼 것**: 없음. Q-27 잔여는 이제 ②변경 감지기(효율) ③최초부터 품절인 원문 ④애매/스킵 글 재스캔 — 전부 core 기존 파일 수정이 필요해 상대와 조율.
+- **다음**: PERF-01~04·OPS-01이 여전히 어느 보드에도 없다. 추적부터 시킨다.
+
 ## 2026-07-10 — OBS-02 파이프라인 카운터 (Q-57 신설)
 
 - **한 일**: `PipelineScheduler`가 매 틱 `PipelineTickReport`를 남긴다 — `postsLinked · dealsCreated · merged · queued · ended · pending · rawTotal`. 병합률은 "링크는 늘었는데 딜은 안 늘었다"로 **유도**한다(직접 셀 수 없다). 0을 생략하지 않는다. 스모크가 실 로그에서 `dealsCreated=1 merged=0 pending=0`을 확인한다. 리포지토리·유스케이스 **무수정**(JpaRepository의 `count()`만 씀).

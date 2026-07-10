@@ -166,6 +166,26 @@ tick=$(compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep 'dea
 echo "$tick" | grep -q 'merged=0' || fail "병합이 아닌데 merged가 0이 아니다: $tick"
 echo "$tick" | grep -q 'pending=0' || fail "원문을 다 처리했는데 pending이 남았다: $tick"
 
+echo "--- 5-1c) 가격 변경 재처리: raw 업서트 -> deal_event.price_last (BM-01 AC-2) ---"
+# 수집기 재폴링을 흉내낸다 — 같은 원문의 가격이 내렸다. 이미 링크된 원문이라 ingest는 다시 안 읽는다.
+# 그래서 별개 경로(ReprocessDealPricesUseCase)가 필요하다(docs/91 Q-27 ①).
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "raw_deal_post 가격 갱신 실패"
+update raw_deal_post set headline_price = 899000, captured_at = now() where site='ppomppu' and post_id='smoke-1';
+SQL
+
+deal_price() {
+	compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+		-c "select price_first || '/' || price_min || '/' || price_last from deal_event limit 1" | tr -d '\r'
+}
+for _ in $(seq 20); do
+	prices=$(deal_price)
+	[ "$prices" = "999000/899000/899000" ] && refreshed=1 && break
+	sleep 2
+done
+# priceFirst는 불변(기준가 분포가 그 위에 선다) / priceMin은 지나간 기회 / priceLast는 "지금"
+[ "${refreshed:-0}" = 1 ] || fail "가격 변경이 deal_event에 반영되지 않았다 (first/min/last=$prices)"
+
 echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
 # 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.
 purchase=$(mktemp)

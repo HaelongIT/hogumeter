@@ -12,9 +12,8 @@ import org.junit.jupiter.api.Test;
 /**
  * 파이프라인 트리거의 순수 계약. mock 대신 람다 seam을 쓴다(이 프로젝트 테스트는 실객체를 쓴다).
  *
- * <p>스케줄러의 존재 이유는 "두 유스케이스를 주기적으로 부른다"이고, 그 계약에서 진짜 중요한 것은
- * <b>순서</b>와 <b>한 단계의 실패가 다른 단계·다음 주기를 죽이지 않는다</b>는 것, 그리고
- * <b>무슨 일이 있었는지 남긴다</b>는 것이다.
+ * <p>중요한 것 셋: <b>순서</b>(ingest → 가격 → 종료), <b>한 단계의 실패가 뒤 단계와 다음 주기를
+ * 죽이지 않는다</b>, 그리고 <b>무슨 일이 있었는지 남긴다</b>.
  */
 class PipelineSchedulerTest {
 
@@ -23,54 +22,59 @@ class PipelineSchedulerTest {
 	private final List<String> calls = new ArrayList<>();
 	private final AtomicReference<PipelineTickReport> reported = new AtomicReference<>();
 
-	private PipelineScheduler scheduler(Runnable ingest, Runnable reprocess) {
-		return new PipelineScheduler(ingest, reprocess, () -> EMPTY, reported::set);
+	private final Runnable ingest = () -> calls.add("ingest");
+	private final Runnable prices = () -> calls.add("prices");
+	private final Runnable status = () -> calls.add("status");
+
+	private static Runnable boom(String message) {
+		return () -> {
+			throw new IllegalStateException(message);
+		};
+	}
+
+	private PipelineScheduler scheduler(Runnable ingest, Runnable prices, Runnable status) {
+		return new PipelineScheduler(ingest, prices, status, () -> EMPTY, reported::set);
 	}
 
 	@Test
-	@DisplayName("ingest 다음 reprocess — 이번 주기에 새로 링크된 원문까지 종료 판정이 보게 한다")
-	void runsIngestBeforeReprocess() {
-		scheduler(() -> calls.add("ingest"), () -> calls.add("reprocess")).tick();
+	@DisplayName("ingest → 가격 → 종료. 종료가 마지막이라 닫히기 직전의 가격까지 반영된다")
+	void runsStepsInOrder() {
+		scheduler(ingest, prices, status).tick();
 
-		assertThat(calls).containsExactly("ingest", "reprocess");
+		assertThat(calls).containsExactly("ingest", "prices", "status");
 	}
 
 	@Test
-	@DisplayName("ingest가 터져도 reprocess는 돌고, tick은 예외를 밖으로 내지 않는다 (스케줄러가 죽지 않는다)")
-	void ingestFailureDoesNotStopReprocess() {
-		PipelineScheduler scheduler = scheduler(
-				() -> {
-					throw new IllegalStateException("DB 연결 끊김");
-				},
-				() -> calls.add("reprocess"));
+	@DisplayName("ingest가 터져도 뒤 단계는 돌고, tick은 예외를 밖으로 내지 않는다 (스케줄러가 죽지 않는다)")
+	void ingestFailureDoesNotStopTheRest() {
+		PipelineScheduler scheduler = scheduler(boom("DB 연결 끊김"), prices, status);
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
-		assertThat(calls).containsExactly("reprocess");
+		assertThat(calls).containsExactly("prices", "status");
 	}
 
 	@Test
-	@DisplayName("reprocess가 터져도 tick은 정상 반환한다 — 다음 주기가 다시 시도한다")
-	void reprocessFailureIsIsolated() {
-		PipelineScheduler scheduler = scheduler(
-				() -> calls.add("ingest"),
-				() -> {
-					throw new IllegalStateException("낙관적 락 충돌");
-				});
+	@DisplayName("가격 단계가 터져도 종료 판정은 돈다 — 단계는 서로 독립이다")
+	void priceFailureDoesNotStopStatus() {
+		PipelineScheduler scheduler = scheduler(ingest, boom("낙관적 락 충돌"), status);
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
-		assertThat(calls).containsExactly("ingest");
+		assertThat(calls).containsExactly("ingest", "status");
 	}
 
 	@Test
-	@DisplayName("두 단계가 다 터져도 tick은 반환하고, 그때도 보고서를 낸다 — 무엇이 남았는지가 그때 더 중요하다")
-	void bothFailuresStillReport() {
-		PipelineScheduler scheduler = scheduler(
-				() -> {
-					throw new IllegalStateException("ingest 실패");
-				},
-				() -> {
-					throw new IllegalStateException("reprocess 실패");
-				});
+	@DisplayName("종료 단계가 터져도 tick은 정상 반환한다 — 다음 주기가 다시 시도한다")
+	void statusFailureIsIsolated() {
+		PipelineScheduler scheduler = scheduler(ingest, prices, boom("종료 실패"));
+
+		assertThatCode(scheduler::tick).doesNotThrowAnyException();
+		assertThat(calls).containsExactly("ingest", "prices");
+	}
+
+	@Test
+	@DisplayName("세 단계가 다 터져도 tick은 반환하고, 그때도 보고서를 낸다 — 무엇이 남았는지가 그때 더 중요하다")
+	void allFailuresStillReport() {
+		PipelineScheduler scheduler = scheduler(boom("a"), boom("b"), boom("c"));
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
 		assertThat(reported.get()).isNotNull();
@@ -82,8 +86,7 @@ class PipelineSchedulerTest {
 		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
 				new PipelineSnapshot(1, 0, 0, 0, 0, 1),
 				new PipelineSnapshot(1, 1, 1, 0, 0, 0)));
-		PipelineScheduler scheduler = new PipelineScheduler(
-				() -> calls.add("ingest"), () -> calls.add("reprocess"),
+		PipelineScheduler scheduler = new PipelineScheduler(ingest, prices, status,
 				() -> snapshots.remove(0), reported::set);
 
 		scheduler.tick();
@@ -97,6 +100,7 @@ class PipelineSchedulerTest {
 	@DisplayName("아무 일도 없어도 보고한다 — 조용한 스케줄러는 죽은 스케줄러와 구별되지 않는다")
 	void idleTickStillReports() {
 		scheduler(() -> {
+		}, () -> {
 		}, () -> {
 		}).tick();
 

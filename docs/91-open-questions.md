@@ -160,7 +160,7 @@ _(이하 2026-07-08 2차 기획 통합에서 등장한 위임 항목. 출처: `w
 - **재개 트리거**: 스케줄러 배선(반복 폴링) 착수 시 — raw_deal_post에 처리 마커(예: processed_at, V2 컬럼) 추가 또는 처리 이력 테이블로 멱등 보장.
 - **진행(2026-07-09)**: 폴링 루프(`scheduler.loop.run_cycle`)는 생겼으나 **DB 배선이 없어 트리거는 아직 미발동**. 반복 폴링이 실제로 `raw_deal_post`를 쓰기 시작하는 시점(Q-36)에 이 항목을 처리한다 — 그때까지 애매/스킵 글 재처리 문제는 그대로 열려 있다.
 - **⚠️ 트리거 발동(2026-07-09, Q-36 해소)**: collector가 이제 실제로 `raw_deal_post`에 **업서트**한다. 그래서 문제가 하나 커졌다 — 품절·가격변경이 `raw_deal_post`엔 반영되지만, 그 글에 이미 `deal_event_source` 링크가 있으면 **`findUnprocessed()`가 걸러내 core가 재처리하지 않는다.** 즉 **상태변화가 `deal_event`까지 도달하지 못한다**(BM-01 AC-2의 절반이 끊긴다). 애매/스킵 글 재처리 여지와 별개로 이게 더 시급하다. 처리 마커(`processed_at`) 대신 **`captured_at` 갱신을 감지하는 재처리 조건**이 필요할 수 있다(예: `deal_event.last_seen < raw.captured_at`). core 소유 영역이라 상대와 조율 대상.
-- **✅ 상태→ENDED 절반 해소(2026-07-09)**: 신규 `ReprocessDealStatusUseCase.reprocessEndedDeals()` — 링크된 **모든** 원문이 SOLD_OUT/DELETED면 `deal_event`를 ENDED로, last_seen을 종료 근거 시각으로 단조 갱신. `findUnprocessed`·`IngestDealsUseCase` **무수정**(additive: `DealEventEntity.applyStatusChange`·`DealEventRepository.findByStatusIn`만). Testcontainers 4케이스(단일 품절·DELETED·다중소스 중 하나 ACTIVE 유지·전부 ACTIVE 무변). **잔여(여전히 열림)**: ① 가격변화 재처리(raw `headline_price` → deal `priceLast`), ② `captured_at>last_seen` 변경 감지기(전수 스캔이라 정확성은 무관, 효율 seam), ③ 최초 수집 시 이미 품절인 원문(ingest가 ACTIVE로 생성 — ingest 관심사), ④ 애매/스킵 글 재처리 중복(원 Q-27), ~~⑤ 배치 오케스트레이션~~ **해소(2026-07-10)**: `adapter/scheduler/PipelineScheduler`가 `ingestPending()` → `reprocessEndedDeals()` 순으로 주기 호출(`core.pipeline.interval-ms`, 기본 60s). `@EnableScheduling`은 신규 `SchedulingConfig`에(기존 core 파일 무수정). 단계별 예외 격리 + `initialDelay=interval`로 `@SpringBootTest` 오염 방지. `scripts/smoke.sh` 5-1b가 `raw_deal_post` → `deal_event` → 기준가 REST 종단을 매번 증명한다.
+- **✅ 상태→ENDED 절반 해소(2026-07-09)**: 신규 `ReprocessDealStatusUseCase.reprocessEndedDeals()` — 링크된 **모든** 원문이 SOLD_OUT/DELETED면 `deal_event`를 ENDED로, last_seen을 종료 근거 시각으로 단조 갱신. `findUnprocessed`·`IngestDealsUseCase` **무수정**(additive: `DealEventEntity.applyStatusChange`·`DealEventRepository.findByStatusIn`만). Testcontainers 4케이스(단일 품절·DELETED·다중소스 중 하나 ACTIVE 유지·전부 ACTIVE 무변). **잔여(여전히 열림)**: ~~① 가격변화 재처리~~ **해소(2026-07-10)**: 신규 `ReprocessDealPricesUseCase` + 순수 `PriceRefresh`. `priceFirst`·`firstSeen`·`status` 불변, `priceLast`="지금"(**활성** 원문 중 최신 관측 — 방금 품절된 최저가는 "지금 가격"이 아니다), `priceMin`="지나간 기회"(품절 원문도 포함), `lastSeen` 단조, 변화 없으면 미기록. 기존 core 파일 무수정(`DealEventMapper.toDomain`으로 crossVerified 복원). 스모크 5-1c가 `999000/899000/899000` 종단 증명. / ② `captured_at>last_seen` 변경 감지기(전수 스캔이라 정확성은 무관, 효율 seam), ③ 최초 수집 시 이미 품절인 원문(ingest가 ACTIVE로 생성 — ingest 관심사), ④ 애매/스킵 글 재처리 중복(원 Q-27) — **②③④는 core 기존 파일 수정이 필요해 상대와 조율.** / ~~⑤ 배치 오케스트레이션~~ **해소(2026-07-10)**: `adapter/scheduler/PipelineScheduler`가 `ingestPending()` → `reprocessPriceChanges()` → `reprocessEndedDeals()` 순으로 주기 호출(`core.pipeline.interval-ms`, 기본 60s). 종료가 마지막이라 닫히기 직전의 마지막 가격까지 반영된다. `@EnableScheduling`은 신규 `SchedulingConfig`에. 단계별 예외 격리 + `initialDelay=interval`로 `@SpringBootTest` 오염 방지. 매 틱 `PipelineTickReport` 카운터(OBS-02, Q-57).
 
 ## [열림] Q-28. C-5(⚠️라벨=전 통계 제외) 표본 조립 배선은 후속
 - **맥락**: v1.3 C-5는 제외키워드 LABEL도 전 통계 제외(가시성만 차등). `ExcludeKeywordPolicy` 판정·javadoc은 반영했으나, 기준가/알림 표본 조립이 실제로 키워드 히트 딜을 걸러내는 배선은 미구현(딜 제목 접근 필요).
@@ -240,6 +240,16 @@ _(Q-39. BLOCKED 자동 중지의 수동 재개 경로 — **`working-area/decisi
 _(Q-40. REL-06 파싱 드리프트 감지 — **해소됨 2026-07-09**: `scheduler/drift.py`(순수, 이동창). 두 신호를 본다 — ① **조용한 0건**(성공인데 연속 0건 = 구조 변경의 전형. 뽐뿌 셀렉터 체인이 끊겼을 때 예외 없이 0건이었다) ② **성공률 저하**(창 안 TRANSIENT 비율). BLOCKED는 세지 않는다(이미 중지+Alert). 창 미충족 시 미판정, 회복 시 재무장, 같은 증상 반복 알림 억제. `__main__`이 사이클마다 관측을 먹인다. 임계는 **미승인 잠정 주입**(아래 Q-45). 여기서 제거.)_
 
 _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildCommand`가 데카르트 곱을 만든다(용량 2 × 색상 2 → variant 4). 축 이름 중복은 거부(맵에서 덮어쓰기), 빈 축 행은 무시, 화면이 "생성될 variant N개"를 미리 보여준다. 여기서 제거.)_
+
+## [열림] Q-58. PERF-01~04·OPS-01이 어느 보드에도 없었다 (측정 자체가 없다)
+- **맥락**: 2026-07-10 요구 문서 전수 대조에서 발견. `docs/20`의 다음 요구는 코드에도 보드에도 대응물이 없다.
+- **PERF-03**(웹 API p95 ≤ 500ms): **측정하지 않는다.** 기준가는 매 요청 재계산이고 캐시가 없다(`@Cacheable` 0건). 표본이 작아 지금은 빠르지만 아무도 재고 있지 않다.
+- **PERF-04 후반**(기준가 증분 재계산 또는 요청 시 계산+캐시): 캐시 없음. 문서가 "1인용 규모에서 과최적화 금지"라 했으니 **의도된 선택으로 볼 수 있으나 어디에도 그렇게 적혀 있지 않았다.** 인덱스는 충족(`idx_deal_event_variant_seen`, `raw_deal_post` unique).
+- **PERF-01**(알림 지연 p95 ≤ 폴링주기+30초): 텔레그램 발송 자체가 스텁(Q-20). 측정 불가.
+- **PERF-02**(네이버 쿼터 50% 이하 + 캐시 1h): 네이버 어댑터가 스텁(Q-3). 측정 불가.
+- **OPS-01 후반**(환경별 `.env` 분리 local/prod): `.env.example` 하나뿐. 운영 `.env`는 사람이 EC2에서 만든다(pre-deploy §B).
+- **잠정값**: 전부 현 상태 유지. 기준가는 요청 시 재계산(캐시 없음), 응답 시간은 측정하지 않는다.
+- **재개 트리거**: PERF-03/04는 **실 데이터가 유입돼 딜이 수백 건 쌓인 뒤** 측정한다 — 그 전의 캐시는 과최적화다(문서가 금지). PERF-01/02는 토큰·키(Q-20·Q-3). OPS-01은 운영 배포 시 `.env.prod` 작성(pre-deploy §B로 이미 추적 중).
 
 ## [열림] Q-57. core는 구조화 로그(JSON)를 내지 않고, 카운터도 절반뿐이다
 - **맥락**: OBS-01은 "구조화 로그(JSON)", OBS-02는 "핵심 카운터: 수집 글 수, 매칭 CONFIRMED/CANDIDATE/REJECTED 비율, 병합률, 알림 발송 수, 큐 적체, API 쿼터 사용량"을 요구한다. **어느 보드에도 없던 요구다**(2026-07-10 발견).
