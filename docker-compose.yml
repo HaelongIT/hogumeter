@@ -3,7 +3,7 @@
 
 services:
   postgres:
-    image: postgres:16
+    image: postgres:18
     # 상주 서비스 3종(postgres·core·web)은 EC2 재부팅·크래시에서 스스로 돌아와야 한다.
     # `unless-stopped`: 사람이 명시적으로 멈춘 것만 존중한다(`docker compose stop`).
     restart: unless-stopped
