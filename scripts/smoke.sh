@@ -565,10 +565,20 @@ code_no_creds=$(curl -s -o /dev/null -w '%{http_code}' "$auth_url")
 code_with_creds=$(curl -s -o /dev/null -w '%{http_code}' -u smoke:smoke-pass "$auth_url")
 # 헬스체크는 인증 뒤에 숨으면 안 된다 — 자격증명 없이도 200이어야 컨테이너가 healthy가 된다.
 code_health=$(curl -s -o /dev/null -w '%{http_code}' "${auth_url}healthz")
+# **데이터는 전부 /api 뒤에 있다.** nginx.conf는 "server 레벨이라 /api 프록시에도 적용된다"고
+# 단언하지만 아무것도 확인하지 않았다 — `location /api/`에 `auth_basic off;` 한 줄이 들어가면
+# 정적 페이지는 막힌 채 **API만 열린다.** 그 이미지는 이 컨테이너 안에 core가 없으므로,
+# 인증을 통과하면 502(업스트림 없음), 못 하면 401이다. 둘의 차이가 곧 인증 여부다.
+code_api_no_creds=$(curl -s -o /dev/null -w '%{http_code}' "${auth_url}api/v1/products")
+code_api_with_creds=$(curl -s -o /dev/null -w '%{http_code}' -u smoke:smoke-pass "${auth_url}api/v1/products")
 docker rm -f "$auth_cid" >/dev/null
 [ "$code_health" = 200 ] || fail "auth를 켜니 /healthz가 ${code_health}다 (헬스체크가 막힌다)"
 [ "$code_no_creds" = 401 ] || fail "Basic Auth를 켰는데 인증 없이 ${code_no_creds}를 준다"
 [ "$code_with_creds" = 200 ] || fail "올바른 자격증명인데 ${code_with_creds}를 준다"
+[ "$code_api_no_creds" = 401 ] ||
+	fail "**/api가 인증 없이 ${code_api_no_creds}를 준다** — 데이터가 통째로 열려 있다(SEC-02)"
+[ "$code_api_with_creds" = 502 ] ||
+	fail "인증을 통과한 /api가 ${code_api_with_creds}다 (기대: 502 — 이 컨테이너엔 core가 없다)"
 
 echo
 echo "SMOKE PASS: web -> nginx -> core -> postgres 왕복 + SEC-02 Basic Auth 확인"
