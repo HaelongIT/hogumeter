@@ -1,3 +1,23 @@
+## 2026-07-11 — 판단 화면 감사(전부 살아 있음) + BenchmarkView 계약 드리프트를 종단에서 잡는다
+
+**한 일**: ② 판정 절차 ⓒ(소비처 0 감사)를 web에 돌렸다.
+
+- `BenchmarkView`·`SignalView`·`CadenceView` 필드를 화면이 전부 읽는다. **소비처 0 필드 없음.**
+  (내 첫 감사가 `sampleSize`·`crossVerifiedCount`를 "죽었다"고 했으나 착시였다 — 실제 필드명은 `n`·`m`.)
+- collector 소비처 0 함수는 `parse_bunjang`(M2) 하나뿐. core/web 판단 경로는 살아 있다.
+
+**발견한 갭**: 스모크가 `tier`·`n`은 봤지만 web이 기대하는 **전체 필드 집합**은 안 봤다.
+core가 `goodDealLine`을 다른 이름으로 바꾸면 단위 테스트는 GREEN인데 화면만 조용히 undefined를 그린다.
+→ 스모크에 11개 필드 존재 검증을 추가했다(정본 = `web/api/types.ts`의 BenchmarkView).
+뮤테이션 증명: 없는 필드를 요구하게 하면 스모크가 RED가 된다.
+
+**게이트로 안 만든 이유**: 자바 record ↔ TS interface를 파싱해 대조하려면 제네릭·nullable·중첩 record
+매핑이 복잡한데, 스모크가 **실제 JSON**으로 이미 종단 검증한다. 게이트는 스모크와 중복이면서 더 약하다.
+
+**검증**: 종단 스모크 PASS · shellcheck clean.
+
+---
+
 ## 2026-07-11 — 게이트 다섯의 한계를 전수로 세고, 덮을 수 있는 둘을 덮었다
 
 **한 일**: "게이트의 명시된 한계는 다음 게이트의 명세다"를 게이트 다섯에 전부 적용했다.
