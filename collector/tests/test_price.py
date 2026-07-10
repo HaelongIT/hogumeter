@@ -330,3 +330,30 @@ def test_other_pickup_words():
         tags = normalize_price(f"[GS25]맥주 (8,800원/{word})").applied_conditions
         assert SHIPPING_UNKNOWN not in tags, word
         assert f"수령:{word}" in tags, word
+
+
+# ── `원 없는 숫자` 폴백이 모델명을 가격으로 읽는다 ─────────────────────────
+#
+# `_BARE`(4자리+ 숫자)는 golden 49개 제목에서 **한 번도 돌지 않는다** — 검증된 적 없는 가지다.
+# 그 가지에 `RTX 5070` → 5,070원, `RTX 4090` → 4,090원이 있다. 그래픽카드는 핫딜 최빈 품목이다.
+#
+# **거짓 가격은 놓침보다 나쁘다.** 놓치면 원문이 `raw_deal_post`에 남아 사람이 본다.
+# 거짓 가격은 조용히 기준가 분포에 들어가 굿딜라인을 망친다(절대 원칙 1·3).
+
+
+def test_gpu_model_number_is_not_a_price():
+    assert normalize_price("[다나와]MSI RTX 5070 특가") is None
+    assert normalize_price("[컴퓨존]RTX 4090 재입고") is None
+
+
+def test_model_number_followed_by_a_letter_is_not_a_price():
+    assert normalize_price("[퀘이사존]라이젠 7 5600X 정품") is None
+
+
+def test_bare_number_after_hangul_is_still_a_price():
+    """`원` 없는 숫자 폴백은 살려 둔다(확정본 경계 케이스)."""
+    assert normalize_price("[G마켓]라면 13490").headline_price == 13_490
+
+
+def test_bare_fallback_still_loses_to_a_real_price():
+    assert normalize_price("[다나와]MSI RTX 5070 (899,000원/무료)").headline_price == 899_000

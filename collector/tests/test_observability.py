@@ -77,6 +77,7 @@ def test_counters_report_yield_per_site():
         "failures": 0,
         "blocked": 0,
         "alerts": 0,
+        "no_price": 0,
         "conditional": 0,
         "shipping_unknown": 0,
         "stopped_sites": [],
@@ -164,3 +165,30 @@ def test_shipping_unknown_is_a_strict_subset_of_conditional():
 
     assert counters(result)["conditional"] == 3
     assert counters(result)["shipping_unknown"] == 2  # 카할은 배송비 문제가 아니다
+
+
+def test_no_price_deals_are_counted_not_swallowed():
+    """BM-02 AC-3: 가격 패턴이 없으면 딜을 만들지 않는다. **그 사실이 로그에 보여야 한다.**
+
+    루리웹 golden은 28딜 중 10건(36%)이 가격 없음이다. 세지 않으면 폴링을 켠 사람은
+    "표본이 왜 안 쌓이지"를 알 수 없다. 0도 센다(OBS-02).
+    """
+    result = _result(
+        [SiteObservation("ruliweb", Outcome.OK, 3)],
+        deals=[_deal("a"), _priceless("b"), _priceless("c")],
+    )
+
+    c = counters(result)
+    assert c["deals"] == 3  # 수집은 3건
+    assert c["no_price"] == 2  # 그중 2건은 딜이 되지 못한다
+
+
+def test_no_price_zero_is_not_omitted():
+    result = _result([SiteObservation("ppomppu", Outcome.OK, 1)], deals=[_deal("1")])
+
+    assert counters(result)["no_price"] == 0
+
+
+def _priceless(post_id: str) -> ParsedDeal:
+    return ParsedDeal(site="ruliweb", post_id=post_id, title="가격 없는 글", url="u",
+                      headline_price=None)

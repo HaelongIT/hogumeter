@@ -46,6 +46,9 @@ def counters(result: CycleResult) -> dict:
         "failures": sum(1 for o in result.observations if o.outcome is Outcome.TRANSIENT),
         "blocked": sum(1 for o in result.observations if o.outcome is Outcome.BLOCKED),
         "alerts": len(result.alerts),
+        # BM-02 AC-3: 가격 패턴이 없으면 딜이 되지 못한다(미상 버킷과 다르다 — 그건 제품 축 판별 실패다).
+        # 세지 않으면 "표본이 왜 안 쌓이지"에 답할 수 없다. golden 실측: 루리웹 28딜 중 10건(36%).
+        "no_price": sum(1 for deal in result.deals if deal.headline_price is None),
         "conditional": sum(1 for deal in result.deals if deal.applied_conditions),
         # `conditional`의 부분집합. 배송비를 모른 채 0을 더한 딜 — 저장된 가격은 실결제가가
         # 아니라 **하한**이고 기준가를 아래로 끈다(BM-02, docs/91 Q-46). 폴링을 켠 사람이
