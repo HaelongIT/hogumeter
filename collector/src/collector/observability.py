@@ -39,6 +39,19 @@ def counters(result: CycleResult) -> dict:
     (골든 실측: 뽐뿌 9.5% · 펨코 15%). 0도 센다 — "조건부 0건"과 "안 셌다"는 다른 사건이다.
     """
     by_site = {o.site: o.deal_count for o in result.observations}
+
+    def per_site(matches) -> dict[str, int]:
+        """폴링한 **모든** 사이트에 대해 센다 — 0을 생략하면 "없다"와 "안 셌다"가 구별되지 않는다.
+
+        세 카운터가 같은 모양이라 헬퍼로 묶는다. 흩어 두면 하나가 0을 빼먹는다.
+        """
+        return {
+            observation.site: sum(
+                1 for deal in result.deals if deal.site == observation.site and matches(deal)
+            )
+            for observation in result.observations
+        }
+
     return {
         "sites_polled": len(result.observations),
         "deals": sum(by_site.values()),
@@ -48,7 +61,11 @@ def counters(result: CycleResult) -> dict:
         "alerts": len(result.alerts),
         # BM-02 AC-3: 가격 패턴이 없으면 딜이 되지 못한다(미상 버킷과 다르다 — 그건 제품 축 판별 실패다).
         # 세지 않으면 "표본이 왜 안 쌓이지"에 답할 수 없다. golden 실측: 루리웹 28딜 중 10건(36%).
+        #
+        # **사이트별로도 낸다**: 뽐뿌의 제목 셀렉터가 끊기면 뽐뿌만 치솟는데 합산은 그 사실을 지운다.
+        # `pre-deploy`가 "루리웹 36%"를 보라고 하는데 합산으로는 구할 수 없었다.
         "no_price": sum(1 for deal in result.deals if deal.headline_price is None),
+        "no_price_by_site": per_site(lambda deal: deal.headline_price is None),
         "conditional": sum(1 for deal in result.deals if deal.applied_conditions),
         # `conditional`의 부분집합. 배송비를 모른 채 0을 더한 딜 — 저장된 가격은 실결제가가
         # 아니라 **하한**이고 기준가를 아래로 끈다(BM-02, docs/91 Q-46). 폴링을 켠 사람이
@@ -56,30 +73,18 @@ def counters(result: CycleResult) -> dict:
         "shipping_unknown": sum(
             1 for deal in result.deals if SHIPPING_UNKNOWN in deal.applied_conditions
         ),
-        # **사이트마다 편향이 다르다.** golden 실측: 번개 60% · 펨코 15% · 뽐뿌 4.8% · 루리웹 0%.
+        # **사이트마다 편향이 다르다.** golden 실측: 번개 60% · 펨코 15% · 루리웹 14.3% · 뽐뿌 4.8%.
         # 합산 하나로 내면 그 사실이 사라지고, 사이트 간 기준가를 섞어도 되는지 판단할 수 없다.
-        # 루리웹의 0%는 좋은 소식이 아니다 — 배송 무표기를 태그하지 않는다는 뜻이다(docs/91 Q-64).
-        "shipping_unknown_by_site": {
-            observation.site: sum(
-                1
-                for deal in result.deals
-                if deal.site == observation.site and SHIPPING_UNKNOWN in deal.applied_conditions
-            )
-            for observation in result.observations
-        },
+        # 어떤 사이트의 0%는 좋은 소식이 아니라 **태그가 죽었다**는 뜻일 수 있다.
+        "shipping_unknown_by_site": per_site(
+            lambda deal: SHIPPING_UNKNOWN in deal.applied_conditions
+        ),
         # 품절 표식이 죽어도 golden 테스트는 GREEN이다 — **golden은 고정이고 사이트는 변한다.**
         # 루리웹의 `[종료]`가 정확히 그랬다(제목 앵커 밖에 있어 파서가 볼 수 없었다).
         #
         # **알림이 아니라 카운터로 낸다.** 뽐뿌는 골든에서 `.end2`가 0건이라(Q-19 미검증) 알림으로
         # 만들면 매 사이클 오알림한다. 사실은 세고 결론은 사람이 낸다(절대 원칙 2).
         # 어떤 사이트의 이 값이 며칠째 0이면 그 사이트의 품절 셀렉터를 의심한다(pre-deploy).
-        "sold_out_by_site": {
-            observation.site: sum(
-                1
-                for deal in result.deals
-                if deal.site == observation.site and deal.status == "SOLD_OUT"
-            )
-            for observation in result.observations
-        },
+        "sold_out_by_site": per_site(lambda deal: deal.status == "SOLD_OUT"),
         "stopped_sites": sorted(name for name, state in result.states.items() if state.stopped),
     }

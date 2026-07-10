@@ -190,6 +190,8 @@ def test_the_cycle_event_reports_the_real_bias_per_site(monkeypatch, connection,
     assert cycle["shipping_unknown"] == 8
     assert cycle["shipping_unknown_by_site"] == {"ppomppu": 1, "ruliweb": 4, "fmkorea": 3}
     assert cycle["no_price"] == 10  # 루리웹 전량(docs/98: 잘림 2 · 무료 4 · 가격 없음 4)
+    # `pre-deploy`가 "루리웹 36%"를 보라고 한다 — **합산으로는 구할 수 없다.** 사이트별로 낸다.
+    assert cycle["no_price_by_site"] == {"ppomppu": 0, "ruliweb": 10, "fmkorea": 0}
     # `conditional`은 `shipping_unknown`의 **상위집합**이다: 배송비미상 8 + `카할` 1 + `수령:픽업` 1.
     # 픽업은 조건이지만 **배송 문제가 아니다** — 두 카운터가 다른 사실을 말한다는 증거다.
     assert cycle["conditional"] == 10

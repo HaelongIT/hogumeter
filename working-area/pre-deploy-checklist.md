@@ -72,7 +72,7 @@
 - [완료] 조건 태그가 `deal_event`까지 도달 — `PreserveAppliedConditionsUseCase`. 리뷰 큐·화면이 읽는다.
 - [완료] 배송비 "조용한 0" 4종(펨코 숫자·괄호 미지 어휘·잘린 제목·번개 `free_shipping:false`) → `배송비미상` 표식.
 - [필수] **첫 폴링 후 `docker logs collector`에서 아래를 본다** — golden과 실제가 다르면 파서가 어긋난 것이다:
-  - `no_price` 비율(골든: 루리웹 36%). 갑자기 100%에 가까우면 셀렉터가 끊겼다.
+  - `no_price_by_site` 비율(골든: 루리웹 10/28=36% · 뽐뿌 0 · 펨코 0). **어느 사이트가 갑자기 치솟는지** 본다 — 합산은 그 사실을 지운다. 그 사이트만 100%에 가까우면 제목 셀렉터가 끊겼다(REL-06 드리프트도 알린다).
   - `shipping_unknown_by_site`(골든: 뽐뿌 4.8% · 펨코 15% · 루리웹 14.3%). **0%가 나오면 표식이 죽은 것이다.**
   - `conditional`이 0이면 조건 태그가 유실되고 있다.
 - [필수] **첫 폴링 후 `core` 로그의 `pipeline tick`에서 `shippingUnknownTotal`이 0이 아닌지 본다.** 0이면 collector→core 표식 계약이 끊긴 것이다(`scripts/check-tag-contract.sh`는 리터럴만 본다 — DB에 쌓인 옛 표식은 못 본다).
