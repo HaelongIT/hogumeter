@@ -117,6 +117,11 @@ jobs:
       - name: 테이블 배선 게이트 계약 테스트
         run: bash scripts/check-table-wiring.test.sh
 
+      # `배송비미상` 표식은 collector가 만들고 core가 DB 너머에서 읽는다. 두 모듈이 같은 리터럴을
+      # 각자 들고 있으므로, 한쪽이 이름을 바꾸면 다른 쪽은 조용히 0을 세며 "오염 없음"이라고 말한다.
+      - name: 모듈 간 태그 계약 게이트 계약 테스트
+        run: bash scripts/check-tag-contract.test.sh
+
   # SEC-08: robots 게이트는 fake opener 테스트만 통과했다. 실제 소켓을 만지는 경로는
   # **실 수집을 켜기 직전에 처음 실행된다.** 로컬 서버에 대고 운영과 같은 코드 경로를 리허설한다.
   # (이 드릴이 `urllib_opener`가 403/429를 예외로 던져 차단 감지가 죽어 있던 것을 잡았다.)

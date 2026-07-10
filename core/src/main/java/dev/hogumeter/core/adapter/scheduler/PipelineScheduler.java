@@ -11,6 +11,7 @@ import dev.hogumeter.core.application.PreserveAppliedConditionsUseCase;
 import dev.hogumeter.core.application.ReprocessDealPricesUseCase;
 import dev.hogumeter.core.application.ReprocessDealStatusUseCase;
 import dev.hogumeter.core.domain.deal.DealStatus;
+import dev.hogumeter.core.domain.deal.DealTags;
 import dev.hogumeter.core.domain.purchase.PurchaseState;
 import java.util.List;
 import java.util.function.Consumer;
@@ -30,7 +31,7 @@ import org.springframework.stereotype.Component;
  * {@link IngestDealsUseCase#ingestPending()}을 부르는 사람이 없으면 {@code deal_event}가 생기지 않고,
  * 기준가 표본은 영원히 0이며 알림도 오지 않는다(2026-07-10까지 실제로 그랬다 — docs/91 Q-27 ⑤).
  *
- * <p>순서는 <b>관찰만료 → ingest → 가격 → 종료</b>다.
+ * <p>순서는 <b>관찰만료 → ingest → 조건태그 → 가격 → 종료</b>다.
  * <ol>
  * <li>관찰만료: 관찰 기간이 끝난 구매를 REPORT_PENDING으로(PUR-01). <b>ingest보다 먼저</b> 온다 —
  * ingest는 새 딜마다 알림을 태우는데 PUR-03의 "산 뒤 알림"은 OBSERVING 관찰에만 발화한다.
@@ -84,7 +85,11 @@ public class PipelineScheduler {
 						// DealEventEntity는 applied_conditions를 매핑하지 않는다(상대 소유). SQL로 센다.
 						jdbc.queryForObject(
 								"select count(*) from deal_event where cardinality(applied_conditions) > 0",
-								Long.class)),
+								Long.class),
+						// 표식의 정본은 collector다(scripts/check-tag-contract.sh가 두 리터럴을 묶는다).
+						jdbc.queryForObject(
+								"select count(*) from deal_event where ? = any(applied_conditions)",
+								Long.class, DealTags.SHIPPING_UNKNOWN)),
 				tick -> log.info("pipeline tick {}", tick));
 	}
 

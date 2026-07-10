@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
  */
 class PipelineSchedulerTest {
 
-	private static final PipelineSnapshot EMPTY = new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 0);
+	private static final PipelineSnapshot EMPTY = new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0);
 
 	private final List<String> calls = new ArrayList<>();
 	private final AtomicReference<PipelineTickReport> reported = new AtomicReference<>();
@@ -86,8 +86,8 @@ class PipelineSchedulerTest {
 	@DisplayName("틱마다 전후 스냅샷을 찍어 차이를 보고한다 (OBS-02)")
 	void reportsWhatTheTickDid() {
 		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
-				new PipelineSnapshot(1, 0, 0, 0, 0, 1, 0, 0),
-				new PipelineSnapshot(1, 1, 1, 0, 0, 0, 0, 0)));
+				new PipelineSnapshot(1, 0, 0, 0, 0, 1, 0, 0, 0),
+				new PipelineSnapshot(1, 1, 1, 0, 0, 0, 0, 0, 0)));
 		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, conditions, prices, status,
 				() -> snapshots.remove(0), reported::set);
 
@@ -162,8 +162,8 @@ class PipelineSchedulerTest {
 	@Test
 	void reportsHowManyObservationsExpired() {
 		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
-				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 1, 0),
-				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 3, 0)));
+				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 1, 0, 0),
+				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 3, 0, 0)));
 		new PipelineScheduler(expire, ingest, conditions, prices, status, () -> snapshots.remove(0), reported::set).tick();
 
 		assertThat(reported.get().purchasesExpired()).isEqualTo(2);
@@ -192,14 +192,32 @@ class PipelineSchedulerTest {
 	}
 
 	/**
+	 * OBS-02: 배송비 미상 딜은 조건부 딜의 <b>진부분집합</b>이고 성질이 다르다 — 조건부 가격은 as-posted로
+	 * 옳지만, 배송비를 모른 채 0을 더한 값은 기준가를 실제보다 아래로 끈다. 합쳐 세면 아무것도 말하지 않는다.
+	 */
+	@Test
+	@DisplayName("배송비 미상 딜을 따로 센다 — 이 수가 표본 오염률이고, 지금 그걸 보는 유일한 창이다")
+	void reportsShippingUnknownSeparatelyFromConditional() {
+		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
+				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 5, 1),
+				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 9, 4)));
+		new PipelineScheduler(expire, ingest, conditions, prices, status, () -> snapshots.remove(0), reported::set)
+				.tick();
+
+		assertThat(reported.get().conditionalTotal()).isEqualTo(9);
+		assertThat(reported.get().shippingUnknownTotal()).isEqualTo(4);
+		assertThat(reported.get().toString()).contains("shippingUnknownTotal=4");
+	}
+
+	/**
 	 * OBS-02: 조건부 딜은 <b>차이와 절대 수를 함께</b> 낸다. 태그가 붙은 딜은 기준가 표본 안에 그대로
 	 * 있으므로(as-posted), 그 절대 수가 이 사실을 볼 수 있는 유일한 창이다(화면 표시는 미구현, Q-46).
 	 */
 	@Test
 	void reportsConditionalDealsTaggedAndTheRunningTotal() {
 		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
-				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 2),
-				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 5)));
+				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 2, 0),
+				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 5, 0)));
 		new PipelineScheduler(expire, ingest, conditions, prices, status, () -> snapshots.remove(0), reported::set)
 				.tick();
 

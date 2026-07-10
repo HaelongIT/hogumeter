@@ -513,6 +513,24 @@ base_price=$(compose exec -T postgres psql -qAt -U "${DB_USER:-hogumeter}" -d "$
 	 where rp.post_id = 'cond-e2e'" 2>/dev/null | tr -d '\r' | head -1) || true
 [ "$base_price" = "NULL" ] || fail "조건부 가격을 역산했다(base_price=$base_price). AC-2는 역산을 금지한다"
 
+# 배송비 미상 표식(collector 정본 → core 사본)이 DB를 건너 실제로 검색된다.
+# 표식이 어긋나면 core는 조용히 0을 세며 "오염 없음"이라고 말한다(scripts/check-tag-contract.sh).
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "배송비 미상 원문 삽입 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status, raw)
+values ('ppomppu', 'ship-e2e', 'https://example.invalid/ship', '이상치테스트 256GB 특가', 970000, now(), 'ACTIVE',
+        '{"_derived":{"applied_conditions":["유료배송(금액미상)","배송비미상"]}}'::jsonb);
+SQL
+
+for _ in $(seq 20); do
+	unknown=$(compose exec -T postgres psql -qAt -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" -c "
+		select count(*) from deal_event where '배송비미상' = any(applied_conditions)" 2>/dev/null | tr -d '\r' | head -1) || true
+	[ "${unknown:-0}" -ge 1 ] && break
+	sleep 2
+done
+[ "${unknown:-0}" -ge 1 ] ||
+	fail "배송비 미상 표식이 deal_event에 도달하지 않았다 — core는 표본 오염률을 영원히 0으로 본다"
+
 echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
 # 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.
 purchase=$(mktemp)

@@ -16,6 +16,10 @@ package dev.hogumeter.core.adapter.scheduler;
  * @param conditionalDeals 조건부 가격 태그가 붙은 딜 수(BM-02 AC-2). 골든 실측으로 뽐뿌 9.5% · 펨코 15%가
  *        조건부다 — "N카드 할인 시 890,000"의 890,000은 분포에 그대로 들어가지만(as-posted, 역산 금지)
  *        <b>조건부라는 사실은 남아야 한다.</b> 이 수가 0에 붙어 있으면 태그가 어딘가에서 유실되고 있다.
+ * @param shippingUnknownDeals {@code conditionalDeals}의 <b>진부분집합</b> — 배송비를 모른 채 0을 더한 딜.
+ *        저장된 가격이 실결제가가 아니라 하한이라 <b>기준가를 실제보다 아래로 끈다</b>(좋은 딜을 놓친다).
+ *        `카할`은 여기 들지 않는다(as-posted로 옳은 값). 이 수가 표본 오염률이고, 지금 그것을 보는 유일한
+ *        창이다 — 표본에서 하한으로 취급하는 일은 미구현(docs/91 Q-46 ②).
  */
 public record PipelineSnapshot(
 		long rawPosts,
@@ -25,5 +29,6 @@ public record PipelineSnapshot(
 		long endedDeals,
 		long unprocessed,
 		long reportPendingPurchases,
-		long conditionalDeals) {
+		long conditionalDeals,
+		long shippingUnknownDeals) {
 }

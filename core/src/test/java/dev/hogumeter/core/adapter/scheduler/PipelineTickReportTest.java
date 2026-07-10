@@ -15,7 +15,7 @@ class PipelineTickReportTest {
 
 	private static PipelineSnapshot snapshot(long raw, long sources, long deals, long queue, long ended,
 			long unprocessed, long reportPending) {
-		return new PipelineSnapshot(raw, sources, deals, queue, ended, unprocessed, reportPending, 0);
+		return new PipelineSnapshot(raw, sources, deals, queue, ended, unprocessed, reportPending, 0, 0);
 	}
 
 	@Test
