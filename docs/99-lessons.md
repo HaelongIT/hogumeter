@@ -417,3 +417,14 @@
 - **순서가 계약이다**: 만료는 `ingest`보다 **먼저** 돌아야 한다. ingest가 새 딜마다 알림을 태우는데 "산 뒤 알림"은 OBSERVING만 보기 때문이다. 나중에 돌리면 이미 끝난 관찰이 이번 틱의 딜에 대해 한 번 더 알림을 낸다. `expireRunsBeforeIngestSoEndedObservationsDoNotAlert`가 못박는다.
 - **카운터는 오염되지 않는 쪽을 센다**: `purchasesExpired`를 `OBSERVING` 감소분으로 세면 틱 도중 REST로 들어온 새 구매가 값을 망친다. `REPORT_PENDING` **증가분**으로 센다 — 그건 스케줄러만 늘린다.
 - **관련 테스트**: `ExpirePurchaseObservationsUseCaseTest`(6), `PipelineSchedulerTest`(순서·격리·카운터), `scripts/smoke.sh` 5-2b(100일 전 구매 → REPORT_PENDING → `purchasesExpired=1`).
+
+---
+
+## 2026-07-10 — 컬럼이 있어도 도메인 record에 필드가 없으면 값은 도달하지 않는다 (네 번째 죽은 경로)
+
+- **맥락**: 죽은 경로를 셋 잡았다 — 읽기만 하는 테이블(`alert_policy`), 쓰기만 하는 테이블(`review_queue_item`), 부르는 사람 없는 상태 전이(`Purchase.expire()`). 넷째를 찾다 **BM-02의 조건 태그**를 열어 봤다.
+- **증상**: collector는 `카할`(카드할인)·`유료배송(금액미상)`·`조건부무료배송:와우무배`를 정확히 뽑아 `raw_deal_post.raw._derived.applied_conditions`에 저장한다. 테스트도 잠겨 있다. 그런데 **`deal_event`에는 도달하지 않는다.** `deal_event.applied_conditions text[]` 컬럼은 **V1에 이미 있는데**, ① `DealEvent` 도메인 record에 필드가 없고 ② `DealEventEntity`가 "미매핑"이라 스스로 적어 뒀으며 ③ `IngestDealsUseCase.candidateFrom`은 가격만 읽는다.
+- **결과**: golden 전수로 재 보니 **뽐뿌 9.5% · 펨코 15%**의 딜이 조건부 가격이다. 그게 무조건 가격으로 기준가 표본에 들어간다. `유료배송(금액미상)`은 배송비 0을 더해 표본을 **낮게** 편향시킨다 — 기준가가 낮아지면 진짜 좋은 딜을 놓친다. 화면도 알림도 조건을 말하지 않고 **로그 한 줄 남지 않는다.**
+- **교훈(규칙화)**: **"컬럼이 있다"는 "값이 도달한다"가 아니다.** DDL → 엔티티 매핑 → 도메인 필드 → 생성 지점 → 표시까지, **다섯 구간 중 하나만 끊겨도 값은 사라진다.** 그리고 끊긴 구간은 예외도 로그도 남기지 않는다. 저장 계약이 있는 필드는 **DDL이 아니라 화면(또는 최종 소비처)에서 거꾸로** 추적한다.
+- **보드가 또 틀렸다**: Q-46의 재개 트리거는 "`raw_deal_post`에 컬럼 추가"였다. **컬럼을 더해도 `DealEvent`에 필드가 없어 값은 여전히 도달하지 않는다.** 구현 수단을 적어 두면 다음 세션이 그걸 요구사항의 제약으로 읽는다 — Q-50·Q-48·Q-34에 이어 **네 번째**다. 재개 트리거는 언제나 "무엇이 참이 되어야 하는가"로 쓴다.
+- **관련 기록**: `docs/98`(비율 실측 표), `pre-deploy §F`([필수·선결] — 폴링을 켜는 순간 표본이 조용히 오염된다), `docs/30` M1 블로커 0-2.

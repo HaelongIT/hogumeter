@@ -135,3 +135,22 @@
 | `CAD-01~03` | 구현돼 있고 옳다. **"경과일 = P 무관"을 코드가 실제로 지킨다**(창 밖에서 최신 발생을 찾음). "다음 딜 예상일"은 어디에도 없다 |
 
 **방법 자체가 재사용 가능하다**: 요구 ID를 코드에서 grep해 참조 0을 찾고, 각각을 ①범위 밖 ②블록됨 ③**우연히 옳음**(→ 지금 테스트로 잠근다) ④**결함**(→ 고친다)으로 가른다. NFR에 두 번(Q-58·Q-61), 기능 요구에 한 번(Q-62) 통했다.
+
+## 2026-07-10 — 조건 태그 비율 실측 (golden 전수)
+
+`normalize_price`가 뽑는 조건 태그가 golden에서 얼마나 나오는지 세어 봤다. 이 비율이 곧
+"기준가 표본이 얼마나 오염되는가"다(Q-46 — 태그가 `deal_event`에 도달하지 않는다).
+
+| 사이트 | 딜 | 조건 태그 있는 딜 | 비율 | 예 |
+|---|---|---|---|---|
+| ppomppu | 21 | 2 | **9.5%** | `카할`(1,800,000원 딜 — 특정 카드 보유자만) · `유료배송(금액미상)`(16,450원 딜) |
+| fmkorea | 20 | 3 | **15%** | `조건부무료배송:와우무배` · `:네멤무료` · `:1만5천원무료` |
+
+- **`유료배송(금액미상)`이 특히 나쁘다**: 배송비를 추출하지 못해 **0을 더한다.** BM-02의 저장 기준
+  ("실결제가 + 배송비, 무조건 합산")을 지키지 못한 값이라 표본이 **실제보다 낮게** 편향된다.
+  기준가가 낮아지면 진짜 좋은 딜이 "괜찮은 딜" 판정을 못 받는다(놓침, 절대 원칙 3).
+- 생산자(collector) 쪽은 옳고 테스트로 잠겨 있다 — `test_ingest.py::test_applied_conditions_are_preserved_under_a_derived_key`,
+  `test_end_to_end_ingest.py::test_korean_titles_and_derived_json_round_trip`(실 Postgres에서 `raw->'_derived'` 확인).
+- 끊긴 곳은 `IngestDealsUseCase.candidateFrom` — `post.getHeadlinePrice()`만 읽는다.
+
+**재현**: `cd collector && uv run python -c "…parse_ppomppu(golden)…"` 후 `d.applied_conditions`가 빈 리스트가 아닌 딜을 센다.
