@@ -23,9 +23,11 @@
 | **알림 정책 저장**(REG-03, `alert_policy` writer) | ✅ GREEN — `AlertPolicyController` + web `AlertPolicyPanel`. **2026-07-10까지 writer가 없었다.** `EvaluateAlertOnDealUseCase`가 읽기만 해서 확정본 §107의 "목표가 이하" 트리거와 방해금지(AL-04)가 발화할 수 없었다(Q-48). 저장되는 건 넷(목표가·판정 기간·방해금지 2개) — K_display·제외 키워드·⚠️라벨 토글은 엔티티 미매핑 |
 | REG 웹 최소 슬라이스(등록+목록+알림 정책) | ✅ GREEN |
 | web 판단 화면(신호등·기준가·갭·주기) + 구매 기록(PUR) | ✅ GREEN (M4·M5에서 앞당김, `decision-log` 2026-07-09) |
-| **미상 큐 조회**(`GET /api/v1/review-queue` + web 탭) | ✅ GREEN(읽기만) — 그전까지 `review_queue_item`은 **쓰이기만 하고 아무도 읽지 않았다.** 매칭이 무엇을 놓치는지 볼 방법이 없었다. **승격·기각(쓰기)은 없다**(Q-15) — M1 완료 기준의 "버튼으로 미상 분류"는 여전히 텔레그램(Q-20) 대기 |
+| **미상 큐 조회**(`GET /api/v1/review-queue` + web 탭) | ✅ GREEN(읽기만) — 그전까지 `review_queue_item`은 **쓰이기만 하고 아무도 읽지 않았다.** 매칭이 무엇을 놓치는지 볼 방법이 없었다. 2026-07-10: 이상치가 **왜 싸 보이는지**(조건 태그)까지 낸다 — `배송비미상`이면 "실제 결제가는 더 높습니다"를 덧붙인다. **승격·기각(쓰기)은 없다**(Q-15) — M1 완료 기준의 "버튼으로 미상 분류"는 여전히 텔레그램(Q-20) 대기 |
 | OBS-04 헬스체크(컴포넌트별) | ✅ GREEN — `GET /api/v1/health`, DB가 죽으면 503 + 어느 컴포넌트인지 지목. `scripts/smoke.sh` 0-1이 postgres만 죽여 확인 |
 | SEC-08 차단 신호 감지 | ✅ GREEN — **2026-07-10까지 죽어 있었다.** `urllib_opener`가 403/429를 예외로 던져 `classify_status`가 차단을 볼 수 없었다. 리허설: `scripts/check-robots-drill.sh` |
+| SEC-08 **`Crawl-delay` 준수** | ✅ GREEN — **2026-07-10까지 한 번도 지킨 적이 없었다.** `effective_interval_with_robots`는 존재했고 단위 테스트도 GREEN이었지만 **프로덕션 호출자가 0**이었다(`run_cycle`은 우리 하한만 봤다). 뽐뿌가 `Crawl-delay: 120`을 선언해도 60초마다 두드렸을 것이다. `__main__._interval_port`가 `run_cycle(interval_for=…)`로 주입한다 |
+| **파서 정확도**(BM-01·BM-02) | ⚠️ **2026-07-10 골든 전수 감사로 다섯 결함 수정** — 루리웹 품절 감지 사망 · `그래픽카드`=카드할인 · `5000만화소`=5천만원 · `RTX 5070`=5,070원 · 배송비 조용한 0(4곳). **전부 모든 테스트가 GREEN인 채였다.** 남은 것: 뽐뿌 `.end2` 커버리지 0(Q-19) · 실물 무표기 배송(Q-64) · 가격 서열(Q-63) · `DDR5 5600`(Q-65) |
 
 **완료 기준을 막고 있는 것:**
 

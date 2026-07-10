@@ -64,3 +64,17 @@
 - **[권장]** 로그 형식 — `CORE_LOG_FORMAT=ecs`(기본)면 core도 collector처럼 JSON을 낸다(OBS-01). 로그 수집기를 붙일 때 두 컨테이너를 한 파서로 읽을 수 있다. 빈 값이면 텍스트로 되돌아간다.
 
 <!-- 각 항목은 프로젝트에 맞게 추가/삭제. 완료분은 [완료]로 표기하고 decision-log에 남긴다. -->
+
+## 2026-07-10 — 실 폴링 켜기 전 확인(파서 정확도)
+
+- [완료] robots `Crawl-delay` 준수 — `__main__._interval_port`가 `run_cycle`에 주입한다. 그전엔 **한 번도 지킨 적이 없었다**(순수 함수 GREEN, 호출자 0).
+- [완료] 루리웹 품절 감지 — `[종료]` 마커가 제목 앵커 밖에 있어 통째로 죽어 있었다. 이제 golden 3건이 SOLD_OUT.
+- [완료] 조건 태그가 `deal_event`까지 도달 — `PreserveAppliedConditionsUseCase`. 리뷰 큐·화면이 읽는다.
+- [완료] 배송비 "조용한 0" 4종(펨코 숫자·괄호 미지 어휘·잘린 제목·번개 `free_shipping:false`) → `배송비미상` 표식.
+- [필수] **첫 폴링 후 `docker logs collector`에서 아래를 본다** — golden과 실제가 다르면 파서가 어긋난 것이다:
+  - `no_price` 비율(골든: 루리웹 36%). 갑자기 100%에 가까우면 셀렉터가 끊겼다.
+  - `shipping_unknown_by_site`(골든: 뽐뿌 4.8% · 펨코 15% · 루리웹 14.3%). **0%가 나오면 표식이 죽은 것이다.**
+  - `conditional`이 0이면 조건 태그가 유실되고 있다.
+- [필수] **첫 폴링 후 `core` 로그의 `pipeline tick`에서 `shippingUnknownTotal`이 0이 아닌지 본다.** 0이면 collector→core 표식 계약이 끊긴 것이다(`scripts/check-tag-contract.sh`는 리터럴만 본다 — DB에 쌓인 옛 표식은 못 본다).
+- [필수] 뽐뿌 `.end2` 품절 표식을 **한 번이라도 관측**하면 fixture로 채취한다(Q-19). 오래 관측해도 안 나오면 셀렉터가 틀린 것이므로, 루리웹처럼 표식이 파서가 읽지 않는 자리에 있는지 의심한다.
+- [필수] `유료배송(금액미상)` 계열이 기준가 표본을 아래로 끄는 문제는 **여전히 열려 있다**(Q-46 재개 트리거 ②, `BenchmarkCalculator` = core 기존 파일).
