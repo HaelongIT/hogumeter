@@ -186,3 +186,82 @@ def test_ppomppu_adds_shipping_fee_from_title_convention():
     d = next(x for x in deals if x.post_id == "717716")
     assert "(13,490원/3,000원)" in d.title
     assert d.headline_price == 16_490  # 13,490 + 3,000
+
+
+# ── 펨코: 배송 칸의 **숫자 배송비가 조용히 사라진다** ────────────────────
+#
+# `.hotdeal_info` = [쇼핑몰, 가격, 배송]. golden 20딜의 배송 칸은 `무료`(17) + 조건부(3)뿐이라
+# **숫자 배송비가 fixture에 하나도 없다.** 그래서 이 결함은 golden 전수 대조로 잡히지 않는다
+# (`docs/99` 2026-07-10: golden은 "이미 본 것"에만 강하다).
+#
+# BM-02의 저장 기준은 **실결제가 + 배송비**다. 배송비를 안 더하면 표본이 실제보다 낮아지고,
+# 태그조차 없어서 아무도 모른다 — `유배`와 달리 "모른다"고 말하지도 않는 **조용한 0**이다.
+
+from collector.pipeline.price import SHIPPING_UNKNOWN  # noqa: E402
+
+_FM_NOW = datetime(2026, 7, 10, 21, 30, tzinfo=timezone.utc)
+
+
+def _fm_html(price_text: str, shipping_text: str) -> str:
+    return f"""
+    <div id="content"><div class="fm_best_widget"><ul><li>
+      <h3 class="title"><a href="/1234567">테스트 상품</a></h3>
+      <div class="hotdeal_info">
+        <span><a href="#">쿠팡</a></span>
+        <span><a href="#">{price_text}</a></span>
+        <span><a href="#">{shipping_text}</a></span>
+      </div>
+      <span class="regdate">21:10</span>
+    </li></ul></div></div>
+    """
+
+
+def _fm_deal(price_text: str, shipping_text: str):
+    (deal,) = parse_fmkorea(_fm_html(price_text, shipping_text), _FM_NOW)
+    return deal
+
+
+def test_fmkorea_numeric_shipping_is_added_to_the_price():
+    """BM-02: 저장 기준 = 실결제가 + 배송비. 2,500원을 버리면 표본이 그만큼 낮아진다."""
+    deal = _fm_deal("10,980원", "2,500원")
+
+    assert deal.headline_price == 13_480
+    assert deal.applied_conditions == []  # 금액을 아니까 "미상"이 아니다
+
+
+def test_fmkorea_numeric_shipping_without_the_won_suffix():
+    """배송 칸이 `2,500`으로만 올 수도 있다. 숫자면 배송비다."""
+    assert _fm_deal("10,980원", "2,500").headline_price == 13_480
+
+
+def test_fmkorea_unconditional_free_shipping_adds_nothing_and_tags_nothing():
+    deal = _fm_deal("10,980원", "무료")
+
+    assert deal.headline_price == 10_980
+    assert deal.applied_conditions == []
+
+
+def test_fmkorea_conditional_free_shipping_is_a_lower_bound():
+    deal = _fm_deal("10,980원", "와우무배")
+
+    assert deal.headline_price == 10_980
+    assert deal.applied_conditions == ["조건부무료배송:와우무배", SHIPPING_UNKNOWN]
+
+
+def test_fmkorea_unparseable_shipping_is_marked_unknown_not_zero():
+    """`착불`은 금액을 모른다. 0을 더하고 침묵하면 **조용한 거짓말**이 된다."""
+    deal = _fm_deal("10,980원", "착불")
+
+    assert deal.headline_price == 10_980
+    assert SHIPPING_UNKNOWN in deal.applied_conditions
+    assert "배송비:착불" in deal.applied_conditions
+
+
+def test_fmkorea_missing_shipping_cell_is_unknown_too():
+    """배송 칸이 아예 없으면 무료라고 단정할 수 없다."""
+    html = _fm_html("10,980원", "무료").replace(
+        '<span><a href="#">무료</a></span>\n      </div>', "</div>")
+    (deal,) = parse_fmkorea(html, _FM_NOW)
+
+    assert deal.headline_price == 10_980
+    assert SHIPPING_UNKNOWN in deal.applied_conditions
