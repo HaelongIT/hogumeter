@@ -16,6 +16,7 @@
 - **[필수]** 운영 시크릿 = EC2의 `.env`(gitignore) — 텔레그램 봇 토큰, 네이버 쇼핑 API Client ID/Secret, Postgres 비밀번호. git/CI에 평문 금지.
 - **[필수]** 유출 시크릿 회전 — git history에 평문이 올라간 적 있으면 새 값으로 교체(봇 토큰·API 키 재발급 포함).
 - **[필수]** 텔레그램 봇: 운영 chat_id 확인, 관리자 알림용 별도 chat(OBS-03) 설정.
+- **[필수 · 선결]** ⚠️ **봇 토큰을 넣기 전에 `docs/91` Q-27 ③을 고칠 것.** 최초 수집 시 이미 품절인 원문에 대해 **"지금 사라" 알림이 나간다**(2026-07-10 실측: `[STUB alert] intensity=GOOD price=700000` 직후 `deal_event.status=ENDED`). 지금은 `StubAlertSender`라 로그뿐이지만 토큰을 넣는 순간 **실전송된다.** core 기존 파일(`IngestDealsUseCase`) 수정이라 상대와 조율.
 
 ## C. 보안 · 네트워크
 - **[완료]** ~~CORS 설정~~ **불필요해졌다.** `web` 컨테이너의 nginx가 `/api`를 `core:8080`으로 프록시하므로 브라우저에겐 **동일 오리진**이다. 교차 출처 요청이 발생하지 않아 core에 CORS를 넣을 이유가 없다. 개발(Vite 프록시)과 운영(nginx)의 동작이 같다. **단, 크롬 확장(기능4)이 core에 직접 붙으면 그때 다시 필요**해진다.
@@ -45,5 +46,7 @@
 - **[완료]** 재시작·종료 계약 — 상주 3종(postgres·core·web)은 `restart: unless-stopped`, collector는 `restart: on-failure`(opt-in off의 exit 0엔 재시작 안 함). `SIGTERM`이면 현재 사이클을 마치고 종료(`stop_grace_period: 30s`). 적재 연속 3회 실패 시 `giving_up` 후 exit 1 — **수집은 되는데 저장이 안 되는 상태로 계속 돌지 않는다**.
 - **[권장]** `giving_up`·`sink_error` 이벤트를 관리 알림 chat(§B)으로 흘릴 것. 지금은 `docker logs`에만 남는다.
 - **[완료]** DB 적재기(Q-36 해소) — `db/raw_deal_sink.py`가 `raw_deal_post`에 `(site, post_id)` 업서트한다. `DB_HOST`가 없으면 적재하지 않고 그 사실을 `started` 이벤트에 남긴다. **운영 compose는 `DB_HOST`를 주입한다**(설정 누락 시 수집은 도는데 표본이 0으로 남으므로 기동 로그에서 `"sink":"postgres"`를 확인할 것).
+- **[완료]** **파이프라인 트리거**(Q-27 ⑤) — core의 `PipelineScheduler`가 `CORE_PIPELINE_INTERVAL_MS`(기본 60000)마다 `raw_deal_post`를 소비한다. **2026-07-10까지 이게 없어 수집된 원문을 아무도 읽지 않았다.** 기동 후 `docker logs`에서 `"message":"pipeline tick …"`이 주기적으로 찍히는지 확인할 것. `pending`이 단조 증가하면 매칭이 전부 실패하고 있다는 뜻이다(`review_queue_item` 확인).
+- **[권장]** 로그 형식 — `CORE_LOG_FORMAT=ecs`(기본)면 core도 collector처럼 JSON을 낸다(OBS-01). 로그 수집기를 붙일 때 두 컨테이너를 한 파서로 읽을 수 있다. 빈 값이면 텍스트로 되돌아간다.
 
 <!-- 각 항목은 프로젝트에 맞게 추가/삭제. 완료분은 [완료]로 표기하고 decision-log에 남긴다. -->
