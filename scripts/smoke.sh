@@ -595,6 +595,17 @@ echo "$observations" | grep -q '"mode":"NO_ACTIVE_DEAL"' || fail "딜 0건인데
 echo "$observations" | grep -q '"cheaperChanceCount":0' || fail "놓친 기회가 0이 아니다"
 echo "$observations" | grep -q '"paidPrice":899000' || fail "실지불가가 왕복하지 않는다"
 
+# 계약 드리프트: 구매 화면(purchase/present.ts)이 읽는 필드가 전부 있는가.
+# PurchaseObservation 5필드 + 중첩 ObservationContext 6필드 — 이름 하나만 바뀌어도 화면이 undefined를 그린다.
+for field in purchaseId state paidPrice purchasedAt context; do
+	echo "$observations" | grep -q "\"${field}\":" ||
+		fail "web PurchaseObservation이 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $observations"
+done
+for field in mode activeLowestPriceLast overpaidWon overpaidPct observationDay cheaperChanceCount; do
+	echo "$observations" | grep -q "\"${field}\":" ||
+		fail "web ObservationContext가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $observations"
+done
+
 echo "--- 5-2b) 관찰 만료: OBSERVING → REPORT_PENDING (PUR-01) ---"
 # `Purchase.expire()`·`isExpired()`는 순수 도메인에 있었지만 **부르는 사람이 없었다.**
 # 관찰이 영원히 끝나지 않아 "산 뒤 알림"(PUR-03)이 3년 전 구매에도 계속 발화했을 것이다.

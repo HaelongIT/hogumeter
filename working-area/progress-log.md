@@ -1,3 +1,16 @@
+## 2026-07-11 — 네 응답 뷰 전부 전체 필드 계약을 종단 검증한다
+
+**한 일**: PurchaseObservation(5필드) + 중첩 ObservationContext(6필드)도 스모크가 `mode`·
+`cheaperChanceCount` 둘만 봤다. 화면은 열한 필드 전부 소비한다(감사: 소비처 0 없음, null 가드까지 정직).
+`overpaidWon`·`overpaidPct`·`activeLowestPriceLast`·`observationDay`가 드리프트하면 화면만 조용히 깨진다.
+
+이제 네 뷰(Benchmark·Signal·Cadence·PurchaseObservation+context) 전부 전체 필드 존재를 종단 검증.
+`.claude/rules/web-react.md`에 "필드 추가 시 스모크 목록도 갱신"을 규칙으로 넣었다.
+
+**검증**: 종단 스모크 PASS · shellcheck clean.
+
+---
+
 ## 2026-07-11 — Signal·Cadence도 전체 필드 계약을 종단 검증한다
 
 **한 일**: BenchmarkView에 이어 SignalView(3필드)·CadenceView(5필드)도 스모크가 `color`·`guardMet`
