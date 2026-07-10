@@ -17,7 +17,7 @@
 | 조각 | 상태 |
 |---|---|
 | BM-01~07 순수 도메인 + REST | ✅ GREEN |
-| collector 수집→적재 전 구간 | ✅ GREEN (`docker compose up` + `scripts/smoke.sh`) |
+| collector 수집→적재 전 구간 | ✅ GREEN (`docker compose up` + `scripts/smoke.sh`). **단, 파서 정확도는 별개다** — 2026-07-10에 골든 전수 감사로 다섯 결함을 찾아 고쳤다: 루리웹 **품절 감지가 통째로 죽어 있었고**(마커가 제목 앵커 밖, 28딜 중 3건), `그래픽카드`가 카드할인으로, `5000만화소`가 5천만원으로, `RTX 5070`이 5,070원으로 읽혔고, 펨코·뽐뿌의 **숫자 배송비가 조용히 버려졌다**. 전부 "모든 테스트 GREEN"인 채였다. 남은 것: 뽐뿌 `.end2` golden 커버리지 0(Q-19), 배송 무표기 딜(Q-64), 가격 서열(Q-63)·`DDR5 5600`(Q-65) |
 | **파이프라인 트리거**(`raw_deal_post` → `deal_event`) | ✅ GREEN — `PipelineScheduler`(ingest → 가격 재처리 → 종료 판정, 60초). **2026-07-10까지 없었다.** 그동안 수집된 원문을 아무도 소비하지 않아 기준가 표본이 영원히 0이었다(Q-27 ⑤) |
 | AL 판정(트리거·게이트·후속 자격) | ✅ GREEN (발송은 스텁) |
 | **알림 정책 저장**(REG-03, `alert_policy` writer) | ✅ GREEN — `AlertPolicyController` + web `AlertPolicyPanel`. **2026-07-10까지 writer가 없었다.** `EvaluateAlertOnDealUseCase`가 읽기만 해서 확정본 §107의 "목표가 이하" 트리거와 방해금지(AL-04)가 발화할 수 없었다(Q-48). 저장되는 건 넷(목표가·판정 기간·방해금지 2개) — K_display·제외 키워드·⚠️라벨 토글은 엔티티 미매핑 |
