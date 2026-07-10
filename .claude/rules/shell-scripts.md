@@ -35,4 +35,5 @@ paths:
 - **훅은 도구 이름으로 스코프된다.** `settings.json`의 `matcher`에 없는 도구로 같은 명령을 보내면 훅은 붙지 않는다 — `"Bash"`만 적어 둔 탓에 `PowerShell` 도구가 네트워크 가드와 push deny를 통째로 우회하고 있었다(현재 `"Bash|PowerShell"`). 게이트를 세울 땐 **어떤 도구 표면이 우회하는가를 열거한다.** (99: 2026-07-10)
 - **`guard.sh`는 파괴적 `git push`도 막는다** — `--force`·`-f`·`--force-with-lease`·`--delete`·`-d`·`--mirror`·`--prune`·`+refspec`·`:refspec`. 일반 푸시는 통과한다. 판정은 **세그먼트 단위**이고 `push`가 git의 서브커맨드일 때만 본다(그래야 `git commit -m "... --force ..."`나 `grep "git push --force"`가 오차단되지 않는다).
 - **드릴은 전용 프로젝트 이름·전용 포트·일회용 컨테이너에서 돈다.** 운영/개발 스택에 `docker compose down -v` 금지.
+- **compose 계약을 뒤집어 보려면 `docker-compose.override.yml`(untracked)을 쓴다** — compose가 자동으로 읽으므로 추적 파일을 건드리지 않는다. 리스트(`volumes:`)는 기본 **병합**이라 `!override` 태그로 대체한다. 검증하겠다고 저장소를 고치지 않는다. (99: 2026-07-10)
 - **출력 라벨은 ASCII로.** 한글은 콘솔 인코딩에 따라 깨지고, 깨진 로그는 읽히지 않는다. 문구를 `grep`하는 대신 마커(`REFUSED reason=...`)나 JSON을 본다.

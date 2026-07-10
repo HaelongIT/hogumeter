@@ -99,6 +99,49 @@ for _ in $(seq 30); do
 done
 [ "${recovered:-0}" = 1 ] || fail "DB가 돌아왔는데 core 헬스가 UP으로 복귀하지 않는다 (커넥션 풀이 굳었다)"
 
+echo "--- 0-2) 데이터 영속: postgres를 재생성해도 살아남는다 (명명 볼륨) ---"
+# `pre-deploy`는 "운영에서 `docker compose down -v` 금지"라고 경고하지만, 데이터가 정말
+# **명명 볼륨**에 있는지는 아무것도 확인하지 않았다. `volumes:` 한 줄을 지우면 데이터는 컨테이너
+# 안에 남고, 이미지 갱신 한 번에 사라진다. 그건 프로세스 밖의 계약이라 어떤 단위 테스트도 안 본다.
+pg_cid=$(compose ps -q postgres)
+[ -n "$pg_cid" ] || fail "postgres 컨테이너를 찾지 못했다"
+pg_mounts=$(docker inspect -f '{{range .Mounts}}{{.Type}}:{{.Name}}:{{.Destination}} {{end}}' "$pg_cid")
+case "$pg_mounts" in
+*volume:*pgdata*:/var/lib/postgresql/data*) ;;
+*) fail "postgres 데이터가 명명 볼륨(pgdata)에 있지 않다: $pg_mounts" ;;
+esac
+
+# 행 하나를 남기고 컨테이너를 **새로 만든다**. 계약 테이블을 쓰지 않는다 —
+# raw_deal_post에 넣으면 파이프라인이 집어가 뒤 단계의 카운터(pending·dealsCreated)를 흔든다.
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "영속 확인용 테이블 생성 실패"
+create table if not exists smoke_persistence (marker text not null);
+insert into smoke_persistence values ('alive');
+SQL
+
+compose up -d --force-recreate --no-deps postgres >/dev/null 2>&1 || fail "postgres 재생성 실패"
+for _ in $(seq 30); do
+	compose ps --format '{{.Service}}:{{.Health}}' | grep -q '^postgres:healthy' && pg_back=1 && break
+	sleep 2
+done
+[ "${pg_back:-0}" = 1 ] || fail "재생성한 postgres가 healthy가 되지 않았다"
+
+marker=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-c "select marker from smoke_persistence limit 1" 2>/dev/null | tr -d '\r' || true)
+[ "$marker" = "alive" ] || fail "컨테이너 재생성으로 데이터가 사라졌다 (볼륨이 붙어 있지 않다). marker='$marker'"
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-c "drop table smoke_persistence" >/dev/null || fail "정리 실패"
+
+# core의 커넥션 풀은 방금 끊겼다. 뒤 단계가 그 상태를 물려받지 않게 복귀를 기다린다.
+for _ in $(seq 30); do
+	if curl -fsS -o /dev/null --max-time 10 "http://127.0.0.1:${CORE_PORT}/api/v1/health" 2>/dev/null; then
+		core_back=1
+		break
+	fi
+	sleep 2
+done
+[ "${core_back:-0}" = 1 ] || fail "postgres 재생성 후 core가 UP으로 복귀하지 않는다"
+
 echo "--- 1) 정적 자산이 서빙된다 ---"
 curl -fsS "${WEB}/" | grep -q '<div id="root">' || fail "index.html이 아니다"
 
