@@ -107,6 +107,12 @@ export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variant
 
         <fieldset>
           <legend>가격축</legend>
+          {/*
+            `AxisType.DEMAND`는 프로덕션에 생산자도 소비처도 없다 — 등록되는 축은 **전부 가격축**이다.
+            색상처럼 가격에 영향 없는 축을 넣으면 variant가 곱해져 표본이 쪼개진다(n이 작아져 SPARSE).
+            그 사실을 숨기면 사용자는 기준가가 왜 빈약한지 모른다(절대 원칙 1·6, docs/91 Q-66).
+          */}
+          <p>축의 조합이 variant가 됩니다. 가격에 영향 없는 축(색상 등)을 넣으면 표본이 쪼개집니다.</p>
           {form.axes.map((axis, index) => (
             <div key={index}>
               <label>
@@ -148,6 +154,13 @@ export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variant
             <option value="SPLIT">분리</option>
           </select>
         </label>
+        {/*
+          `SPLIT`은 `product.demand_axis_mode`에 저장되지만 **어떤 프로덕션 코드도 그 값을 보고
+          분기하지 않는다**(2026-07-11 실측). 표본 분리도, variant 분리도, `demandAxisValue` 필수
+          검증("SPLIT 필수"라는 javadoc)도 없다. 기다리면 된다고 믿게 두는 것이 과대약속이다.
+          구현되면 이 문단만 지운다(seam). docs/91 Q-66.
+        */}
+        <p>분리(SPLIT)는 아직 표본을 나누지 않습니다 — 값은 저장되지만 동작은 묶음과 같습니다.</p>
 
         {preview.length > 0 && (
           <section aria-label="생성될 variant">

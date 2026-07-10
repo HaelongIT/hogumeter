@@ -172,3 +172,21 @@ describe('RegistrationPage — 등록 다음에 무엇을 할지 알려준다', 
     expect(screen.queryByRole('button', { name: /판단 보기/ })).not.toBeInTheDocument()
   })
 })
+
+describe('RegistrationPage — 없는 손잡이를 그리지 않는다', () => {
+  it('수요축 "분리"는 아직 아무것도 분리하지 않는다고 말한다', () => {
+    render(<RegistrationPage />)
+
+    // `SPLIT`은 `product.demand_axis_mode`에 저장되지만 **어떤 코드도 그 값을 보고 분기하지 않는다.**
+    // 기준가 표본 분리도, variant 분리도 없다. 기다리면 된다고 믿게 두는 것이 과대약속이다.
+    expect(screen.getByText(/분리\(SPLIT\)는 아직 표본을 나누지 않습니다/)).toBeInTheDocument()
+  })
+
+  it('축은 전부 가격축으로 저장된다는 사실을 밝힌다', () => {
+    render(<RegistrationPage />)
+
+    // `AxisType.DEMAND`는 프로덕션 생산자·소비처가 0이다. 색상처럼 가격에 영향 없는 축을
+    // 넣으면 variant가 곱해져 **표본이 쪼개진다** — 사람이 알고 넣어야 한다.
+    expect(screen.getByText(/가격에 영향 없는 축(.|\n)*표본이 쪼개집니다/)).toBeInTheDocument()
+  })
+})
