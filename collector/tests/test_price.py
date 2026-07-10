@@ -262,3 +262,71 @@ def test_manwon_still_wins_when_it_really_is_a_price():
 def test_manwon_with_a_thousand_part():
     """`2만2천원`은 22,000원이다. `2만`만 읽으면 10% 낮은 값이 표본에 들어간다."""
     assert normalize_price("[다나와]모니터 2만2천원").headline_price == 22_000
+
+
+# ── 괄호 관례의 미지 토큰도 조용히 0이 되면 안 된다 ────────────────────────
+#
+# `(가격원/배송비)`의 배송비 자리를 고정 토큰 집합(`무료|무배|유배|숫자`)으로만 읽으면,
+# **모르는 토큰은 괄호 규칙 자체를 매치 실패**시키고 하류의 기본값 0으로 떨어진다.
+# `(11,800원/3,000원~)`은 배송비 3,000원을 통째로 잃었고, `(11,800원/착불)`은 태그도 없었다.
+
+
+def test_paren_unknown_shipping_word_is_marked_not_silently_free():
+    result = normalize_price("[롯데온]폴햄 (11,800원/착불)")
+
+    assert result.headline_price == 11_800
+    assert SHIPPING_UNKNOWN in result.applied_conditions
+    assert "배송비:착불" in result.applied_conditions
+
+
+def test_paren_shipping_amount_with_a_from_suffix_is_added_and_marked():
+    """`3,000원~`은 "3,000원부터"다. 더하되 하한임을 말한다 — 버리지 않는다."""
+    result = normalize_price("[G마켓]TV (11,800원/3,000원~)")
+
+    assert result.headline_price == 14_800
+    assert SHIPPING_UNKNOWN in result.applied_conditions
+
+
+def test_paren_conditional_free_shipping_is_a_lower_bound():
+    result = normalize_price("[11번가]선풍기 (11,800원/조건부무료)")
+
+    assert result.headline_price == 11_800
+    assert "조건부무료배송:조건부무료" in result.applied_conditions
+    assert SHIPPING_UNKNOWN in result.applied_conditions
+
+
+def test_paren_known_amount_and_free_stay_untagged():
+    assert normalize_price("[쿠팡]키보드 (11,800원/2500)").headline_price == 14_300
+    assert normalize_price("[쿠팡]키보드 (11,800원/2500)").applied_conditions == []
+    assert normalize_price("[옥션]마우스 (11,800원/무료)").applied_conditions == []
+
+
+def test_paren_paid_shipping_unknown_keeps_both_tags():
+    result = normalize_price("[티몬]의자 (11,800원/유배)")
+
+    assert result.headline_price == 11_800
+    assert result.applied_conditions == ["유료배송(금액미상)", SHIPPING_UNKNOWN]
+
+
+# ── 픽업은 "배송비 미상"이 아니라 "배송이 없음"이다 ─────────────────────────
+#
+# 루리웹 golden 실측: `[우리동네gs] 스텔라 740ml 4캔 (8800원 /픽업)` — GS 편의점 매장 수령이다.
+# 배송비가 **존재하지 않으므로** 8,800원은 정확한 실결제가다. 여기에 `배송비미상`을 달면
+# 표본 오염률 카운터가 부풀고, 무조건 가격이 "하한"으로 오독된다(`그래픽카드`와 같은 과잉 태그).
+#
+# 그래도 조건이긴 하다 — 매장에 가야 그 가격이다. 그래서 **설명 태그는 남기되 배송 표식은 안 단다.**
+
+
+def test_pickup_is_not_unknown_shipping():
+    result = normalize_price("[우리동네gs] 스텔라 740ml 4캔 (8800원 /픽업)")
+
+    assert result.headline_price == 8_800  # 배송비가 없다. 지어내지도, 미상이라 하지도 않는다
+    assert SHIPPING_UNKNOWN not in result.applied_conditions
+    assert "수령:픽업" in result.applied_conditions
+
+
+def test_other_pickup_words():
+    for word in ("매장픽업", "방문수령", "매장수령"):
+        tags = normalize_price(f"[GS25]맥주 (8,800원/{word})").applied_conditions
+        assert SHIPPING_UNKNOWN not in tags, word
+        assert f"수령:{word}" in tags, word

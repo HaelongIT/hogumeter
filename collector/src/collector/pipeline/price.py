@@ -43,9 +43,17 @@ _COMMA = re.compile(rf"(?<![\d,])(\d{{1,3}}(?:,\d{{3}})+)(?!\s*{_UNIT})")
 _BARE = re.compile(rf"(?<![\d,])(\d{{4,}})(?!\s*{_UNIT})")
 
 # `(13,490원/3,000원)` · `(1,200원~/3,000원)` · `(11,800원/무료)` · `(16,450원/유배)`
-_PAREN_PRICE_SHIPPING = re.compile(
-    rf"\(\s*{_AMOUNT}\s*원\s*~?\s*/\s*(무료배송|무료|무배|유배|[\d,]+\s*원?)\s*\)"
-)
+#
+# 배송비 자리는 **무엇이든 받는다**(`[^)]+`). 고정 토큰 집합으로 두면 모르는 어휘(`착불`·`3,000원~`)가
+# **규칙 전체를 매치 실패**시키고, 하류의 기본값 0으로 조용히 떨어진다 — `(11,800원/3,000원~)`은
+# 배송비 3,000원을 통째로 잃었다. 해석은 `classify_shipping` 한 곳에 가둔다.
+_PAREN_PRICE_SHIPPING = re.compile(rf"\(\s*{_AMOUNT}\s*원\s*~?\s*/\s*([^)]+?)\s*\)")
+
+# 배송 표기가 **순수 금액**인가(`2,500` · `2,500원` · `3,000원~`). `~`는 "부터" — 하한이다.
+_SHIPPING_AMOUNT = re.compile(r"([\d,]+)\s*원?\s*(~?)")
+
+# 매장 수령 — 배송비가 **없다**(미상이 아니다). 실측: 루리웹 `(8800원 /픽업)` = GS 편의점.
+_PICKUP = frozenset({"픽업", "매장픽업", "방문수령", "매장수령", "현장수령"})
 
 _SHIPPING = re.compile(r"배송비\s*([\d,]+)\s*원?")
 _FREE_SHIPPING = re.compile(r"무료\s*배송|무배")
@@ -104,7 +112,8 @@ def normalize_price(text: str) -> NormalizedPrice | None:
     paren = _PAREN_PRICE_SHIPPING.search(text)
     if paren:
         main = _to_int(paren.group(1))
-        return NormalizedPrice(main + _shipping_from_token(paren.group(2)), conditions)
+        shipping, shipping_conditions = classify_shipping(paren.group(2))
+        return NormalizedPrice(main + shipping, _dedupe(conditions + shipping_conditions))
 
     shipping, remaining = _extract_shipping(text)
     main = _extract_main_price(remaining)
@@ -113,13 +122,47 @@ def normalize_price(text: str) -> NormalizedPrice | None:
     return NormalizedPrice(headline_price=main + shipping, applied_conditions=conditions)
 
 
-def _shipping_from_token(token: str) -> int:
-    """`(가격/배송비)`의 배송비 자리. `유배`는 금액 미상이라 0으로 두되 조건 태그가 사실을 보존한다."""
-    if _FREE_SHIPPING.search(token) or "무료" in token:
-        return 0
-    if "유배" in token:
-        return 0
-    return _to_int(token)
+def classify_shipping(text: str) -> tuple[int, list[str]]:
+    """배송 표기 → (더할 배송비, 조건 태그). **뽐뿌·루리웹의 괄호 자리와 펨코의 배송 칸이 함께 쓴다.**
+
+    해석을 한 곳에 가두는 이유: 두 파서가 각자 판단하면 한쪽이 모르는 어휘를 조용히 0으로 흡수한다.
+    실제로 그랬다 — `(11,800원/3,000원~)`은 배송비 3,000원을 잃었고 `착불`은 태그조차 없었다.
+
+    **마지막 분기는 항상 "해석 못 함"이다.** 새 어휘가 생겨도 조용히 0이 되지 않는다.
+    금액을 모르면 0을 더하되 `SHIPPING_UNKNOWN`으로 그 사실을 말한다(값 없음을 값으로 쓰지 않는다).
+    """
+    stripped = text.strip()
+    if not stripped:
+        return 0, [SHIPPING_UNKNOWN]  # 배송 표기가 없다 — "무료"라고 단정할 근거가 없다
+
+    if stripped in ("무료", "무료배송", "무배"):
+        return 0, []  # 유일한 무조건 무료
+
+    if stripped in _PICKUP:
+        # 배송비가 **없다**(매장 수령). 실측: 루리웹 `(8800원 /픽업)` = GS 편의점.
+        # `배송비미상`을 달면 정확한 가격이 "하한"으로 오독되고 표본 오염률이 부푼다.
+        # 그래도 조건이긴 하다 — 매장에 가야 그 가격이다. 설명만 남긴다.
+        return 0, [f"수령:{stripped}"]
+
+    amount = _SHIPPING_AMOUNT.fullmatch(stripped)
+    if amount:
+        value = int(amount.group(1).replace(",", ""))
+        if amount.group(2):  # `3,000원~` = 3,000원부터. 더하되 하한임을 말한다.
+            return value, [f"배송비:{stripped}", SHIPPING_UNKNOWN]
+        return value, []  # 금액을 안다 → 더하면 끝
+
+    if "유배" in stripped:
+        return 0, [_PAID_SHIPPING_UNKNOWN, SHIPPING_UNKNOWN]
+
+    if "무료" in stripped or "무배" in stripped:
+        # 조건을 충족하는지 우리는 모른다 — 멤버십 여부·장바구니 합계를 알아야 한다.
+        return 0, [f"조건부무료배송:{stripped}", SHIPPING_UNKNOWN]
+
+    return 0, [f"배송비:{stripped}", SHIPPING_UNKNOWN]  # `착불` 등 미지 어휘
+
+
+def _dedupe(tags: list[str]) -> list[str]:
+    return list(dict.fromkeys(tags))
 
 
 def _extract_shipping(text: str) -> tuple[int, str]:
