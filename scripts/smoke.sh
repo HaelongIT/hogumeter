@@ -391,6 +391,67 @@ queue=$(curl -fsS "${WEB}/api/v1/review-queue")
 echo "$queue" | grep -qE '"occurrences":[2-9][0-9]*' ||
 	fail "중복 ${rows}건을 occurrences로 드러내지 않는다 (조용히 지우면 결함이 사라진 것처럼 보인다): $queue"
 
+echo "--- 5-1f) 이상치(BM-05): 분포 하단 딜이 큐에 뜨고 **대상을 지목한다** ---"
+# 🔥 경로는 종단으로 한 번도 실행된 적이 없었다. 분포가 5건 이상이어야 판정이 돈다
+# (`OUTLIER_MIN_DISTRIBUTION`). 병합(±2%, 48h)에 먹히지 않게 가격을 벌려 심는다.
+outlier_payload=$(mktemp)
+cat >"$outlier_payload" <<'JSON'
+{"name":"이상치테스트 제품","category":"test","demandAxisMode":"GROUPED",
+ "axes":[{"axisType":"PRICE","name":"용량","allowedValues":["256GB"]}],
+ "variants":[{"label":"256GB","priceAxisValues":{"용량":"256GB"}}],
+ "aliases":["이상치테스트"]}
+JSON
+outlier_product=$(curl -fsS -X POST "${WEB}/api/v1/products" -H 'Content-Type: application/json' \
+	-d @"$outlier_payload") || fail "이상치용 제품 등록 실패"
+rm -f "$outlier_payload"
+outlier_pid=$(echo "$outlier_product" | sed 's/.*"productId"[: ]*\([0-9]*\).*/\1/')
+outlier_variants=$(curl -fsS "${WEB}/api/v1/products/${outlier_pid}/variants") || fail "이상치용 variant 조회 실패"
+outlier_vid=$(echo "$outlier_variants" | sed 's/[^0-9]*\([0-9]*\).*/\1/')
+
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "이상치용 분포 삽입 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status) values
+ ('ppomppu','out-1','https://example.invalid/o1','이상치테스트 256GB 특가',  900000, now(), 'ACTIVE'),
+ ('ppomppu','out-2','https://example.invalid/o2','이상치테스트 256GB 특가',  950000, now(), 'ACTIVE'),
+ ('ppomppu','out-3','https://example.invalid/o3','이상치테스트 256GB 특가', 1000000, now(), 'ACTIVE'),
+ ('ppomppu','out-4','https://example.invalid/o4','이상치테스트 256GB 특가', 1050000, now(), 'ACTIVE'),
+ ('ppomppu','out-5','https://example.invalid/o5','이상치테스트 256GB 특가', 1100000, now(), 'ACTIVE'),
+ ('ppomppu','out-6','https://example.invalid/o6','이상치테스트 256GB 특가', 1150000, now(), 'ACTIVE');
+SQL
+
+# 분포가 6건이 될 때까지 기다린다(딜이 병합되면 n이 줄어 판정이 안 돈다).
+for _ in $(seq 20); do
+	bench=$(curl -fsS "${WEB}/api/v1/variants/${outlier_vid}/benchmark?periodMonths=6" || true)
+	case "$bench" in
+	*'"n":6'*) distributed=1 && break ;;
+	esac
+	sleep 2
+done
+[ "${distributed:-0}" = 1 ] || fail "분포가 6건이 되지 않았다(병합에 먹혔다?): $bench"
+
+# Tukey 하한: Q1(925,000) − 1.5×IQR(150,000) = 700,000. 300,000은 그보다 한참 아래다.
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "이상치 딜 삽입 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status)
+values ('ppomppu','out-low','https://example.invalid/olow','이상치테스트 256GB 특가', 300000, now(), 'ACTIVE');
+SQL
+
+for _ in $(seq 20); do
+	queue=$(curl -fsS "${WEB}/api/v1/review-queue" || true)
+	case "$queue" in
+	*'"type":"OUTLIER_LOWER"'*) outliered=1 && break ;;
+	esac
+	sleep 2
+done
+[ "${outliered:-0}" = 1 ] || fail "분포 하단 딜이 이상치 큐에 뜨지 않았다(BM-05가 안 돌았다): $queue"
+# "300,000원"만 보고는 아무것도 결정할 수 없다 — **무엇의** 이상치인지 지목해야 한다.
+echo "$queue" | grep -q '"subject":"이상치테스트 제품 — 256GB"' ||
+	fail "이상치가 대상(제품 — variant)을 지목하지 않는다: $queue"
+echo "$queue" | grep -q 'https://example.invalid/olow' || fail "이상치의 원문 링크를 잇지 못했다: $queue"
+# 이상치는 기준가 표본에서 빠진다(정직성) — n은 6 그대로여야 한다.
+curl -fsS "${WEB}/api/v1/variants/${outlier_vid}/benchmark?periodMonths=6" | grep -q '"n":6' ||
+	fail "이상치가 기준가 표본에 섞였다"
+
 echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
 # 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.
 purchase=$(mktemp)
