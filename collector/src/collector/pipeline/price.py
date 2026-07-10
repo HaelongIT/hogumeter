@@ -27,7 +27,17 @@ _UNIT = r"(?:mAh|MHz|GHz|mg|kg|ml|Hz|GB|TB|MB|인치|[gklWV]|정|매|포|롤|캔
 # 가격 형태: 콤마 구분(1,000) 또는 3자리 이상 연속 숫자.
 _AMOUNT = r"(\d{1,3}(?:,\d{3})+|\d{3,})"
 
-_MANWON = re.compile(r"(\d+(?:\.\d+)?)\s*만\s*원?")
+# `만원` 축약. **`만` 뒤에 단위·한글이 붙으면 가격이 아니다.**
+#
+# 이 패턴만 `_UNIT` 가드가 없었다. 서열 1순위라 뒤의 `_WON`·`_COMMA`·`_BARE`가 가진 가드에
+# 닿지도 못한다: `5000만화소` → 50,000,000원(55배), `3만시간 보증` → 30,000원(20배 낮음),
+# `2만mAh` → 20,000원. 괄호 관례 `(가격원/배송비)`가 먼저 걸리는 제목에선 드러나지 않았을 뿐이고,
+# **루리웹 golden은 28딜 중 22딜이 괄호 없이 온다** — 이 경로가 오히려 정상 경로다.
+#
+# `원`을 필수로 할 수는 없다. 확정본 경계 케이스가 `89만` → 890,000이다. 그래서 `만` 바로 뒤가
+# `원`이거나(`180만원대`), **글자·숫자가 아니어야** 한다(`89만` · `89만 특가`).
+# `2만2천원` = 22,000원 — `2만`만 읽으면 10% 낮은 값이 표본에 들어간다.
+_MANWON = re.compile(r"(\d+(?:\.\d+)?)\s*만(?:\s*(\d+)\s*천)?(?:\s*원|(?![A-Za-z가-힣0-9]))")
 _WON = re.compile(rf"(?<![\d,]){_AMOUNT}\s*원")
 _COMMA = re.compile(rf"(?<![\d,])(\d{{1,3}}(?:,\d{{3}})+)(?!\s*{_UNIT})")
 _BARE = re.compile(rf"(?<![\d,])(\d{{4,}})(?!\s*{_UNIT})")
@@ -127,7 +137,10 @@ def _extract_main_price(text: str) -> int | None:
     """가격다움이 높은 순서로 찾는다. 서열이 곧 오검출 방지책이다."""
     manwon = _MANWON.search(text)
     if manwon:
-        return int(round(float(manwon.group(1)) * 10_000))
+        total = float(manwon.group(1)) * 10_000
+        if manwon.group(2):  # `2만2천원`의 `2천`
+            total += int(manwon.group(2)) * 1_000
+        return int(round(total))
     for pattern in (_WON, _COMMA, _BARE):
         match = pattern.search(text)
         if match:

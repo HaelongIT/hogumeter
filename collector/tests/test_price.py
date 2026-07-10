@@ -230,3 +230,35 @@ def test_card_with_an_explicit_discount_context_is_a_condition():
     """발급사를 안 밝혀도 `카드할인`·`카드 결제 시`는 조건이다(확정본 AC-2의 "N카드 할인")."""
     assert _tags("[옥션]에어팟 (199,000원/무료) 카드할인 적용") == ["카드할인"]
     assert _tags("[11번가]TV (1,000,000원/무료) 카드 결제 시") == ["카드결제"]
+
+
+# ── `만원` 축약에는 단위 가드가 없었다 — `5000만화소`가 5천만원이 된다 ──────
+#
+# 후보 서열의 1순위(`_MANWON`)만 `_UNIT` 가드를 안 갖고 있었다. `_WON`·`_COMMA`·`_BARE`는
+# `1,000mg`·`5600MHz`를 걸러내는데, `만` 뒤의 단위는 아무도 안 봤다.
+#
+# 괄호 관례 `(가격원/배송비)`가 있는 제목은 먼저 걸려서 이 경로에 안 온다 — 그래서 안 보였다.
+# **루리웹 golden 28딜 중 22딜에는 괄호 표기가 없다.** 이 경로가 오히려 정상 경로다.
+
+
+def test_pixel_count_is_not_a_price():
+    """`5000만화소`가 50,000,000원이 되면 그 딜 하나로 기준가 분포가 무너진다."""
+    result = normalize_price("[쿠팡]갤럭시 S24 5000만화소 카메라 899,000원")
+
+    assert result.headline_price == 899_000
+
+
+def test_hours_and_capacity_are_not_prices():
+    assert normalize_price("[G마켓]에어컨 3만시간 보증 599,000원").headline_price == 599_000
+    assert normalize_price("[11번가]보조배터리 2만mAh 19,900원").headline_price == 19_900
+
+
+def test_manwon_still_wins_when_it_really_is_a_price():
+    assert normalize_price("3.3만원 특가").headline_price == 33_000
+    assert normalize_price("[옥션]키보드 8만원대 특가").headline_price == 80_000
+    assert normalize_price("(카할180만원대/무료)").headline_price == 1_800_000
+
+
+def test_manwon_with_a_thousand_part():
+    """`2만2천원`은 22,000원이다. `2만`만 읽으면 10% 낮은 값이 표본에 들어간다."""
+    assert normalize_price("[다나와]모니터 2만2천원").headline_price == 22_000
