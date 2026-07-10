@@ -217,6 +217,7 @@ _(Q-36. collector DB 적재기 — **해소됨 2026-07-09**: `db/raw_deal_sink.p
 - **잠정값**: `observedFrom` = 해당 variant 딜 중 **최초 firstSeen**(딜 0건이면 now) — 관측 개시를 최초 관측으로 근사. `lastPoll` = **`clock.instant()`(now)** — 항상 방금 폴링했다고 가정(신선도가 낙관적으로 편향). 가장 보수적이진 않으나 조회 read-model이라 되돌리기 쉬움. seam = 두 use-case의 해당 라인 1곳씩.
 - **재개 트리거**: (a) variant 등록/백필 도달 시각을 저장(REG 배선)하면 `observedFrom`을 그 값으로 교체 — 최초 딜보다 이른 관측 공백을 반영. (b) 수집 파이프라인이 `last_successful_poll`(사이트별/전역)을 기록하면 `lastPoll`을 실측으로 교체 — 수집 정지 시 신선도가 올바로 강등(Q-25). 연결: `Staleness`(3-2 관측 시계).
 - **진행(2026-07-09)**: collector 스케줄러가 `SiteState.last_successful_poll`을 **산출**하기 시작했다(사이트별). 다만 아직 **메모리 값**이라 core가 읽을 수 없다 — 영속화는 Q-36(DB 접점)에 종속. Q-36 해소 시 이 값을 테이블에 쓰면 (b)가 바로 열린다.
+- **⚠️ 정정(2026-07-10)**: 위 문장은 이제 틀렸다. **Q-36은 해소됐지만 (b)는 열리지 않았다.** ① 값을 담을 테이블이 없고(마이그레이션 = core 소유) ② 그 값을 읽어 `SignalCalculator`에 넘기는 곳은 `GetSignalUseCase`(**상대 소유 기존 파일**)다. 그래서 지금도 `lastPoll = clock.instant()`이고, **SIG-02 신선도 3단은 "확신" 한 칸만 도달 가능하다** — 수집이 멈춰도 신호등이 강등되지 않는다. 재개 트리거는 "무엇이 참이 되어야 하는가"로 다시 쓴다: **`last_successful_poll`이 어딘가에 영속되고, `GetSignalUseCase`가 그것을 읽을 수 있어야 한다.** (2026-07-10 감사에서 `SIG-02`가 코드 참조 0으로 걸려 발견.)
 
 ---
 
