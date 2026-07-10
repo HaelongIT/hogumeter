@@ -5,7 +5,7 @@ description = "호구미터 수집기 — 핫딜 3사(뽐뿌/루리웹/펨코) +
 requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.15.0",
-    "psycopg[binary]>=3.2",
+    "psycopg[binary]>=3.3.4",
 ]
 
 [dependency-groups]
