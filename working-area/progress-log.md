@@ -16,6 +16,14 @@
 
 ---
 
+## 2026-07-10 — 무중단이 끊기던 진짜 이유 (지침 개정)
+
+- **한 일**: 정지 원인을 트랜스크립트로 실측(`ExitPlanMode` 11 + `AskUserQuestion` 12 = 23회 강제 정지)하고 CLAUDE.md를 개정 — 턴 규율 / 질문 규율(`AskUserQuestion`은 정지조건에만) / 정지조건 정밀화(보안 게이트를 **넓히는** 변경만 정지) / **모듈 소유권 절 신설**(core=상대, additive 신규 파일은 자율) / Git 규칙 현실화.
+- **핵심 발견**: 지침의 "보고는 멈춤이 아니다"가 **이 도구에선 거짓**이었다. 도구 호출을 멈추고 채팅 글을 내면 그 턴이 끝나고, 사용자가 말하기 전까지 아무것도 못 한다. 지침이 "비차단"이라 부른 행위가 정확히 차단이었다.
+- **⚠️ 당신이 볼 것**: **플랜 모드는 사용자만 끌 수 있다.** 켜져 있으면 `"This supercedes any other instructions"`라 CLAUDE.md가 무엇을 적든 매 턴 `ExitPlanMode` 승인을 받아야 한다. `Shift+Tab`으로 모드를 순환해 plan이 아닌 상태로 둘 것. (선택) `.claude/settings.local.json`에 `{"permissions":{"defaultMode":"acceptEdits"}}` — `git push` deny는 그대로 유지된다.
+- **하지 않은 것**: 정지조건 완화 없음. `permissions.deny`의 `git push`·`guard.sh` 무수정(오늘 jar를 깎은 사고가 그 게이트의 값어치를 증명했다).
+- **다음**: 개정된 지침대로 무중단 재개.
+
 ## 2026-07-10 — Q-27 ① 가격 변경 재처리 (BM-01 AC-2 나머지 절반)
 
 - **한 일**: 수집기가 업서트한 새 가격이 `deal_event`까지 가지 못하던 것을 뚫었다. 순수 `PriceRefresh`(산술) + 신규 `ReprocessDealPricesUseCase`(IO). 스케줄러가 **ingest → 가격 → 종료** 순으로 돈다. **기존 core 파일 무수정**(`DealEventMapper.toDomain`으로 crossVerified를 복원해 `applyMerge`를 그대로 씀). 스모크 5-1c가 `999000/899000/899000`(first 불변 / min 갱신 / last 갱신)을 증명한다.
