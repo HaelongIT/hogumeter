@@ -9,6 +9,7 @@ import type {
   PurchaseRecorded,
   RecordPurchaseCommand,
   RegisterProductCommand,
+  ReviewQueueItem,
   SignalView,
   UpdateAlertPolicyCommand,
   VariantView,
@@ -77,4 +78,7 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(command),
     }),
+
+  // 미상 큐(읽기 전용). 승격·기각 REST는 아직 없다 — docs/91 Q-15.
+  listReviewQueue: () => request<ReviewQueueItem[]>('/api/v1/review-queue'),
 }

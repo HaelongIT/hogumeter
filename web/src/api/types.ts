@@ -157,6 +157,28 @@ export interface PurchaseRecorded {
   purchaseId: number
 }
 
+export type ReviewQueueType = 'UNCLASSIFIED' | 'OUTLIER_LOWER' | 'KEYWORD_SUGGEST'
+
+/**
+ * GET /api/v1/review-queue (읽기 전용) — 처리 대기(PENDING) 항목만. 같은 근거는 하나로 접혀 온다.
+ *
+ * **승격·기각 REST는 없다**(docs/91 Q-15). `payload`는 유형별 근거를 그대로 담은 jsonb라
+ * 필드가 보장되지 않는다 — `review/present.ts`가 한 곳에서 해석한다.
+ * `sourceUrl`은 원문을 잇지 못하면 `null`이다(빈 문자열이 아니다 — 죽은 링크를 그리지 않으려고).
+ *
+ * `occurrences > 1`은 **재처리 멱등이 없다는 뜻**이다 — 매칭 실패 원문은 매 틱마다 다시 큐에 쌓인다
+ * (docs/91 Q-27 ④). 숨기지 않고 세어서 보여준다.
+ */
+export interface ReviewQueueItem {
+  id: number
+  type: ReviewQueueType
+  occurrences: number
+  firstSeenAt: string
+  lastSeenAt: string
+  sourceUrl: string | null
+  payload: Record<string, unknown>
+}
+
 /** 에러 형태는 하나다(`{code, message}`). 코드 카탈로그는 `docs/benchmark/07`. */
 export interface ApiError {
   code: 'BM_VARIANT_NOT_FOUND' | 'BM_INVALID_PERIOD' | 'REG_INVALID_ALERT_POLICY' | (string & {})

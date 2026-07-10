@@ -280,6 +280,54 @@ done
 [ "${alerted:-0}" = 1 ] || fail "목표가를 저장했는데 TARGET 알림이 발화하지 않았다 (정책이 판정에 닿지 않는다). 최근 알림: $(compose logs --no-log-prefix core 2>&1 | grep 'STUB alert' | tail -3 || true)"
 echo "$alert_log" | grep -q 'price=950000' || fail "알림이 딜 가격을 싣지 않았다: $alert_log"
 
+echo "--- 5-1e) 미상 큐: 매칭 실패 원문이 사람에게 보인다 + 중복 재처리 실측 (Q-27 ④) ---"
+# `review_queue_item`은 2026-07-10까지 **쓰이기만 하고 아무도 읽지 않았다.** 매칭이 무엇을
+# 놓치는지 볼 방법이 없었다 — 놓침을 허용하는 시스템에서 놓친 걸 못 보면 그건 유실이다.
+#
+# 별칭('스모크')은 맞는데 **축값(256GB/512GB)이 제목에 없다** → Matcher가 variant를 못 고른다(UNKNOWN)
+# → deal_event 없이 review_queue_item만 생긴다. (아무 토큰도 안 겹치는 제목은 REJECTED로 그냥 버려진다.)
+unknown_title='스모크 제품 1테라 특가'
+deals_before=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-c "select count(*) from deal_event" | tr -d '\r')
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "미상 원문 삽입 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status)
+values ('ruliweb', 'smoke-unknown', 'https://example.invalid/unknown', '스모크 제품 1테라 특가', 111000, now(), 'ACTIVE');
+SQL
+
+for _ in $(seq 20); do
+	queue=$(curl -fsS "${WEB}/api/v1/review-queue" || true)
+	case "$queue" in
+	*"$unknown_title"*) queued=1 && break ;;
+	esac
+	sleep 2
+done
+[ "${queued:-0}" = 1 ] || fail "매칭 실패 원문이 미상 큐에 뜨지 않는다: $queue"
+echo "$queue" | grep -q '"type":"UNCLASSIFIED"' || fail "유형이 UNCLASSIFIED가 아니다: $queue"
+# 판단은 사람이 한다 — 시스템은 근거와 원문 링크만 모아준다(절대 원칙 2·6).
+echo "$queue" | grep -q 'https://example.invalid/unknown' || fail "원문 링크를 잇지 못했다: $queue"
+
+# 딜은 생기지 않아야 한다 — 미상은 기준가 표본에 들어가면 안 된다(정직성).
+deals_after=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-c "select count(*) from deal_event" | tr -d '\r')
+[ "$deals_before" = "$deals_after" ] || fail "미상 원문이 deal_event를 만들었다 ($deals_before -> $deals_after)"
+
+# ⚠️ Q-27 ④ 실측: `findUnprocessed()`는 deal_event_source 링크가 없는 원문을 미처리로 본다.
+# 미상 원문은 링크를 만들지 않으므로 **매 틱 다시 큐에 쌓인다**(운영 60초면 하루 1,440행).
+# 이 단정이 실패하면 Q-27 ④가 고쳐진 것이다 — 그때 이 블록을 지워라.
+sleep 5
+rows=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-c "select count(*) from review_queue_item where payload->>'title' = '${unknown_title}'" | tr -d '\r')
+[ "$rows" -gt 1 ] || fail "중복 재처리가 관측되지 않는다(${rows}건). Q-27 ④가 해소됐다면 이 블록을 지워라"
+
+# 조회는 같은 근거를 하나로 접어 준다. 접었다는 사실은 occurrences로 드러낸다 — 조용히 지우지 않는다.
+# `grep -c`는 **줄 수**를 세므로 한 줄 JSON에선 언제나 1이다. `grep -o | wc -l`로 **등장 횟수**를 센다.
+queue=$(curl -fsS "${WEB}/api/v1/review-queue")
+[ "$(echo "$queue" | grep -o "$unknown_title" | wc -l)" = 1 ] ||
+	fail "중복이 접히지 않았다 — 화면이 같은 항목을 여러 번 그린다 (DB ${rows}행)"
+echo "$queue" | grep -qE '"occurrences":[2-9][0-9]*' ||
+	fail "중복 ${rows}건을 occurrences로 드러내지 않는다 (조용히 지우면 결함이 사라진 것처럼 보인다): $queue"
+
 echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
 # 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.
 purchase=$(mktemp)

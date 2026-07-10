@@ -12,6 +12,7 @@ paths:
 
 - **Boot 메이저 이관 시 "starter로 교체"는 방언·DB 전용 모듈까지 옮겨주지 않는다.** `spring-boot-starter-flyway`는 flyway-core만 준다 — `flyway-database-postgresql`을 따로 명시. 런타임 GREEN까지 확인할 것. (99: 2026-07-04 Boot 4.1 이관)
 - **Boot 4는 슬라이스 테스트 자동설정을 모듈별 스타터로 분리**했다. `@WebMvcTest`/`@AutoConfigureMockMvc`를 쓰면 `spring-boot-starter-webmvc-test`를 추가하고 import를 `org.springframework.boot.<module>.test.autoconfigure`로 고친다. 못 찾으면 gradle 캐시의 **실제 4.x jar**에서 패키지 경로를 확인(3.5.x jar의 옛 경로에 낚이지 말 것). (99: 2026-07-08)
+- **Boot 4는 Jackson 3다** — `tools.jackson.databind.ObjectMapper`·`tools.jackson.core.type.TypeReference`. 애노테이션만 `com.fasterxml.jackson.annotation`(2.x)에 남아 있어 `@JsonInclude`가 컴파일된다고 `com.fasterxml.jackson.databind`가 있는 게 아니다. `JacksonException`은 unchecked. 좌표는 `./gradlew dependencies`, 클래스 경로는 jar `unzip -l`로 확인한다. (99: 2026-07-10)
 - **Testcontainers 2.0 좌표·패키지가 바뀌었다**: 아티팩트는 `testcontainers-` 접두사(`testcontainers-junit-jupiter`·`testcontainers-postgresql`), 클래스는 `org.testcontainers.postgresql.PostgreSQLContainer`, self-type 제네릭 제거(`PostgreSQLContainer<?>` 아님). (99: 2026-07-04)
 - **`ddl-auto=validate`는 DDL 타입과 JPA 필드 타입을 정확히 맞춘다.** `smallint` 컬럼을 `Integer`로 매핑하면 검증 실패. `@JdbcTypeCode(SqlTypes.SMALLINT)`를 붙이거나 필드를 `Short`로. **컨텍스트 로드가 무더기로 깨지면 스키마 검증 불일치를 먼저 의심**하고 리포트에서 `Schema-validation` 라인을 볼 것. (99: 2026-07-08)
 - **`@SpringBootTest`는 컨테이너(postgres)를 공유하고 기본은 롤백이 없다.** 전역 count 단정은 다른 테스트의 커밋에 오염된다 → 특정 `variantId`로 스코프하거나 `@Transactional`로 tx 롤백. (99: 2026-07-08)

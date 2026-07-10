@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { DecisionPage } from './decision/DecisionPage'
 import { RegistrationPage } from './registration/RegistrationPage'
+import { ReviewQueuePage } from './review/ReviewQueuePage'
 
-// 화면이 둘뿐이라 라우터를 들이지 않는다. URL이 필요해지면 그때 넣는다.
-const TABS = { decision: '지금 사도 되나', registration: '제품 등록' } as const
+// 화면이 셋뿐이라 라우터를 들이지 않는다. URL이 필요해지면 그때 넣는다.
+const TABS = { decision: '지금 사도 되나', registration: '제품 등록', review: '미상 큐' } as const
 type Tab = keyof typeof TABS
 
 export function App() {
@@ -25,11 +26,9 @@ export function App() {
           </button>
         ))}
       </nav>
-      {tab === 'decision' ? (
-        <DecisionPage initialVariantId={openVariantId} />
-      ) : (
-        <RegistrationPage onOpenDecision={openDecision} />
-      )}
+      {tab === 'decision' && <DecisionPage initialVariantId={openVariantId} />}
+      {tab === 'registration' && <RegistrationPage onOpenDecision={openDecision} />}
+      {tab === 'review' && <ReviewQueuePage />}
     </>
   )
 }
