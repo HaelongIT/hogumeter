@@ -1,0 +1,19 @@
+# 프로덕션 소비처가 0인 순수 도메인 클래스 — 그 사실을 **선언**한다.
+#
+#   <클래스명>  <docs/91의 열린 Q-ID>  <한 줄 이유>
+#
+# 규칙(scripts/check-domain-consumers.sh가 강제한다):
+#   - 여기 없는 소비처 0 클래스는 차단된다. 순수 도메인은 단위 테스트만으로 GREEN이 되므로
+#     **죽어 있어도 아무 신호가 없다.** `effective_interval_with_robots`가 그랬고(robots Crawl-delay가
+#     한 번도 안 지켜졌다), `Purchase.expire()`가 그랬다(관찰이 영원히 안 끝났다).
+#   - 인용한 Q가 docs/91에서 **열려 있어야** 한다. 해소되면 면제가 만료되고 게이트가 다시 묻는다.
+#   - 다시 소비되기 시작하면 여기서 지워야 한다(낡은 면제는 다음 결함을 숨긴다).
+#
+# **테스트는 호출자가 아니다.**
+
+FollowUpEvaluator     Q-67  AL-03 후속 알림이 통째로 미배선. 알림 이력 저장소가 없어 `alreadyAlerted`를 채울 수 없다.
+ExcludeKeywordPolicy  Q-28  제외키워드 판정은 있으나 표본 조립이 그것을 부르지 않는다(딜 제목 접근 필요).
+KeywordSuggester      Q-22  키워드 사후학습 배선 미구현.
+DigestRules           Q-33  다이제스트(docs/18)는 M1 범위 밖.
+ReportCardCalculator  Q-62  성적표 발급(PUR-04) 미구현 — 저장소도 유스케이스도 없다.
+ReportIssueGate       Q-62  같은 이유. 발급 게이트만 있고 발급이 없다.

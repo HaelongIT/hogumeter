@@ -123,6 +123,12 @@ jobs:
       - name: 리포지토리 조회 메서드 소비처 게이트 계약 테스트
         run: bash scripts/check-repository-readers.test.sh
 
+      # 순수 도메인은 IO가 없어 **단위 테스트만으로 GREEN**이 된다 — 죽어 있어도 아무 신호가 없다.
+      # `effective_interval_with_robots`가 그랬고(robots Crawl-delay가 한 번도 안 지켜졌다),
+      # `Purchase.expire()`가 그랬으며(관찰이 영원히 안 끝났다), `FollowUpEvaluator`가 그렇다(AL-03).
+      - name: 도메인 클래스 소비처 게이트 계약 테스트
+        run: bash scripts/check-domain-consumers.test.sh
+
       # `배송비미상` 표식은 collector가 만들고 core가 DB 너머에서 읽는다. 두 모듈이 같은 리터럴을
       # 각자 들고 있으므로, 한쪽이 이름을 바꾸면 다른 쪽은 조용히 0을 세며 "오염 없음"이라고 말한다.
       - name: 모듈 간 태그 계약 게이트 계약 테스트
