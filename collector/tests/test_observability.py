@@ -9,6 +9,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from collector.observability import counters, event
+from collector.parsers.models import ParsedDeal
 from collector.scheduler.loop import CycleResult, SiteObservation
 from collector.scheduler.policy import Alert, Outcome, SiteState
 
@@ -49,9 +50,14 @@ def test_event_drops_none_fields():
 # ── counters(): 사이클 카운터 (OBS-02) ─────────────────────────────────
 
 
-def _result(observations, alerts=(), stopped=()) -> CycleResult:
+def _result(observations, alerts=(), stopped=(), deals=()) -> CycleResult:
     states = {o.site: SiteState(site=o.site, stopped=o.site in stopped) for o in observations}
-    return CycleResult(states=states, deals=[], alerts=list(alerts), observations=observations)
+    return CycleResult(states=states, deals=list(deals), alerts=list(alerts), observations=observations)
+
+
+def _deal(post_id: str, conditions=()) -> ParsedDeal:
+    return ParsedDeal(site="ppomppu", post_id=post_id, title="t", url="u", headline_price=1000,
+                      applied_conditions=list(conditions))
 
 
 def test_counters_report_yield_per_site():
@@ -70,6 +76,7 @@ def test_counters_report_yield_per_site():
         "failures": 0,
         "blocked": 0,
         "alerts": 0,
+        "conditional": 0,
         "stopped_sites": [],
     }
 
@@ -105,6 +112,28 @@ def test_zero_yield_is_visible_not_hidden():
 
     assert c["by_site"] == {"ppomppu": 0}
     assert c["deals"] == 0
+
+
+def test_counters_count_conditional_prices():
+    """조건부 가격(`카할`·`유료배송(금액미상)`)은 **무조건 가격이 아니다.**
+
+    그 태그는 `raw._derived`까지만 가고 `deal_event`에 도달하지 않는다(docs/91 Q-46) — 즉
+    기준가 표본이 조용히 오염된다. 고칠 수 없는 결함은 **세어서 노출한다**. 폴링을 켜는 사람이
+    `docker logs`에서 오염률을 바로 본다(골든 실측: 뽐뿌 9.5% · 펨코 15%).
+    """
+    result = _result(
+        [SiteObservation("ppomppu", Outcome.OK, 3)],
+        deals=[_deal("1"), _deal("2", ["카할"]), _deal("3", ["유료배송(금액미상)"])],
+    )
+
+    assert counters(result)["conditional"] == 2
+
+
+def test_conditional_zero_is_not_omitted():
+    """0을 생략하면 "조건부 0건"과 "안 셌다"가 구별되지 않는다(OBS-02)."""
+    result = _result([SiteObservation("ppomppu", Outcome.OK, 1)], deals=[_deal("1")])
+
+    assert counters(result)["conditional"] == 0
 
 
 def test_counters_serialize_cleanly_as_an_event():

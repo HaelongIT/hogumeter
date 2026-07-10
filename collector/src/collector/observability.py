@@ -30,6 +30,12 @@ def counters(result: CycleResult) -> dict:
     """OBS-02 핵심 카운터. 일시 장애와 차단을 **따로** 센다 — 대응이 다르다(백오프 vs 중지).
 
     `by_site`의 0은 지우지 않는다. "성공했는데 0건"이 구조 변경의 전형이기 때문이다(REL-06).
+
+    `conditional`은 조건부 가격(`카할`=카드할인 · `유료배송(금액미상)` · 펨코 `조건부무료배송:…`)
+    딜 수다. 그 태그는 `raw._derived`까지만 가고 **`deal_event`에 도달하지 않는다**(docs/91 Q-46) —
+    즉 그만큼의 딜이 **무조건 가격인 척** 기준가 표본에 들어간다. 우리가 못 고치는 결함이라면
+    **세어서 노출한다**: 폴링을 켠 사람이 `docker logs`에서 오염률을 바로 본다
+    (골든 실측: 뽐뿌 9.5% · 펨코 15%). 0도 센다 — "조건부 0건"과 "안 셌다"는 다른 사건이다.
     """
     by_site = {o.site: o.deal_count for o in result.observations}
     return {
@@ -39,5 +45,6 @@ def counters(result: CycleResult) -> dict:
         "failures": sum(1 for o in result.observations if o.outcome is Outcome.TRANSIENT),
         "blocked": sum(1 for o in result.observations if o.outcome is Outcome.BLOCKED),
         "alerts": len(result.alerts),
+        "conditional": sum(1 for deal in result.deals if deal.applied_conditions),
         "stopped_sites": sorted(name for name, state in result.states.items() if state.stopped),
     }
