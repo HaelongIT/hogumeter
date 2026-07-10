@@ -13,11 +13,12 @@ trap 'rm -rf "$work"' EXIT
 fail=0
 case_no=0
 
-# fake <python값> <java값> — 둘 중 하나가 빈 문자열이면 그 상수를 아예 쓰지 않는다.
+# fake <python값> <java값> <web값> — 빈 문자열이면 그 모듈이 상수를 아예 쓰지 않는다.
 fake() {
 	case_no=$((case_no + 1))
 	local r="$work/r$case_no"
-	mkdir -p "$r/collector/src/collector/pipeline" "$r/core/src/main/java/dev/hogumeter/core/domain/deal"
+	mkdir -p "$r/collector/src/collector/pipeline" "$r/core/src/main/java/dev/hogumeter/core/domain/deal" \
+		"$r/web/src/review"
 	if [ -n "$1" ]; then
 		printf 'SHIPPING_UNKNOWN = "%s"\n' "$1" >"$r/collector/src/collector/pipeline/price.py"
 	else
@@ -28,6 +29,11 @@ fake() {
 			>"$r/core/src/main/java/dev/hogumeter/core/domain/deal/DealTags.java"
 	else
 		printf '// 상수를 지웠다\n' >"$r/core/src/main/java/dev/hogumeter/core/domain/deal/DealTags.java"
+	fi
+	if [ -n "$3" ]; then
+		printf "const SHIPPING_UNKNOWN = '%s'\n" "$3" >"$r/web/src/review/present.ts"
+	else
+		printf '// 상수를 지웠다\n' >"$r/web/src/review/present.ts"
 	fi
 	printf '%s' "$r"
 }
@@ -47,15 +53,19 @@ check() { # expected_exit  label  root
 }
 
 echo "── 통과해야 함 (exit 0) ──"
-check 0 "두 리터럴이 같다" "$(fake '배송비미상' '배송비미상')"
-check 0 "정본을 바꿔도 사본이 따라오면 통과한다" "$(fake 'SHIPPING_UNKNOWN' 'SHIPPING_UNKNOWN')"
+check 0 "세 리터럴이 같다" "$(fake '배송비미상' '배송비미상' '배송비미상')"
+check 0 "정본을 바꿔도 사본이 둘 다 따라오면 통과한다" \
+	"$(fake 'SHIPPING_UNKNOWN' 'SHIPPING_UNKNOWN' 'SHIPPING_UNKNOWN')"
 
 echo "── 차단되어야 함 (exit 1) ──"
 # 이게 이 게이트의 존재 이유: collector가 이름을 바꾸면 core는 조용히 0을 센다.
-check 1 "collector가 표식 이름을 바꿨다 (core는 영원히 0을 센다)" "$(fake '배송비_미상' '배송비미상')"
-check 1 "core 쪽 오타" "$(fake '배송비미상' '배송비미상 ')"
-check 1 "정본에서 상수가 사라졌다" "$(fake '' '배송비미상')"
-check 1 "사본에서 상수가 사라졌다" "$(fake '배송비미상' '')"
+check 1 "collector가 표식 이름을 바꿨다 (core는 영원히 0을 센다)" "$(fake '배송비_미상' '배송비미상' '배송비_미상')"
+check 1 "core 쪽 오타" "$(fake '배송비미상' '배송비미상 ' '배송비미상')"
+# web이 어긋나면 화면이 "실제 결제가는 더 높습니다"를 조용히 멈춘다 — 가장 눈에 안 띄는 실패다.
+check 1 "web 쪽만 어긋났다 (하한 경고가 조용히 사라진다)" "$(fake '배송비미상' '배송비미상' '배송비_미상')"
+check 1 "정본에서 상수가 사라졌다" "$(fake '' '배송비미상' '배송비미상')"
+check 1 "core 사본에서 상수가 사라졌다" "$(fake '배송비미상' '' '배송비미상')"
+check 1 "web 사본에서 상수가 사라졌다" "$(fake '배송비미상' '배송비미상' '')"
 check 1 "파일 자체가 없다" "$work/does-not-exist"
 
 echo "── 실제 저장소 (exit 0) ──"
