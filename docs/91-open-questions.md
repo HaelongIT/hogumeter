@@ -241,6 +241,13 @@ _(Q-40. REL-06 파싱 드리프트 감지 — **해소됨 2026-07-09**: `schedul
 
 _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildCommand`가 데카르트 곱을 만든다(용량 2 × 색상 2 → variant 4). 축 이름 중복은 거부(맵에서 덮어쓰기), 빈 축 행은 무시, 화면이 "생성될 variant N개"를 미리 보여준다. 여기서 제거.)_
 
+## [열림] Q-57. core는 구조화 로그(JSON)를 내지 않고, 카운터도 절반뿐이다
+- **맥락**: OBS-01은 "구조화 로그(JSON)", OBS-02는 "핵심 카운터: 수집 글 수, 매칭 CONFIRMED/CANDIDATE/REJECTED 비율, 병합률, 알림 발송 수, 큐 적체, API 쿼터 사용량"을 요구한다. **어느 보드에도 없던 요구다**(2026-07-10 발견).
+- **한 것(2026-07-10)**: `PipelineScheduler`가 매 틱 `PipelineTickReport`를 남긴다 — `postsLinked·dealsCreated·merged·queued·ended·pending·rawTotal`. 병합률은 "링크는 늘었는데 딜은 안 늘었다"로 유도한다. 0을 생략하지 않는다. 스모크가 `dealsCreated=1 merged=0 pending=0`을 실제 로그에서 확인한다.
+- **남은 것**: ① **JSON이 아니다** — core는 logback 기본 텍스트 로그다(`logback-spring.xml` 부재). collector만 JSON Lines를 낸다. ② **매칭 tier 비율**(CONFIRMED/CANDIDATE/REJECTED)은 `IngestDealsUseCase`가 void라 밖에서 셀 수 없다 — 큐 증가분으로 CANDIDATE+UNKNOWN만 근사한다. ③ **알림 발송 수**는 `StubAlertSender` 안에 있다. ④ **API 쿼터**는 네이버 키 대기(Q-3).
+- **잠정값**: 텍스트 로그 + 틱 단위 카운터. `docker logs`로 읽는다.
+- **재개 트리거**: ①은 로그 수집기(운영 배포)를 붙일 때 — core 전체 로그 형식을 바꾸는 일이라 상대와 조율. ②③은 use case 반환값 변경이 필요하니 **core 기존 파일 수정**이라 조율 대상. ④는 Q-3.
+
 ## [열림] Q-56. 파이프라인 단계 실패가 로그에만 남는다
 - **맥락**: `PipelineScheduler.runStep`은 한 단계(ingest·reprocess)가 던져도 다른 단계와 다음 주기를 살리려고 예외를 잡는다. 잡은 뒤에는 `log.error`로 단계 이름과 함께 남긴다 — 그게 전부다.
 - **왜 위험한가**: DB 스키마 불일치·낙관적 락 충돌 같은 지속적 실패가 나면 **파이프라인은 도는 척하면서 아무것도 처리하지 않는다.** `docker logs`를 보지 않으면 모른다. collector의 `giving_up`(연속 실패 시 프로세스 종료)과 달리 core는 스스로 내려오지도 않는다.

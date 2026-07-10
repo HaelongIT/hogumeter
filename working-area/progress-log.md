@@ -16,6 +16,13 @@
 
 ---
 
+## 2026-07-10 — OBS-02 파이프라인 카운터 (Q-57 신설)
+
+- **한 일**: `PipelineScheduler`가 매 틱 `PipelineTickReport`를 남긴다 — `postsLinked · dealsCreated · merged · queued · ended · pending · rawTotal`. 병합률은 "링크는 늘었는데 딜은 안 늘었다"로 **유도**한다(직접 셀 수 없다). 0을 생략하지 않는다. 스모크가 실 로그에서 `dealsCreated=1 merged=0 pending=0`을 확인한다. 리포지토리·유스케이스 **무수정**(JpaRepository의 `count()`만 씀).
+- **자율로 정한 것**: `pending`을 `rawPosts − sources` 뺄셈으로 근사하지 않고 `findUnprocessed().size()`로 정확히 잰다 — `unique(deal_event_id, raw_deal_post_id)`는 한 원문이 두 딜에 붙는 걸 막지 않아 그 뺄셈은 가정이다. 1인용 규모라 스캔 비용은 무의미.
+- **⚠️ 당신이 볼 것**: `docs/91` **Q-57 신설** — OBS-01/02가 **어느 보드에도 없던 요구**였다. core는 여전히 **JSON 로그가 아니고**(logback 기본 텍스트), 매칭 tier 비율·알림 발송 수는 use case가 void라 밖에서 셀 수 없다(core 기존 파일 수정 필요 → 상대와 조율).
+- **다음**: 요구 문서(docs/20) 전수 대조를 계속한다.
+
 ## 2026-07-10 — SEC-05 크기 상한 (Q-55 해소)
 
 - **한 일**: 크롤링 텍스트가 상한 없이 `text`·`jsonb`로 들어가던 것을 막았다. title 300자 · url 2000자 · post_id 64자 · raw 256KiB(**바이트**로 잼 — 한글은 UTF-8에서 3바이트라 글자 수로 재면 3배 뚫린다). 넘으면 **자르지 않고 거절**하고 `oversized` 이벤트로 남긴다. `cycle.skipped` 카운터 신설(0도 센다).

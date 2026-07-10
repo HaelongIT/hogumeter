@@ -1,13 +1,22 @@
 package dev.hogumeter.core.adapter.scheduler;
 
-import dev.hogumeter.core.application.IngestDealsUseCase;
-import dev.hogumeter.core.application.ReprocessDealStatusUseCase;
+import dev.hogumeter.core.adapter.persistence.DealEventRepository;
+import dev.hogumeter.core.adapter.persistence.DealEventSourceRepository;
+import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
+import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
+import dev.hogumeter.core.domain.deal.DealStatus;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import dev.hogumeter.core.application.IngestDealsUseCase;
+import dev.hogumeter.core.application.ReprocessDealStatusUseCase;
 
 /**
  * 파이프라인 트리거 — {@code raw_deal_post}를 주기적으로 소비한다.
@@ -20,6 +29,9 @@ import org.springframework.stereotype.Component;
  *
  * <p>기동 직후에는 돌지 않는다({@code initialDelay = interval}). {@code fixedDelay}는 기본적으로
  * 시작하자마자 1회 실행되는데, 그러면 {@code @SpringBootTest}들이 스케줄러에 오염된다.
+ *
+ * <p>매 틱마다 {@link PipelineTickReport}를 남긴다(OBS-02). 조용히 도는 스케줄러는 아무것도 처리하지
+ * 않는 스케줄러와 구별되지 않는다.
  */
 @Component
 @ConditionalOnProperty(name = "core.pipeline.enabled", havingValue = "true", matchIfMissing = true)
@@ -29,23 +41,41 @@ public class PipelineScheduler {
 
 	private final Runnable ingest;
 	private final Runnable reprocess;
+	private final Supplier<PipelineSnapshot> probe;
+	private final Consumer<PipelineTickReport> report;
 
 	@Autowired
-	PipelineScheduler(IngestDealsUseCase ingest, ReprocessDealStatusUseCase reprocess) {
-		this(ingest::ingestPending, reprocess::reprocessEndedDeals);
+	PipelineScheduler(IngestDealsUseCase ingest, ReprocessDealStatusUseCase reprocess,
+			RawDealPostRepository rawPosts, DealEventRepository dealEvents,
+			DealEventSourceRepository sources, ReviewQueueItemRepository reviewQueue) {
+		this(ingest::ingestPending, reprocess::reprocessEndedDeals,
+				() -> new PipelineSnapshot(
+						rawPosts.count(),
+						sources.count(),
+						dealEvents.count(),
+						reviewQueue.count(),
+						dealEvents.findByStatusIn(List.of(DealStatus.ENDED)).size(),
+						rawPosts.findUnprocessed().size()),
+				tick -> log.info("pipeline tick {}", tick));
 	}
 
 	/** 테스트 seam — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
-	PipelineScheduler(Runnable ingest, Runnable reprocess) {
+	PipelineScheduler(Runnable ingest, Runnable reprocess, Supplier<PipelineSnapshot> probe,
+			Consumer<PipelineTickReport> report) {
 		this.ingest = ingest;
 		this.reprocess = reprocess;
+		this.probe = probe;
+		this.report = report;
 	}
 
 	@Scheduled(fixedDelayString = "${core.pipeline.interval-ms:60000}",
 			initialDelayString = "${core.pipeline.interval-ms:60000}")
 	public void tick() {
+		PipelineSnapshot before = probe.get();
 		runStep("ingest", ingest);
 		runStep("reprocess", reprocess);
+		// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다.
+		report.accept(PipelineTickReport.between(before, probe.get()));
 	}
 
 	/**
