@@ -1,3 +1,25 @@
+## 2026-07-11 — "쓰기만 하는 테이블"을 게이트로 만들었다 (Q-66이 그 첫 수확)
+
+**한 일**: `alert_policy`·`review_queue_item`·`product_axis` — 같은 결함군을 세 번 손으로 찾았다.
+`check-table-wiring.sh`는 셋 다 통과시킨다(엔티티가 있으니 "이름이 나타난다"). 한계를 적어 둔 것으로는
+아무것도 막지 못한다.
+
+- `scripts/check-repository-readers.sh` + allowlist(열린 Q-ID, 만료됨) + 계약 테스트 13건 → CI `lint`.
+- 실측: 조회 메서드 11개 중 호출자 0이 **둘** — `ProductAxisRepository.findByProductId`(Q-66) ·
+  `ReviewQueueItemRepository.findByType`(Q-15).
+
+⚠️ **감사를 두 번 틀렸다**:
+1. **메서드 이름만 세면 안 된다.** `findByProductId`는 세 리포지토리가 각자 선언한다 — Variant의
+   호출자가 ProductAxis의 죽음을 가렸다. **수신자 타입으로 스코프**해야 한다.
+2. `xargs -r grep -l`이 매치 없을 때 **123**을 반환해 `set -e`가 조용히 죽였다(내가 규칙에 적어둔
+   함정에 또 걸렸다). 루프로 센다.
+
+**규칙 승격**: 게이트의 "명시된 한계"는 **다음 게이트의 명세**다.
+
+**검증**: 계약 테스트 13건 ALL PASS · shellcheck clean · `check-ci-coverage`가 **네 번째로** 자기 일을 했다.
+
+---
+
 ## 2026-07-11 — 수요축 기능이 통째로 죽어 있는데 화면은 "분리" 손잡이를 그린다 (Q-66)
 
 **한 일**: 지난 배치에서 "web의 `axisType` 하드코딩은 요청 측 갭"이라 적고 넘겼다. **검증한 적이
