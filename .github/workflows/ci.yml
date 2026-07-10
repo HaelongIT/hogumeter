@@ -106,9 +106,16 @@ jobs:
 
       # `restore-drill.sh`는 CI에 없었고 CLAUDE.md는 "전부 CI가 돌린다"고 적어 두고 있었다.
       # 손으로 대조해 고쳤지만 다음 드릴을 만들 때 또 잊는다. 사람의 기억을 장치로 바꾼다.
-      # (이 게이트는 자기 자신도 검사한다 — 만들자마자 "CI에 없다"고 스스로를 잡았다.)
+      # (이 게이트는 자기 자신도 검사한다 — 만들자마자 "CI에 없다"고 스스로를 잡았다.
+      #  `check-table-wiring.test.sh`를 만들었을 때도 곧바로 잡았다.)
       - name: 드릴·계약 테스트의 CI 커버리지 게이트
         run: bash scripts/check-ci-coverage.test.sh
+
+      # `alert_policy`는 읽히기만 하고(목표가 알림이 발화 불가), `review_queue_item`은 쌓이기만 했다
+      # (볼 수가 없었다). 둘 다 모든 테스트가 GREEN인 채였다. 그 상류 — **아무도 쓰지도 읽지도
+      # 않는 테이블** — 을 막는다. 면제는 열린 Q-ID와 함께 선언하고, Q가 해소되면 면제가 만료된다.
+      - name: 테이블 배선 게이트 계약 테스트
+        run: bash scripts/check-table-wiring.test.sh
 
   # SEC-08: robots 게이트는 fake opener 테스트만 통과했다. 실제 소켓을 만지는 경로는
   # **실 수집을 켜기 직전에 처음 실행된다.** 로컬 서버에 대고 운영과 같은 코드 경로를 리허설한다.
