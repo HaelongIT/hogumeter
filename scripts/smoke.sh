@@ -474,6 +474,14 @@ for _ in $(seq 20); do
 done
 [ "${distributed:-0}" = 1 ] || fail "분포가 6건이 되지 않았다(병합에 먹혔다?): $bench"
 
+# **SUFFICIENT tier + 기준가(median) 산출은 종단으로 한 번도 검증된 적이 없었다** — 기준가 엔진의
+# 최종 산출물인데도. n=6(≥ K_display 5)이면 tier=SUFFICIENT, benchmarkPrice=median이어야 한다.
+# 분포 900/950/1000/1050/1100/1150(×1000)의 R-7 median: h=(6-1)×0.5=2.5 → 1000000 + 0.5×50000 = 1,025,000.
+# **정확한 값**을 단언해 median이 실제로 계산됨을 증명한다(null 아님만으론 "0을 냈다"를 못 잡는다).
+echo "$bench" | grep -q '"tier":"SUFFICIENT"' || fail "n=6인데 tier가 SUFFICIENT가 아니다: $bench"
+echo "$bench" | grep -q '"benchmarkPrice":1025000' ||
+	fail "기준가 median이 1,025,000이 아니다(R-7 산출이 안 돌았다): $bench"
+
 # Tukey 하한: Q1(925,000) − 1.5×IQR(150,000) = 700,000. 300,000은 그보다 한참 아래다.
 compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
 	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "이상치 딜 삽입 실패"
