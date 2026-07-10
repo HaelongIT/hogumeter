@@ -104,6 +104,12 @@ jobs:
       - name: PreToolUse 가드 계약 테스트
         run: bash .claude/hooks/guard.test.sh
 
+      # `restore-drill.sh`는 CI에 없었고 CLAUDE.md는 "전부 CI가 돌린다"고 적어 두고 있었다.
+      # 손으로 대조해 고쳤지만 다음 드릴을 만들 때 또 잊는다. 사람의 기억을 장치로 바꾼다.
+      # (이 게이트는 자기 자신도 검사한다 — 만들자마자 "CI에 없다"고 스스로를 잡았다.)
+      - name: 드릴·계약 테스트의 CI 커버리지 게이트
+        run: bash scripts/check-ci-coverage.test.sh
+
   # SEC-08: robots 게이트는 fake opener 테스트만 통과했다. 실제 소켓을 만지는 경로는
   # **실 수집을 켜기 직전에 처음 실행된다.** 로컬 서버에 대고 운영과 같은 코드 경로를 리허설한다.
   # (이 드릴이 `urllib_opener`가 403/429를 예외로 던져 차단 감지가 죽어 있던 것을 잡았다.)
