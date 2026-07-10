@@ -212,6 +212,27 @@ echo "$observations" | grep -q '"mode":"NO_ACTIVE_DEAL"' || fail "딜 0건인데
 echo "$observations" | grep -q '"cheaperChanceCount":0' || fail "놓친 기회가 0이 아니다"
 echo "$observations" | grep -q '"paidPrice":899000' || fail "실지불가가 왕복하지 않는다"
 
+echo "--- 5-3) 최초부터 품절인 원문은 같은 틱에 ENDED로 닫힌다 (Q-27 ③ 자가치유) ---"
+# ⚠️ `IngestDealsUseCase:137`은 원문 상태와 무관하게 딜을 ACTIVE로 만들고 :110에서 곧바로
+# 알림 판정을 태운다. 파이프라인 순서(ingest → 가격 → 종료) 덕에 **DB는 같은 틱에 자가치유**되지만,
+# **알림은 이미 나간 뒤다.** 텔레그램이 스텁인 지금은 로그뿐이지만 Q-20이 켜지면 실전송된다 → Q-27 ③.
+# 다른 사이트(ruliweb)·다른 variant(512GB)를 써서 기존 딜과 병합되지 않게 한다.
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "품절 원문 삽입 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status)
+values ('ruliweb', 'smoke-2', 'https://example.invalid/2', '스모크 제품 512GB 특가', 1200000, now(), 'SOLD_OUT');
+SQL
+
+deal_status() {
+	compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+		-c "select status from deal_event where variant_id = ${variant_id}" | tr -d '\r'
+}
+for _ in $(seq 20); do
+	[ "$(deal_status)" = "ENDED" ] && healed=1 && break
+	sleep 2
+done
+[ "${healed:-0}" = 1 ] || fail "최초부터 품절인 원문이 ENDED로 닫히지 않았다 (status=$(deal_status))"
+
 echo "--- 6) collector는 opt-in 없이 네트워크를 만지지 않는다 (OBS-01 구조화 로그) ---"
 # 로그는 JSON Lines다. 문장을 grep하지 말고 이벤트를 본다 — 문구는 바뀌어도 계약은 안 바뀐다.
 collector_log=$(compose logs --no-log-prefix collector 2>&1 | grep '^{' | tail -1)

@@ -16,6 +16,13 @@
 
 ---
 
+## 2026-07-10 — Q-27 ③ 실측: 품절된 딜에 알림이 나간다
+
+- **한 일**: 스모크 5-3 신설 — 최초부터 품절인 원문이 같은 틱에 `ENDED`로 닫히는 **자가치유**를 증명. 그 과정에서 격리 스택으로 확인: `IngestDealsUseCase:137`이 원문 상태와 무관하게 딜을 ACTIVE로 만들고 `:110`에서 곧바로 알림 판정을 태운다 → `[STUB alert] intensity=GOOD price=700000` 직후 `ENDED`. **DB는 고쳐지지만 알림은 이미 나갔다.**
+- **곁가지 정정**: `.env.example`의 `CORE_LOG_FORMAT` 설명이 틀렸다. compose의 `${VAR:-ecs}`는 **빈 값에도 기본값을 붙여** 구조화 로그를 끌 수 없다. `${VAR-ecs}`로 바꾸고 `docker compose config`로 실측 확인. collector README의 "core 재처리 미해결"·"Q-55 해소 시 기록"도 이미 해결된 것이라 정정.
+- **⚠️ 당신이 볼 것**: `docs/91` **Q-27 ③** — 품절된 딜에 "지금 사라" 알림. 지금은 `StubAlertSender`라 로그뿐이지만 **봇 토큰(Q-20)이 켜지는 순간 실전송된다.** `ingestOne`이 `post.getStatus()`를 보게 하거나 종료될 딜의 알림을 억제해야 한다 — **core 기존 파일이라 상대와 조율.** Q-20 착수 전 필수.
+- **다음**: 남은 우리 레인 항목이 거의 없다. Q-27 ②③④·Q-50·Q-48은 전부 core 기존 파일 수정 → 상대 몫.
+
 ## 2026-07-10 — OBS-01 core JSON 로그 (Q-57 ① 해소) + 문서 드리프트 정정
 
 - **한 일**: ① Spring Boot 4.1 내장 구조화 로그를 **환경변수로만** 켰다 — `LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`(compose `CORE_LOG_FORMAT`). `application.yml`도 `logback-spring.xml`도 만들지 않았다(**core 파일 무수정**). 이제 core도 collector처럼 JSON을 낸다. 스모크 5-1b가 매번 확인한다(형식은 조용히 되돌아간다). ② `docs/01`·`README`·`core/README`가 **"누가 언제 `raw_deal_post`를 소비하는가"를 말하지 않았다** — 바로 그 침묵이 시스템을 죽여뒀다. 파이프라인 트리거 절을 셋 다 신설.
