@@ -50,6 +50,7 @@
 - **바이트가 의미인 파일은 저장소가 바이트를 못박는다**(`.gitattributes`의 `-text`). 줄끝을 정하지 않으면 각자의 `core.autocrlf`가 정하고, "저장소가 진실"이라는 전제가 조용히 무너진다 — golden을 Windows와 CI가 다른 바이트로 읽는다. 실행되는 것(`*.sh`·훅)은 `eol=lf`.
 - **"값 없음"을 값으로 표현하지 않는다.** 스텁·기본값의 sentinel(`0`, `""`)은 스텁 안에 머물지 않고 산식·알림·화면까지 흘러 **정상 응답 모양의 거짓말**이 된다(Q-53: 현재가 0 → "100% 싸다"). 불가피하면 해석을 **한 곳**에 가두고 그 사실을 보드에 적는다.
 - **체크리스트의 "…할 것"에는 "…했는지 확인하는 법"이 붙어야 한다.** 확인 절차가 없는 항목은 배포 후 아무도 검증하지 않는다 — "web Basic Auth를 켤 것"이 그랬다. 확인은 산문 로그가 아니라 **마커·상태코드**로 한다.
+- **"성공했는가"와 "최근에 성공했는가"는 다른 계약이다.** 주기 작업(cron)은 조용히 실패한다 — 성공을 증명하는 산출물을 남기고 **그 산출물의 나이**를 별도 게이트가 본다. CI는 코드가 옳은지만 볼 수 있다.
 - **관측 출력은 산문이 아니라 이벤트(JSON, ASCII 이스케이프)로 낸다.** 문구를 grep하는 테스트는 문구를 굳히고, 콘솔 인코딩·파싱·표현이 한 덩어리가 된다. 카운터에서 0을 생략하지 않는다 — "성공했는데 0건"이 사라진다.
 
 ### 테스트를 짜는 법
@@ -126,6 +127,7 @@ bash scripts/offsite-drill.sh      # MinIO에 대고 운영과 같은 업로드 
 bash .claude/hooks/guard.test.sh   # 네트워크 차단 훅의 차단/통과 계약
 bash .githooks/pre-commit.test.sh  # gitleaks 훅의 차단/통과 계약
 bash scripts/check-env-example.test.sh  # compose ↔ .env.example 드리프트 게이트 (OPS-01)
+bash scripts/check-backup-freshness.sh   # 최신 덤프가 26시간 이내인가 (cron 침묵 감지, REL-04)
 ```
 - 테스트 DB: **Testcontainers(PostgreSQL 16)** — 통합 테스트 전용. 순수 도메인은 DB 없이 단위 테스트로 검증.
 - 로컬 시크릿: 루트 `.env`(gitignore) — 텔레그램 봇 토큰·네이버 쇼핑 API 키·DB 비밀번호.

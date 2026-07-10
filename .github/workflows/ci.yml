@@ -88,6 +88,11 @@ jobs:
       - name: .env.example 드리프트 게이트
         run: bash scripts/check-env-example.test.sh
 
+      # REL-04: cron은 조용히 실패한다. `pre-deploy`는 cron 등록을 [필수]로 적어 뒀지만
+      # **도는지 확인하는 법이 없었다** — 백업이 3일째 없어도 복구가 필요한 날에야 드러난다.
+      - name: 백업 신선도 게이트 계약 테스트
+        run: bash scripts/check-backup-freshness.test.sh
+
       # 정지조건(실 네트워크·파괴적 push)을 강제하는 훅. **훅은 만들기 쉽고, 도는지 아무도 모른다.**
       # 오차단 회귀도 함께 시험한다 — 오차단은 사람이 게이트를 끄게 만든다.
       - name: PreToolUse 가드 계약 테스트
