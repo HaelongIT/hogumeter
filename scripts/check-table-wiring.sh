@@ -54,11 +54,21 @@ done
 	exit 1
 }
 
-wired() { # 테이블 이름이 프로덕션 코드에 나타나는가
-	local table="$1" hits
+# **주석은 배선이 아니다.** `DealEventEntity`의 javadoc은 "applied_conditions는 미매핑"이라고
+# 적어 두고 있었다 — 그 문장을 배선으로 읽으면 게이트가 자기 존재 이유를 놓친다(2026-07-10 실측).
+# 전체 줄이 주석인 것만 걷는다(`//`·`#`·javadoc의 `*`·`/*`). 코드 옆 주석은 건드리지 않는다.
+_CODE_ONLY='^[[:space:]]*(//|#|\*|/\*)'
+
+wired() { # 테이블 이름이 프로덕션 **코드**에 나타나는가
+	local table="$1" file
 	# `\b`가 밑줄을 단어 문자로 보므로 deal_event가 deal_event_source에 오탐하지 않는다.
-	hits=$(grep -rlP "\b${table}\b" "${sources[@]}" 2>/dev/null | grep -vE '\.test\.|/test/' || true)
-	[ -n "$hits" ]
+	while IFS= read -r file; do
+		[ -n "$file" ] || continue
+		if grep -vE "$_CODE_ONLY" "$file" | grep -qP "\b${table}\b"; then
+			return 0
+		fi
+	done < <(grep -rlP "\b${table}\b" "${sources[@]}" 2>/dev/null | grep -vE '\.test\.|/test/' || true)
+	return 1
 }
 
 # 면제 목록: "<테이블> <Q-ID> <이유>". 주석·빈 줄은 건너뛴다.

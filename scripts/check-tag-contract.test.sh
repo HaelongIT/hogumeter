@@ -70,6 +70,24 @@ check 1 "core 사본에서 상수가 사라졌다" "$(fake '배송비미상' '' 
 check 1 "web 사본에서 상수가 사라졌다" "$(fake '배송비미상' '배송비미상' '')"
 check 1 "파일 자체가 없다" "$work/does-not-exist"
 
+# **주석 처리된 옛 상수를 집으면 안 된다.** `head -1`은 파일 순서대로 첫 매치를 집는다 —
+# 옛 값이 주석으로 남아 있으면 게이트가 그것을 사본으로 읽고 **멀쩡한 저장소를 차단**한다(오차단).
+echo "── 주석은 코드가 아니다 (오차단 방지) ──"
+r=$(fake '배송비미상' '배송비미상' '배송비미상')
+printf '// 옛 값: public static final String SHIPPING_UNKNOWN = "배송비_미상";\n\tpublic static final String SHIPPING_UNKNOWN = "배송비미상";\n' \
+	>"$r/core/src/main/java/dev/hogumeter/core/domain/deal/DealTags.java"
+check 0 "core: 주석 처리된 옛 상수는 무시한다" "$r"
+
+r=$(fake '배송비미상' '배송비미상' '배송비미상')
+printf "// const SHIPPING_UNKNOWN = '배송비_미상'\nconst SHIPPING_UNKNOWN = '배송비미상'\n" \
+	>"$r/web/src/review/present.ts"
+check 0 "web: 주석 처리된 옛 상수는 무시한다" "$r"
+
+r=$(fake '배송비미상' '배송비미상' '배송비미상')
+printf '# SHIPPING_UNKNOWN = "배송비_미상"\nSHIPPING_UNKNOWN = "배송비미상"\n' \
+	>"$r/collector/src/collector/pipeline/price.py"
+check 0 "collector: 주석 처리된 옛 상수는 무시한다" "$r"
+
 echo "── 실제 저장소 (exit 0) ──"
 if bash "$CHECK" >"$work/real" 2>&1; then
 	printf '  PASS  exit=0  %s\n' "$(cat "$work/real")"

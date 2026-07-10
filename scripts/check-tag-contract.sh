@@ -26,9 +26,14 @@ done
 
 # 세 모듈에서 따옴표 안의 값을 뽑는다. 사본이 하나 늘 때마다 여기에 추가한다 —
 # **게이트가 모르는 사본은 게이트가 지켜 주지 않는다.**
-owner=$(grep -oP '^SHIPPING_UNKNOWN\s*=\s*"\K[^"]+' "$python_src" | head -1 || true)
-java_copy=$(grep -oP 'String\s+SHIPPING_UNKNOWN\s*=\s*"\K[^"]+' "$java_src" | head -1 || true)
-web_copy=$(grep -oP "SHIPPING_UNKNOWN\s*=\s*'\K[^']+" "$web_src" | head -1 || true)
+#
+# **주석은 코드가 아니다.** 옛 값이 `//`·`#`로 남아 있으면 `head -1`이 그것을 집어 멀쩡한
+# 저장소를 차단한다(오차단은 사람이 게이트를 꺼 버리게 만든다). 전체 줄이 주석인 것만 걷는다.
+code_only() { grep -vE '^[[:space:]]*(//|#|\*|/\*)' "$1"; }
+
+owner=$(code_only "$python_src" | grep -oP '^SHIPPING_UNKNOWN\s*=\s*"\K[^"]+' | head -1 || true)
+java_copy=$(code_only "$java_src" | grep -oP 'String\s+SHIPPING_UNKNOWN\s*=\s*"\K[^"]+' | head -1 || true)
+web_copy=$(code_only "$web_src" | grep -oP "SHIPPING_UNKNOWN\s*=\s*'\K[^']+" | head -1 || true)
 
 [ -n "$owner" ] || {
 	echo "FAIL: 정본에서 SHIPPING_UNKNOWN 상수를 찾지 못했다: ${python_src#"$root/"}" >&2

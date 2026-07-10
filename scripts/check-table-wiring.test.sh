@@ -98,6 +98,32 @@ printf 'assertTable("review_queue_item");\n' >"$r/core/src/test/java/FlywayMigra
 printf 'const t = "review_queue_item"\n' >"$r/web/src/present.test.ts"
 check 1 "테스트 파일의 언급은 배선이 아니다" "$r"
 
+# **주석은 배선이 아니다.** `DealEventEntity`의 javadoc은 "applied_conditions는 미매핑"이라고
+# 적어 두고 있었다 — 그 문장을 배선으로 읽으면 게이트가 자기 존재 이유를 놓친다.
+r=$(new_case)
+fake_root "$r"
+printf 'create table price_history (id bigserial);\n' >"$r/core/src/main/resources/db/migration/V1__init.sql"
+cat >"$r/core/src/main/java/Dead.java" <<'JAVA'
+/**
+ * price_history 는 아직 아무도 쓰지 않는다(미배선).
+ */
+class Dead {}
+JAVA
+check 1 "javadoc의 언급은 배선이 아니다" "$r"
+
+r=$(new_case)
+fake_root "$r"
+printf 'create table price_history (id bigserial);\n' >"$r/core/src/main/resources/db/migration/V1__init.sql"
+printf '// price_history 는 미배선이다\n# 파이썬 주석도 마찬가지\nclass X {}\n' >"$r/core/src/main/java/X.java"
+check 1 "한 줄 주석(// · #)도 배선이 아니다" "$r"
+
+# 반대로 **주석 옆의 진짜 코드**는 배선이다(오차단 방지).
+r=$(new_case)
+fake_root "$r"
+printf 'create table product (id bigserial);\n' >"$r/core/src/main/resources/db/migration/V1__init.sql"
+printf '// product 는 아래에서 매핑된다\nclass P { @Table(name = "product") }\n' >"$r/core/src/main/java/P.java"
+check 0 "주석이 있어도 코드가 배선하면 통과한다" "$r"
+
 # `deal_event_source`가 `deal_event`의 배선인 척하면 안 된다(밑줄은 단어 문자).
 r=$(new_case)
 fake_root "$r"
