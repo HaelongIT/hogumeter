@@ -20,8 +20,11 @@
 | collector 수집→적재 전 구간 | ✅ GREEN (`docker compose up` + `scripts/smoke.sh`) |
 | **파이프라인 트리거**(`raw_deal_post` → `deal_event`) | ✅ GREEN — `PipelineScheduler`(ingest → 가격 재처리 → 종료 판정, 60초). **2026-07-10까지 없었다.** 그동안 수집된 원문을 아무도 소비하지 않아 기준가 표본이 영원히 0이었다(Q-27 ⑤) |
 | AL 판정(트리거·게이트·후속 자격) | ✅ GREEN (발송은 스텁) |
-| REG 웹 최소 슬라이스(등록+목록) | ✅ GREEN |
+| **알림 정책 저장**(REG-03, `alert_policy` writer) | ✅ GREEN — `AlertPolicyController` + web `AlertPolicyPanel`. **2026-07-10까지 writer가 없었다.** `EvaluateAlertOnDealUseCase`가 읽기만 해서 확정본 §107의 "목표가 이하" 트리거와 방해금지(AL-04)가 발화할 수 없었다(Q-48). 저장되는 건 넷(목표가·판정 기간·방해금지 2개) — K_display·제외 키워드·⚠️라벨 토글은 엔티티 미매핑 |
+| REG 웹 최소 슬라이스(등록+목록+알림 정책) | ✅ GREEN |
 | web 판단 화면(신호등·기준가·갭·주기) + 구매 기록(PUR) | ✅ GREEN (M4·M5에서 앞당김, `decision-log` 2026-07-09) |
+| OBS-04 헬스체크(컴포넌트별) | ✅ GREEN — `GET /api/v1/health`, DB가 죽으면 503 + 어느 컴포넌트인지 지목. `scripts/smoke.sh` 0-1이 postgres만 죽여 확인 |
+| SEC-08 차단 신호 감지 | ✅ GREEN — **2026-07-10까지 죽어 있었다.** `urllib_opener`가 403/429를 예외로 던져 `classify_status`가 차단을 볼 수 없었다. 리허설: `scripts/check-robots-drill.sh` |
 
 **완료 기준을 막고 있는 것:**
 
@@ -29,13 +32,14 @@
 
 **나머지는 코드 밖:**
 
-1. **텔레그램 봇 토큰 미발급**(Q-20) → 알림 발송·인라인 버튼 승격 불가. "텔레그램 알림 수신 → 버튼으로 미상 분류"를 검증할 수 없다.
+1. **텔레그램 봇 토큰 미발급**(Q-20) → 알림 발송·인라인 버튼 승격 불가. "텔레그램 알림 수신 → 버튼으로 미상 분류"를 검증할 수 없다. 어댑터를 만드는 커밋에 **SEC-03 chat_id 화이트리스트**가 함께 들어가야 한다(Q-61).
 2. **네이버 API 키 미발급**(Q-3) → 현재가(BM-06 `currentPrice`)·갭 계산·REG-01 후보 검색 불가.
-3. **실 폴링 미가동** → `COLLECTOR_ALLOW_NETWORK=1`은 운영자 승인 사항. 실 데이터가 없으면 "기준가가 운영자 체감과 부합"을 대조할 수 없다.
+3. **실 폴링 미가동** → `COLLECTOR_ALLOW_NETWORK=1`은 운영자 승인 사항. 실 데이터가 없으면 "기준가가 운영자 체감과 부합"을 대조할 수 없다. 켜기 전에 **사람이** `ALLOW_REAL_ROBOTS=1 bash scripts/check-robots.sh`를 한 번 돌린다(`pre-deploy §F`).
 4. **백필(REG-04) 미구현** → `raw_deal_post`에 `origin` 컬럼이 없다(있는 건 `deal_event.origin`). 계약 변경이 선행.
-5. **`decisions-needed` D-3 미결** → 차단당한 사이트 재개 경로가 없어 폴링 커서를 영속화할 수 없다(REL-03).
+5. **`decisions-needed` D-3 미결** → 차단당한 사이트 재개 경로가 없어 폴링 커서를 영속화할 수 없다(REL-03, Q-59).
 
 > 1·2·3은 사람이 발급·승인해야 열린다. 4·5는 core 스키마·정책 결정이 선행한다.
+> **⚠️ 보드가 "막혔다"고 적어 두면 다음 세션은 그 주장을 검증하지 않는다** — Q-50·Q-48은 둘 다 "core 기존 파일이라 조율"로 봉인돼 있었으나 실제로는 신규 파일만으로 끝났다. 재개 트리거는 "무엇이 참이 되어야 하는가"로 쓴다(CLAUDE.md 작업 방식).
 
 ## M2 — 중고 (USED 전체)
 번개 폴링 + 3계층 + 생애주기 알림 + 평가기(3단 입력) + 메모·축·병렬 비교(웹).
