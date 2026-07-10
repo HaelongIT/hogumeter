@@ -9,25 +9,31 @@ const item = (over: Partial<ReviewQueueItem>): ReviewQueueItem => ({
   firstSeenAt: '2026-07-10T00:00:00Z',
   lastSeenAt: '2026-07-10T00:00:00Z',
   sourceUrl: null,
+  candidateProducts: [],
   payload: {},
   ...over,
 })
 
 describe('reviewLine', () => {
-  it('미상은 무엇을 못 했는지 말한다 — 제목과 후보 수', () => {
+  it('미상은 무엇을 못 했는지 말한다 — 제목과 후보 제품', () => {
     const line = reviewLine(
-      item({ type: 'UNCLASSIFIED', payload: { title: '아이폰17 특가', productCandidates: [3, 7] } }),
+      item({
+        type: 'UNCLASSIFIED',
+        payload: { title: '아이폰17 특가', productCandidates: [3, 7] },
+        candidateProducts: ['아이폰 17', '아이폰 17 프로'],
+      }),
     )
 
     expect(line.reason).toContain('어느 제품인지 확정하지 못했습니다')
     expect(line.detail).toContain('아이폰17 특가')
-    expect(line.detail).toContain('후보 2개')
+    // id(3, 7)는 사람이 읽는 값이 아니다. core가 이름으로 풀어 준다.
+    expect(line.detail).toContain('후보: 아이폰 17, 아이폰 17 프로')
   })
 
-  it('후보가 하나도 없으면 그렇게 말한다 — 0개를 숨기지 않는다', () => {
-    const line = reviewLine(item({ payload: { title: '뭔가', productCandidates: [] } }))
+  it('후보가 하나도 없으면 그렇게 말한다 — 0을 숨기지 않는다', () => {
+    const line = reviewLine(item({ payload: { title: '뭔가' }, candidateProducts: [] }))
 
-    expect(line.detail).toContain('후보 0개')
+    expect(line.detail).toContain('후보 없음')
   })
 
   /** 절대 원칙 2: 사기/최종 판단 로직을 만들지 않는다. "싸다"도 "위험하다"도 말하지 않는다. */
@@ -95,5 +101,28 @@ describe('seenLine', () => {
     const line = seenLine(item({ occurrences: 1, firstSeenAt: '2026-07-10T15:30:00Z', lastSeenAt: '2026-07-10T15:30:00Z' }))
 
     expect(line).toBe('2026-07-11 접수')
+  })
+})
+
+/** "후보 2개"는 판단에 아무 도움이 안 된다. **무엇의 후보인지**를 말해야 사람이 1초 만에 고른다. */
+describe('reviewLine — 후보 제품', () => {
+  it('후보를 이름으로 말한다', () => {
+    const line = reviewLine(item({ payload: { title: 'x' }, candidateProducts: ['아이폰 17', '갤럭시 S26'] }))
+
+    expect(line.detail).toContain('후보: 아이폰 17, 갤럭시 S26')
+    expect(line.detail).not.toContain('후보 2개')
+  })
+
+  it('후보가 없으면 그 사실을 말한다 — 0을 숨기지 않는다', () => {
+    const line = reviewLine(item({ payload: { title: 'x' }, candidateProducts: [] }))
+
+    expect(line.detail).toContain('후보 없음')
+  })
+
+  /** core가 `#999`로 보내면 그대로 그린다. 사라진 제품을 숨기면 근거가 줄어든 걸 아무도 모른다. */
+  it('사라진 제품은 #id로 그대로 그린다', () => {
+    const line = reviewLine(item({ payload: { title: 'x' }, candidateProducts: ['#999'] }))
+
+    expect(line.detail).toContain('#999')
   })
 })

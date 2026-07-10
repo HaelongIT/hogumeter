@@ -364,6 +364,9 @@ for _ in $(seq 20); do
 done
 [ "${queued:-0}" = 1 ] || fail "매칭 실패 원문이 미상 큐에 뜨지 않는다: $queue"
 echo "$queue" | grep -q '"type":"UNCLASSIFIED"' || fail "유형이 UNCLASSIFIED가 아니다: $queue"
+# 후보를 id로 주면 사람이 못 읽는다. 별칭이 '스모크'에 걸렸으니 그 제품 이름이 나와야 한다.
+echo "$queue" | grep -q '"candidateProducts":\["스모크 제품"\]' ||
+	fail "후보 제품을 이름으로 풀지 않았다(id 그대로거나 비었다): $queue"
 # 판단은 사람이 한다 — 시스템은 근거와 원문 링크만 모아준다(절대 원칙 2·6).
 echo "$queue" | grep -q 'https://example.invalid/unknown' || fail "원문 링크를 잇지 못했다: $queue"
 

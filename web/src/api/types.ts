@@ -176,6 +176,8 @@ export interface ReviewQueueItem {
   firstSeenAt: string
   lastSeenAt: string
   sourceUrl: string | null
+  /** 후보 제품 이름. 사라진 제품은 `#id`로 온다 — 조용히 빠지지 않는다. */
+  candidateProducts: string[]
   payload: Record<string, unknown>
 }
 

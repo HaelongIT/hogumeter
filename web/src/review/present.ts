@@ -38,13 +38,12 @@ const asText = (value: unknown, absent: string) => (typeof value === 'string' &&
 
 export function reviewLine(item: ReviewQueueItem): ReviewLine {
   switch (item.type) {
-    case 'UNCLASSIFIED': {
-      const candidates = Array.isArray(item.payload.productCandidates) ? item.payload.productCandidates : []
+    case 'UNCLASSIFIED':
       return {
         reason: '미상 — 어느 제품인지 확정하지 못했습니다. 사람이 원문을 보고 정합니다.',
-        detail: `${asText(item.payload.title, '제목 없음')} · 후보 ${candidates.length}개`,
+        // "후보 2개"는 판단에 아무 도움이 안 된다. **무엇의 후보인지**를 말해야 1초 만에 고른다.
+        detail: `${asText(item.payload.title, '제목 없음')} · ${candidateLine(item.candidateProducts)}`,
       }
-    }
     case 'OUTLIER_LOWER':
       return {
         reason: '분포 하단 이상치 — 기준가 표본에서 제외됐습니다. 원문을 보고 판단하세요.',
@@ -62,4 +61,9 @@ export function reviewLine(item: ReviewQueueItem): ReviewLine {
 /** 숫자가 아니면 금액으로 꾸미지 않는다 — 꾸민 값은 사실처럼 보인다. */
 function price(value: unknown): string {
   return typeof value === 'number' ? won(value) : String(value)
+}
+
+/** 사라진 제품은 core가 `#id`로 보낸다. 그대로 그린다 — 숨기면 근거가 줄어든 걸 아무도 모른다. */
+function candidateLine(candidates: string[]): string {
+  return candidates.length === 0 ? '후보 없음' : `후보: ${candidates.join(', ')}`
 }

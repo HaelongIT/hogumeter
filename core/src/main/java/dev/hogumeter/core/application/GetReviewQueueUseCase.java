@@ -1,11 +1,15 @@
 package dev.hogumeter.core.application;
 
+import dev.hogumeter.core.adapter.persistence.ProductRepository;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -85,20 +89,38 @@ public class GetReviewQueueUseCase {
 
 	private final JdbcTemplate jdbc;
 	private final ObjectMapper json;
+	private final ProductRepository products;
 
-	public GetReviewQueueUseCase(JdbcTemplate jdbc, ObjectMapper json) {
+	public GetReviewQueueUseCase(JdbcTemplate jdbc, ObjectMapper json, ProductRepository products) {
 		this.jdbc = jdbc;
 		this.json = json;
+		this.products = products;
 	}
 
 	/** 처리 대기(PENDING) 항목만. 처리된 것은 큐가 아니다. */
 	@Transactional(readOnly = true)
 	public List<PendingItem> pending() {
-		return jdbc.query(PENDING, this::toItem);
+		List<Row> rows = jdbc.query(PENDING, this::toRow);
+		Map<Long, String> names = productNames(rows);
+		return rows.stream().map(row -> row.withCandidateNames(names)).toList();
 	}
 
-	private PendingItem toItem(ResultSet row, int rowNum) throws SQLException {
-		return new PendingItem(
+	/**
+	 * 후보 id를 이름으로 한 번에 푼다(N+1 금지). <b>화면이 "후보 2개"라고만 말하면 사람은 아무 판단도
+	 * 못 한다</b> — id는 사람이 읽는 값이 아니다.
+	 */
+	private Map<Long, String> productNames(List<Row> rows) {
+		Set<Long> ids = rows.stream().flatMap(row -> row.candidateIds().stream()).collect(Collectors.toSet());
+		if (ids.isEmpty()) {
+			return Map.of();
+		}
+		Map<Long, String> names = new LinkedHashMap<>();
+		products.findAllById(ids).forEach(product -> names.put(product.getId(), product.getName()));
+		return names;
+	}
+
+	private Row toRow(ResultSet row, int rowNum) throws SQLException {
+		return new Row(
 				row.getLong("id"),
 				ReviewQueueType.valueOf(row.getString("type")),
 				row.getInt("occurrences"),
@@ -106,6 +128,30 @@ public class GetReviewQueueUseCase {
 				row.getTimestamp("last_seen_at").toInstant(),
 				row.getString("source_url"),
 				payloadOf(row.getString("payload")));
+	}
+
+	/** 이름을 붙이기 전의 한 행. `payload`에서 후보 id를 꺼내는 책임도 여기 있다. */
+	private record Row(long id, ReviewQueueType type, int occurrences, Instant firstSeenAt, Instant lastSeenAt,
+			String sourceUrl, Map<String, Object> payload) {
+
+		/** payload는 jsonb다 — 기대한 타입이 온다는 보장이 없다. 숫자가 아닌 값은 무시한다. */
+		List<Long> candidateIds() {
+			if (!(payload.get("productCandidates") instanceof List<?> raw)) {
+				return List.of();
+			}
+			return raw.stream()
+				.filter(Number.class::isInstance)
+				.map(value -> ((Number) value).longValue())
+				.toList();
+		}
+
+		/** 사라진 제품을 조용히 빼면 "후보 2개"가 "후보 1개"가 된다 — 근거가 줄어든 걸 아무도 모른다. */
+		PendingItem withCandidateNames(Map<Long, String> names) {
+			List<String> candidates = candidateIds().stream()
+				.map(candidateId -> names.getOrDefault(candidateId, "#" + candidateId))
+				.toList();
+			return new PendingItem(id, type, occurrences, firstSeenAt, lastSeenAt, sourceUrl, candidates, payload);
+		}
 	}
 
 	private Map<String, Object> payloadOf(String raw) {
@@ -126,8 +172,10 @@ public class GetReviewQueueUseCase {
 	 *     그때는 접힌 행 전부를 처리해야 한다(docs/91 Q-15·Q-27 ④).
 	 * @param occurrences 같은 근거가 큐에 들어간 횟수. <b>1보다 크면 재처리 멱등이 없다는 뜻</b>이다.
 	 * @param sourceUrl 원문 링크. 잇지 못하면 {@code null}.
+	 * @param candidateProducts 후보 제품 이름. 사라진 제품은 {@code #id}로 남긴다 — 조용히 빼면
+	 *     "후보 2개"가 "후보 1개"가 되고 근거가 줄어든 것을 아무도 모른다.
 	 */
 	public record PendingItem(long id, ReviewQueueType type, int occurrences, Instant firstSeenAt,
-			Instant lastSeenAt, String sourceUrl, Map<String, Object> payload) {
+			Instant lastSeenAt, String sourceUrl, List<String> candidateProducts, Map<String, Object> payload) {
 	}
 }

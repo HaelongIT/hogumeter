@@ -11,6 +11,7 @@ const unclassified: ReviewQueueItem = {
   firstSeenAt: '2026-07-10T00:00:00Z',
   lastSeenAt: '2026-07-10T00:00:00Z',
   sourceUrl: 'https://ppomppu/1',
+  candidateProducts: ['아이폰 17'],
   payload: { title: '아이폰17 특가', productCandidates: [7] },
 }
 

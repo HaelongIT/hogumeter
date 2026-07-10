@@ -151,6 +151,39 @@ class GetReviewQueueUseCaseTest {
 		assertThat(folded.get(0).lastSeenAt()).isEqualTo(Instant.parse("2026-07-10T00:02:00Z"));
 	}
 
+	/**
+	 * 화면이 "후보 2개"라고만 말하면 사람은 아무 판단도 못 한다. <b>무엇의 후보인지</b>를 말해야 한다.
+	 * id는 사람이 읽는 값이 아니다.
+	 */
+	@Test
+	void candidateProductIdsAreResolvedToNames() {
+		long productId = jdbc.queryForObject(
+				"insert into product (name, category) values ('아이폰 17', 'phone') returning id", Long.class);
+		long itemId = enqueue("UNCLASSIFIED",
+				"""
+				{"title":"정체불명","productCandidates":[%d]}""".formatted(productId),
+				"PENDING", "2026-07-10T00:00:00Z");
+
+		assertThat(mine(itemId).get(0).candidateProducts()).containsExactly("아이폰 17");
+	}
+
+	/** 후보가 없으면 빈 목록이다. `null`이나 "없음" 같은 문자열을 지어내지 않는다. */
+	@Test
+	void noCandidatesIsAnEmptyList() {
+		long itemId = enqueue("OUTLIER_LOWER", "{\"priceFirst\":700000}", "PENDING", "2026-07-10T00:00:00Z");
+
+		assertThat(mine(itemId).get(0).candidateProducts()).isEmpty();
+	}
+
+	/** 사라진 제품을 조용히 빼면 "후보 2개"가 "후보 1개"가 된다 — 근거가 줄어든 걸 아무도 모른다. */
+	@Test
+	void aCandidateThatNoLongerExistsIsShownAsItsIdNotDropped() {
+		long itemId = enqueue("UNCLASSIFIED", "{\"title\":\"x\",\"productCandidates\":[999999]}",
+				"PENDING", "2026-07-10T00:00:00Z");
+
+		assertThat(mine(itemId).get(0).candidateProducts()).containsExactly("#999999");
+	}
+
 	/** 근거가 다르면 다른 항목이다. 접기가 서로 다른 딜을 뭉개면 안 된다. */
 	@Test
 	void differentEvidenceStaysSeparate() {
