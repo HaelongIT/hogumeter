@@ -130,7 +130,25 @@ def normalize_price(text: str) -> NormalizedPrice | None:
     main = _extract_main_price(remaining)
     if main is None:
         return None  # AC-3: 가격 패턴 없음 → 스킵(호출자가 스킵 로그)
+
+    if _shipping_was_truncated(text):
+        # 목록이 긴 제목을 `...`로 자른다(루리웹 실측). 괄호 관례가 중간에서 끊기면 배송 자리를
+        # 읽을 수 없다 — 우리는 **모른다.** 조용히 0을 더하지 않고 그 사실을 값 옆에 실어 보낸다.
+        conditions = _dedupe(conditions + [SHIPPING_UNKNOWN])
     return NormalizedPrice(headline_price=main + shipping, applied_conditions=conditions)
+
+
+def _shipping_was_truncated(text: str) -> bool:
+    """제목이 잘렸고(`...`) 배송 표기를 하나도 못 찾았는가.
+
+    잘리지 않은 무표기 딜은 여기 들지 않는다 — 스팀·플레이스토어·CGV 같은 **디지털 재화는
+    배송 자체가 없다**(docs/91 Q-64). `...`는 ASCII 3점이다(U+2026이 아니다 — 실측).
+    """
+    if not text.rstrip().endswith("..."):
+        return False
+    if _PAREN_PRICE_SHIPPING.search(text) or _FREE_SHIPPING.search(text) or _SHIPPING.search(text):
+        return False  # 잘렸어도 배송 표기는 온전히 읽었다
+    return True
 
 
 def classify_shipping(text: str) -> tuple[int, list[str]]:

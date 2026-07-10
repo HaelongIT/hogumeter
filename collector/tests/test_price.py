@@ -357,3 +357,40 @@ def test_bare_number_after_hangul_is_still_a_price():
 
 def test_bare_fallback_still_loses_to_a_real_price():
     assert normalize_price("[다나와]MSI RTX 5070 (899,000원/무료)").headline_price == 899_000
+
+
+# ── 제목이 잘렸으면 배송 표기도 잘렸을 수 있다 ────────────────────────────
+#
+# 루리웹 목록은 긴 제목을 ASCII `...`로 자른다. `(13,800원...`처럼 괄호 관례가 **중간에서 끊기면**
+# 배송 자리를 읽을 수 없다 — 그런데 지금은 조용히 0을 더한다.
+#
+# 우리는 배송비를 **모른다.** 모른다는 사실을 값 옆에 실어 보낸다(0을 더하되 표식을 단다).
+
+
+def test_truncated_title_without_complete_shipping_is_unknown():
+    result = normalize_price("[롯데온] 도루코 스타터킷모션(면도기+면도날5입) (13,800원...")
+
+    assert result.headline_price == 13_800  # 지어내지 않는다
+    assert SHIPPING_UNKNOWN in result.applied_conditions
+
+
+def test_truncated_title_with_complete_shipping_is_known():
+    """가격 뒤에서 잘렸어도 `(가격원/무료)`가 온전하면 배송비를 안다."""
+    result = normalize_price("[롯데온] 아주 긴 제품명 (13,800원/무료) 추가 설명이 잘림...")
+
+    assert result.headline_price == 13_800
+    assert result.applied_conditions == []
+
+
+def test_untruncated_title_without_shipping_is_not_marked():
+    """잘리지 않은 무표기 딜은 여기서 다루지 않는다 — 디지털 재화는 배송 자체가 없다(docs/91 Q-64)."""
+    result = normalize_price("[스팀] DRAGON BALL XENOVERSE 2 할인 (2,480원)")
+
+    assert result.headline_price == 2_480
+    assert SHIPPING_UNKNOWN not in result.applied_conditions
+
+
+def test_truncated_title_with_free_shipping_word_is_known():
+    result = normalize_price("[네이버] 백팩 107,000원 무료배송 어쩌고...")
+
+    assert SHIPPING_UNKNOWN not in result.applied_conditions
