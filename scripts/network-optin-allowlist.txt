@@ -1,0 +1,16 @@
+# 네트워크 명령 줄에 외부 URL이 있으나 **실행하지 않는** 파일 — URL이 데이터다.
+#
+#   <파일명>  <사유>
+#
+# 규칙(scripts/check-network-optin.sh가 강제한다):
+#   - 여기 없는 파일이 네트워크 명령 줄에 외부 URL을 담으면 opt-in 게이트가 있어야 한다.
+#   - 면제는 "그 URL로 실제로 나가지 않는다"는 뜻이다. 나간다면 opt-in을 붙여라.
+#
+# ⚠️ 이 게이트는 **필요조건**이다: 변수로 조립한 URL(`curl "$BASE/api"`)은 잡지 못한다.
+#    `check-robots.sh`가 그 예다 — 사이트 목록을 `sites.py`에서 읽고, 스스로 ALLOW_REAL_ROBOTS를 본다.
+
+guard.test.sh       가드가 이 URL들을 차단하는지 시험한다. curl을 실제로 실행하지 않고 훅에 문자열로 넘긴다.
+pre-commit.test.sh  gitleaks 훅이 시크릿을 잡는지 시험한다. URL은 가짜 API 응답 예시다.
+# 이 게이트 자신의 계약 테스트. URL도 `ALLOW_REAL_ROBOTS`도 전부 **테스트 데이터**다.
+# 명시하지 않으면 데이터 속 opt-in 문자열 때문에 **우연히** 면제된다 — 우연히 옳은 코드는 다음 커밋에 틀려진다.
+check-network-optin.test.sh  게이트 자신의 계약 테스트. 일회용 트리에 문자열을 쓸 뿐 실행하지 않는다.
