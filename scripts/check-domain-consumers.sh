@@ -15,6 +15,10 @@
 # ⚠️ **필요조건일 뿐이다**: "이름이 나타난다"는 "호출된다"가 아니다. 다만 도메인 클래스는
 # 생성자 주입·new로 쓰이므로 이름조차 없으면 확실히 죽었다. 주석은 걷어낸다.
 #
+# **죽은 소비자는 소비자가 아니다.** 면제된(=아무도 안 쓰는) 클래스가 유일한 참조자면 그 클래스도
+# 죽은 것이다 — `ReportCardCalculator`가 `DealSets`를 살려 보이게 했다(지금은 다른 소비자가 넷 있다).
+# 면제 목록은 그래서 **한 번만** 걷어내면 충분하다: 면제는 사람이 승인한 목록이라 연쇄가 깊지 않다.
+#
 # 면제는 `domain-consumers-allowlist.txt`에 **열린 Q-ID와 함께** 선언한다 — Q가 닫히면 면제도 죽는다.
 
 set -euo pipefail
@@ -69,6 +73,10 @@ for file in "${files[@]}"; do
 	consumers=0
 	while IFS= read -r user; do
 		[ -n "$user" ] || continue
+		# **죽은 소비자는 소비자가 아니다.** 면제 목록에 있는(=아무도 안 쓰는) 클래스가 유일한
+		# 참조자면 그 클래스도 죽은 것이다 — `ReportCardCalculator`가 `DealSets`를 살려 보이게 했다.
+		user_name=$(basename "$user" .java)
+		[ -n "${excuse[$user_name]:-}" ] && continue
 		if grep -vE "$_CODE_ONLY" "$user" | grep -qP "\b${name}\b"; then
 			consumers=$((consumers + 1))
 		fi

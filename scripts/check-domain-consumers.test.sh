@@ -79,6 +79,10 @@ check 1 "한 줄 주석(//) 속 언급도 소비가 아니다" "$(fake "$THING" 
 	void go() {}
 }')"
 
+# **죽은 소비자는 소비자가 아니다.** 면제된 클래스가 유일한 참조자면 그 클래스도 죽었다.
+r=$(fake "$THING" 'class Consumer { Thing thing; }' 'Consumer  Q-9  이것도 죽었다')
+check 1 "면제된(죽은) 클래스가 유일한 소비자면 그것도 죽은 것이다" "$r"
+
 check 1 "만료된 면제: 인용한 Q가 보드에 열려 있지 않다" "$(fake "$THING" 'class Consumer {}' \
 	'Thing  Q-77  없는 Q를 인용했다')"
 check 1 "낡은 면제: 이제 소비되는데 목록에 남아 있다" \
