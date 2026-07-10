@@ -129,10 +129,13 @@ bash scripts/rollback-drill.sh     # V 전진 → R 역순 후진 → 재전진 
 bash scripts/offsite-drill.sh      # MinIO에 대고 운영과 같은 업로드 경로 리허설
 bash .claude/hooks/guard.test.sh   # 네트워크 차단 훅의 차단/통과 계약
 bash .githooks/pre-commit.test.sh  # gitleaks 훅의 차단/통과 계약
-bash scripts/check-env-example.test.sh  # compose ↔ .env.example 드리프트 게이트 (OPS-01)
+bash scripts/check-env-example.test.sh   # compose ↔ .env.example 드리프트 게이트 (OPS-01)
+bash scripts/check-gitignore.test.sh     # 덤프·시크릿이 정말 무시되는가 (SEC-01·REL-04)
+bash scripts/check-ci-coverage.test.sh   # 드릴·계약 테스트가 정말 CI에 걸려 있는가
 bash scripts/check-backup-freshness.sh   # 최신 덤프가 26시간 이내인가 (cron 침묵 감지, REL-04)
-bash scripts/check-offsite-freshness.sh   # 최신 원격 객체가 26시간 이내인가 (오프사이트 침묵 감지)
+bash scripts/check-offsite-freshness.sh  # 최신 원격 객체가 26시간 이내인가 (오프사이트 침묵 감지)
 ```
+> 게이트를 새로 만들면 **ci.yml에도 걸어야 한다** — `check-ci-coverage.test.sh`가 그걸 강제한다.
 - 테스트 DB: **Testcontainers(PostgreSQL 16)** — 통합 테스트 전용. 순수 도메인은 DB 없이 단위 테스트로 검증.
 - 로컬 시크릿: 루트 `.env`(gitignore) — 텔레그램 봇 토큰·네이버 쇼핑 API 키·DB 비밀번호.
 - **복구 절차(백업·롤백·오프사이트)는 리허설로만 존재를 증명한다.** 드릴은 전부 일회용 격리 컨테이너에서 돈다 — 운영/개발 DB에 절대 닿지 않는다.
