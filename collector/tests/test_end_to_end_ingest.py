@@ -147,3 +147,29 @@ def test_sold_out_deals_reach_the_database_as_sold_out(monkeypatch, connection, 
     assert rows[("fmkorea", "SOLD_OUT")] == 2  # `.hotdeal_var8Y`
     assert ("ppomppu", "SOLD_OUT") not in rows  # 이 스냅샷엔 `.end2`가 0건이다(docs/91 Q-19)
     assert rows[("ruliweb", "ACTIVE")] == 25
+
+
+@pytest.mark.integration
+def test_shipping_unknown_tags_reach_the_database(monkeypatch, connection, golden_opener):
+    """오늘 고친 것들이 **실 DB까지** 흐르는지 본다 — 파서 GREEN은 적재를 보장하지 않는다.
+
+    골든 실측(2026-07-10): 뽐뿌 1(`유배`) · 펨코 3(조건부 무료배송) · 루리웹 4(제목 잘림) = 8건.
+    개수를 상수로 못박는다: "0보다 크다"는 한 건만 걸려도 통과한다.
+
+    이 표식은 core가 `deal_event.applied_conditions`로 옮겨 세고(`shippingUnknownTotal`),
+    web이 "실제 결제가는 더 높습니다"를 그린다. 여기서 끊기면 세 모듈이 조용히 0을 본다.
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    main(opener=golden_opener, sink=RawDealSink(connection), sleep=lambda _: None,
+         clock=lambda: NOW, max_cycles=1)
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            select site, count(*)
+              from raw_deal_post
+             where raw -> '_derived' -> 'applied_conditions' ? '배송비미상'
+             group by site order by site
+        """)
+        by_site = dict(cursor.fetchall())
+
+    assert by_site == {"fmkorea": 3, "ppomppu": 1, "ruliweb": 4}
