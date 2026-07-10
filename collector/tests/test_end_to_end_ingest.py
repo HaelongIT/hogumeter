@@ -121,3 +121,29 @@ def _snapshot(connection):
             "from raw_deal_post order by site, post_id"
         )
         return cursor.fetchall()
+
+
+@pytest.mark.integration
+def test_sold_out_deals_reach_the_database_as_sold_out(monkeypatch, connection, golden_opener):
+    """파서가 낸 `SOLD_OUT`이 **DB까지 간다.** 부품별 GREEN은 이 경로를 보장하지 않는다.
+
+    루리웹의 `[종료]` 마커는 2026-07-10까지 파서가 읽지 않는 자리에 있었다 — golden 28딜 중 3건이
+    종료인데 전부 ACTIVE로 적재됐고, 그러면 core가 딜을 ENDED로 닫을 근거가 영원히 없다.
+    스모크 5-3은 원문을 직접 `SOLD_OUT`으로 심으므로 **파서를 우회한다** — 여기가 유일한 방어선이다.
+
+    개수를 상수로 못박는 이유: "0이 아니다"는 마커가 하나만 걸려도 통과한다. golden의 실제 분포를 잠근다.
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    main(opener=golden_opener, sink=RawDealSink(connection), sleep=lambda _: None,
+         clock=lambda: NOW, max_cycles=1)
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            select site, status, count(*) from raw_deal_post group by site, status order by site, status
+        """)
+        rows = {(site, status): count for site, status, count in cursor.fetchall()}
+
+    assert rows[("ruliweb", "SOLD_OUT")] == 3  # `[종료]` 마커 — 제목 앵커 밖의 span
+    assert rows[("fmkorea", "SOLD_OUT")] == 2  # `.hotdeal_var8Y`
+    assert ("ppomppu", "SOLD_OUT") not in rows  # 이 스냅샷엔 `.end2`가 0건이다(docs/91 Q-19)
+    assert rows[("ruliweb", "ACTIVE")] == 25
