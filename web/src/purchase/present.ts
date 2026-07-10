@@ -26,7 +26,7 @@ const pct = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
 
 const STATE_LABELS: Record<PurchaseState, string> = {
   OBSERVING: '관찰 중',
-  REPORT_PENDING: '성적 집계 중',
+  REPORT_PENDING: '관찰 종료(성적표 미발급)',
   CLOSED: '성적표 발급',
   ARCHIVED: '보관',
 }
@@ -49,7 +49,9 @@ export function observationLine(observation: PurchaseObservation): string {
 
   switch (context.mode) {
     case 'REPORT_PENDING':
-      return '성적 집계 중'
+      // "집계 중"은 진행 중이라는 뜻이다. 성적표를 발급하는 코드가 없어(docs/91 Q-62) 여기서 영원히
+      // 멈춘다 — 기다리면 나온다고 믿게 두지 않는다(과대약속 금지, 절대 원칙 6).
+      return '관찰 종료 · 성적표는 아직 발급되지 않습니다'
     case 'ACTIVE_DEAL':
       return activeDealLine(context)
     case 'NO_ACTIVE_DEAL':

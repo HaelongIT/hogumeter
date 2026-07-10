@@ -9,6 +9,7 @@ const item = (over: Partial<ReviewQueueItem>): ReviewQueueItem => ({
   firstSeenAt: '2026-07-10T00:00:00Z',
   lastSeenAt: '2026-07-10T00:00:00Z',
   sourceUrl: null,
+  subject: null,
   candidateProducts: [],
   payload: {},
   ...over,
@@ -124,5 +125,26 @@ describe('reviewLine — 후보 제품', () => {
     const line = reviewLine(item({ payload: { title: 'x' }, candidateProducts: ['#999'] }))
 
     expect(line.detail).toContain('#999')
+  })
+})
+
+/** "700,000원"만 보고는 아무것도 결정할 수 없다. **무엇의** 이상치인지 말해야 한다. */
+describe('reviewLine — 이상치의 대상', () => {
+  it('대상을 제품 — variant로 말한다', () => {
+    const line = reviewLine(
+      item({ type: 'OUTLIER_LOWER', subject: '아이폰 17 — 256GB', payload: { priceFirst: 700000 } }),
+    )
+
+    expect(line.detail).toContain('아이폰 17 — 256GB')
+    expect(line.detail).toContain('700,000원')
+  })
+
+  /** 딜이 미상이면 대상을 말할 수 없다. 지어내지 않고 그 사실을 말한다(과대약속 금지). */
+  it('대상을 모르면 모른다고 말한다', () => {
+    const line = reviewLine(item({ type: 'OUTLIER_LOWER', subject: null, payload: { priceFirst: 700000 } }))
+
+    expect(line.detail).toContain('대상 미상')
+    expect(line.detail).not.toContain('null')
+    expect(line.detail).not.toContain('undefined')
   })
 })

@@ -92,6 +92,55 @@ class GetReviewQueueUseCaseTest {
 		assertThat(item.payload()).containsEntry("priceFirst", 700000);
 	}
 
+	/**
+	 * "700,000원"만 보고는 아무것도 결정할 수 없다. <b>무엇의</b> 이상치인지 말해야 한다 —
+	 * `후보 2개`와 같은 자리다.
+	 */
+	@Test
+	void outlierItemNamesWhatItIsAbout() {
+		long productId = jdbc.queryForObject(
+				"insert into product (name, category) values ('아이폰 17', 'phone') returning id", Long.class);
+		long variantId = jdbc.queryForObject("""
+				insert into variant (product_id, label, price_axis_values) values (?, '256GB', '{}'::jsonb)
+				returning id
+				""", Long.class, productId);
+		long dealId = jdbc.queryForObject("""
+				insert into deal_event (variant_id, price_first, price_min, price_max, price_last,
+				                        origin, status, first_seen, last_seen)
+				values (?, 700000, 700000, 700000, 700000, 'LIVE', 'ACTIVE', now(), now()) returning id
+				""", Long.class, variantId);
+		long itemId = enqueue("OUTLIER_LOWER",
+				"""
+				{"priceFirst":700000,"dealEventId":%d}""".formatted(dealId),
+				"PENDING", "2026-07-10T00:00:00Z");
+
+		assertThat(mine(itemId).get(0).subject()).isEqualTo("아이폰 17 — 256GB");
+	}
+
+	/** 미상 딜(variant 미배정)의 이상치는 대상을 말할 수 없다. "" 대신 null — 화면이 그 사실을 말한다. */
+	@Test
+	void outlierOnAnUnclassifiedDealHasNoSubject() {
+		long dealId = jdbc.queryForObject("""
+				insert into deal_event (variant_id, price_first, price_min, price_max, price_last,
+				                        origin, status, first_seen, last_seen)
+				values (null, 700000, 700000, 700000, 700000, 'LIVE', 'ACTIVE', now(), now()) returning id
+				""", Long.class);
+		long itemId = enqueue("OUTLIER_LOWER",
+				"""
+				{"priceFirst":700000,"dealEventId":%d}""".formatted(dealId),
+				"PENDING", "2026-07-10T00:00:00Z");
+
+		assertThat(mine(itemId).get(0).subject()).isNull();
+	}
+
+	/** 미상 항목은 정의상 대상이 없다 — 그게 미상이라는 뜻이다. */
+	@Test
+	void unclassifiedItemHasNoSubject() {
+		long itemId = enqueue("UNCLASSIFIED", "{\"title\":\"x\"}", "PENDING", "2026-07-10T00:00:00Z");
+
+		assertThat(mine(itemId).get(0).subject()).isNull();
+	}
+
 	/** 원문을 잇지 못하면 `null`이다. 빈 문자열이나 "#"으로 채우면 화면이 죽은 링크를 그린다. */
 	@Test
 	void anItemWhoseOriginCannotBeResolvedHasNoUrlRatherThanAFakeOne() {

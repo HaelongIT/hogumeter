@@ -70,7 +70,8 @@ public class GetReviewQueueUseCase {
 			       g.first_seen_at,
 			       g.last_seen_at,
 			       g.payload::text as payload,
-			       coalesce(post.url, outlier.url) as source_url
+			       coalesce(post.url, outlier.url) as source_url,
+			       subject.name as subject
 			  from grouped g
 			  left join raw_deal_post post
 			         on g.type = 'UNCLASSIFIED'
@@ -84,6 +85,14 @@ public class GetReviewQueueUseCase {
 			        order by des.id
 			        limit 1
 			  ) outlier on true
+			  left join lateral (
+			       select p.name || ' — ' || v.label as name
+			         from deal_event de
+			         join variant v on v.id = de.variant_id
+			         join product p on p.id = v.product_id
+			        where g.type = 'OUTLIER_LOWER'
+			          and de.id = nullif(g.payload ->> 'dealEventId', '')::bigint
+			  ) subject on true
 			 order by g.last_seen_at desc, g.id desc
 			""";
 
@@ -127,12 +136,13 @@ public class GetReviewQueueUseCase {
 				row.getTimestamp("first_seen_at").toInstant(),
 				row.getTimestamp("last_seen_at").toInstant(),
 				row.getString("source_url"),
+				row.getString("subject"),
 				payloadOf(row.getString("payload")));
 	}
 
 	/** 이름을 붙이기 전의 한 행. `payload`에서 후보 id를 꺼내는 책임도 여기 있다. */
 	private record Row(long id, ReviewQueueType type, int occurrences, Instant firstSeenAt, Instant lastSeenAt,
-			String sourceUrl, Map<String, Object> payload) {
+			String sourceUrl, String subject, Map<String, Object> payload) {
 
 		/** payload는 jsonb다 — 기대한 타입이 온다는 보장이 없다. 숫자가 아닌 값은 무시한다. */
 		List<Long> candidateIds() {
@@ -150,7 +160,8 @@ public class GetReviewQueueUseCase {
 			List<String> candidates = candidateIds().stream()
 				.map(candidateId -> names.getOrDefault(candidateId, "#" + candidateId))
 				.toList();
-			return new PendingItem(id, type, occurrences, firstSeenAt, lastSeenAt, sourceUrl, candidates, payload);
+			return new PendingItem(id, type, occurrences, firstSeenAt, lastSeenAt, sourceUrl, subject, candidates,
+					payload);
 		}
 	}
 
@@ -172,10 +183,13 @@ public class GetReviewQueueUseCase {
 	 *     그때는 접힌 행 전부를 처리해야 한다(docs/91 Q-15·Q-27 ④).
 	 * @param occurrences 같은 근거가 큐에 들어간 횟수. <b>1보다 크면 재처리 멱등이 없다는 뜻</b>이다.
 	 * @param sourceUrl 원문 링크. 잇지 못하면 {@code null}.
+	 * @param subject 이 항목이 **무엇에 대한 것인가**("제품 — variant"). 미상 항목은 정의상 대상이 없어
+	 *     {@code null}이다. 이상치인데 딜이 미상이면 역시 {@code null} — 화면이 그 사실을 말한다.
 	 * @param candidateProducts 후보 제품 이름. 사라진 제품은 {@code #id}로 남긴다 — 조용히 빼면
 	 *     "후보 2개"가 "후보 1개"가 되고 근거가 줄어든 것을 아무도 모른다.
 	 */
 	public record PendingItem(long id, ReviewQueueType type, int occurrences, Instant firstSeenAt,
-			Instant lastSeenAt, String sourceUrl, List<String> candidateProducts, Map<String, Object> payload) {
+			Instant lastSeenAt, String sourceUrl, String subject, List<String> candidateProducts,
+			Map<String, Object> payload) {
 	}
 }

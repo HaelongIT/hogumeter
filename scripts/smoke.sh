@@ -427,7 +427,7 @@ for _ in $(seq 20); do
 	sleep 2
 done
 [ "${expired:-0}" = 1 ] || fail "관찰 기간이 끝났는데 REPORT_PENDING으로 넘어가지 않는다: $observations"
-echo "$observations" | grep -q '"mode":"REPORT_PENDING"' || fail "만료된 관찰의 문맥이 '집계 중'이 아니다"
+echo "$observations" | grep -q '"mode":"REPORT_PENDING"' || fail "만료된 관찰의 문맥이 REPORT_PENDING이 아니다"
 # 아직 관찰 중인 구매(5-2에서 만든 것)는 건드리지 않는다 — 만료는 기간이 끝난 것만 옮긴다.
 echo "$observations" | grep -q '"state":"OBSERVING"' || fail "관찰 중인 구매까지 만료시켰다: $observations"
 

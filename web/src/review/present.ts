@@ -47,7 +47,8 @@ export function reviewLine(item: ReviewQueueItem): ReviewLine {
     case 'OUTLIER_LOWER':
       return {
         reason: '분포 하단 이상치 — 기준가 표본에서 제외됐습니다. 원문을 보고 판단하세요.',
-        detail: price(item.payload.priceFirst),
+        // 가격만으로는 아무것도 결정할 수 없다. **무엇의** 이상치인지 먼저 말한다.
+        detail: `${item.subject ?? '대상 미상'} · ${price(item.payload.priceFirst)}`,
       }
     default:
       // 새 유형이 생겼는데 화면이 모른다. 빈 줄을 그리느니 근거를 통째로 보여준다.
