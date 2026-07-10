@@ -24,8 +24,10 @@ if [ -n "${WEB_BASIC_AUTH_HTPASSWD:-}" ]; then
 		auth_basic "hogumeter";
 		auth_basic_user_file /etc/nginx/.htpasswd;
 	EOF
-	echo "40-basic-auth.sh: Basic Auth 활성화"
+	# 관측 출력은 산문이 아니라 **기계가 읽는 마커**다(docs/99). 문구를 grep하는 테스트는 문구를
+	# 굳히고, 한글은 콘솔 인코딩에 따라 깨진다. 운영 배포 후 이 한 줄로 "켜졌는가"를 확인한다.
+	echo "SEC-02 basic_auth=on"
 else
 	echo 'auth_basic off;' >"$conf"
-	echo "40-basic-auth.sh: Basic Auth 비활성 (WEB_BASIC_AUTH_HTPASSWD 미설정). 공개망 노출 금지."
+	echo "SEC-02 basic_auth=off (WEB_BASIC_AUTH_HTPASSWD unset - do not expose publicly)"
 fi

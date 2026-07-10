@@ -180,6 +180,11 @@ for service in postgres core web; do
 	esac
 done
 
+# 기본 스택은 auth를 끈 상태다. **그 사실이 로그에 남아야** 운영에서 "켰는지"를 확인할 수 있다.
+# 산문이 아니라 마커를 본다 — 문구를 grep하는 테스트는 문구를 굳힌다(docs/99).
+compose logs --no-log-prefix web 2>&1 | grep -q 'SEC-02 basic_auth=off' ||
+	fail "web이 basic_auth 상태를 마커로 남기지 않는다 (기본은 off여야 한다)"
+
 echo "--- 1) 정적 자산이 서빙된다 ---"
 curl -fsS "${WEB}/" | grep -q '<div id="root">' || fail "index.html이 아니다"
 
@@ -592,6 +597,8 @@ code_health=$(curl -s -o /dev/null -w '%{http_code}' "${auth_url}healthz")
 # 인증을 통과하면 502(업스트림 없음), 못 하면 401이다. 둘의 차이가 곧 인증 여부다.
 code_api_no_creds=$(curl -s -o /dev/null -w '%{http_code}' "${auth_url}api/v1/products")
 code_api_with_creds=$(curl -s -o /dev/null -w '%{http_code}' -u smoke:smoke-pass "${auth_url}api/v1/products")
+# 운영 배포 후 "정말 켜졌나"를 물을 때 볼 그 마커. 끈 분기는 0-4가 본다.
+auth_marker=$(docker logs "$auth_cid" 2>&1 | grep -c 'SEC-02 basic_auth=on' || true)
 docker rm -f "$auth_cid" >/dev/null
 [ "$code_health" = 200 ] || fail "auth를 켜니 /healthz가 ${code_health}다 (헬스체크가 막힌다)"
 [ "$code_no_creds" = 401 ] || fail "Basic Auth를 켰는데 인증 없이 ${code_no_creds}를 준다"
@@ -600,6 +607,7 @@ docker rm -f "$auth_cid" >/dev/null
 	fail "**/api가 인증 없이 ${code_api_no_creds}를 준다** — 데이터가 통째로 열려 있다(SEC-02)"
 [ "$code_api_with_creds" = 502 ] ||
 	fail "인증을 통과한 /api가 ${code_api_with_creds}다 (기대: 502 — 이 컨테이너엔 core가 없다)"
+[ "$auth_marker" -ge 1 ] || fail "auth를 켰는데 기동 로그에 'SEC-02 basic_auth=on' 마커가 없다"
 
 echo
 echo "SMOKE PASS: web -> nginx -> core -> postgres 왕복 + SEC-02 Basic Auth 확인"
