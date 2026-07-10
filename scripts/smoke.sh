@@ -238,10 +238,20 @@ variant_id=$(variant_of 512GB)
 bench=$(curl -fsS "${WEB}/api/v1/variants/${variant_id}/benchmark?periodMonths=6")
 echo "$bench" | grep -q '"tier":"NONE"' || fail "딜 0건인데 tier가 NONE이 아니다: $bench"
 echo "$bench" | grep -q '"n":0' || fail "표본 수가 0이 아니다: $bench"
-curl -fsS "${WEB}/api/v1/variants/${variant_id}/signal" | grep -q '"color":"GRAY"' ||
-	fail "표본 0인데 신호등이 GRAY가 아니다"
-curl -fsS "${WEB}/api/v1/variants/${variant_id}/cadence" | grep -q '"guardMet":false' ||
-	fail "발생 0인데 주기 가드가 통과했다"
+signal=$(curl -fsS "${WEB}/api/v1/variants/${variant_id}/signal")
+echo "$signal" | grep -q '"color":"GRAY"' || fail "표본 0인데 신호등이 GRAY가 아니다: $signal"
+# 계약 드리프트: web SignalPage가 읽는 필드가 전부 있는가(정본 = web/api/types.ts의 SignalView).
+for field in color goodDealLineEstablished notes; do
+	echo "$signal" | grep -q "\"${field}\":" ||
+		fail "web SignalView가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $signal"
+done
+
+cadence=$(curl -fsS "${WEB}/api/v1/variants/${variant_id}/cadence")
+echo "$cadence" | grep -q '"guardMet":false' || fail "발생 0인데 주기 가드가 통과했다: $cadence"
+for field in eventCount intervalMedianDays elapsedDays observedMonths guardMet; do
+	echo "$cadence" | grep -q "\"${field}\":" ||
+		fail "web CadenceView가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $cadence"
+done
 # 없는 variant는 도메인 코드로 거절한다(web은 이 code를 그대로 보여준다).
 curl -sS -o /dev/null -w '%{http_code}' "${WEB}/api/v1/variants/999999/benchmark?periodMonths=6" |
 	grep -q '^404$' || fail "없는 variant인데 404가 아니다"
