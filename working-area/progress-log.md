@@ -1,3 +1,27 @@
+## 2026-07-10 — SEC-08: robots의 Crawl-delay를 실제로 따르게 했다 (`223936a`)
+
+**한 일**: "소비처 0" 감사를 API 타입이 아니라 **코드**에 돌려 죽은 함수를 찾았다.
+`scheduler/fetcher.effective_interval_with_robots`는 존재했고 단위 테스트가 GREEN이었지만
+**프로덕션 호출자가 0**이었다. `run_cycle`은 우리 하한(게시판 60초)만 봤다.
+→ 뽐뿌가 `Crawl-delay: 120`을 선언해도 60초마다 두드렸을 것이다.
+
+- `loop.run_cycle`에 `interval_for` 포트(기본은 종전 동작) → `__main__._interval_port`가
+  `max(설정, Crawl-delay, 하한)`을 합성해 주입. 하한은 robots로도 완화 불가.
+- RobotsGate 인스턴스 1개를 fetcher와 공유(호스트당 robots.txt 1회).
+- **배선을 보는 회귀 테스트**를 달았다 — 포트의 계산만 테스트하면 같은 함정을 한 층 위에 재현한다.
+  뮤테이션 증명: `interval_for=` 제거 시 그 테스트만 RED, 단위 테스트 3개는 GREEN 유지.
+
+**자율 결정**: 없음(되돌리기 쉬운 additive 배선).
+
+**정정한 거짓 기록**: `docs/91` Q-38이 "Crawl-delay를 따른다"고 **해소 처리**해 두고 있었다.
+문서가 코드를 앞질러 있었다 — 정정 각주를 달았다.
+
+⚠️ **여전히 미해결**: 실 robots.txt와 대조한 적 없다(fake opener만). `check-robots.sh`는 **사람이** 돌린다.
+
+**다음**: 소비처 0 감사를 남은 모듈(web/core 신규분)로 확대.
+
+---
+
 # 진행 로그 (Progress Log) — 무중단 개발 중 사용자에게 알리는 것
 
 > 무중단(Autonomous)으로 개발하는 동안 **사용자가 알아야 할 것**을 여기 차곡차곡 쌓는다.
