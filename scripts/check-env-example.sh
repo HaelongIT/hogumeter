@@ -25,9 +25,14 @@ for file in "$compose" "$example"; do
 	}
 done
 
+# **주석은 설정이 아니다.** compose의 `# - X=${COMMENTED:-1}`은 compose가 읽지 않는다 —
+# 그걸 요구하면 운영자에게 **존재하지 않는 손잡이**를 문서화하라고 시키는 오차단이 된다.
+# 전체 줄이 주석인 것만 걷는다(2026-07-10 실측: 게이트 셋이 같은 방식으로 주석에 속았다).
+code_only() { grep -vE '^[[:space:]]*#' "$1"; }
+
 # `${VAR}`·`${VAR:-x}`·`${VAR:?}`·`${VAR-x}` 전부 잡는다. 매치가 없으면 grep은 1을 반환한다.
-referenced=$(grep -ohE '\$\{[A-Z_][A-Z0-9_]*' "$compose" | sed 's/\${//' | sort -u || true)
-documented=$(grep -ohE '^[A-Z_][A-Z0-9_]*=' "$example" | sed 's/=$//' | sort -u || true)
+referenced=$(code_only "$compose" | grep -ohE '\$\{[A-Z_][A-Z0-9_]*' | sed 's/\${//' | sort -u || true)
+documented=$(code_only "$example" | grep -ohE '^[A-Z_][A-Z0-9_]*=' | sed 's/=$//' | sort -u || true)
 
 missing=$(comm -23 <(printf '%s\n' "$referenced") <(printf '%s\n' "$documented"))
 

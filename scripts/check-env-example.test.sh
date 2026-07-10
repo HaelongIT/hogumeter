@@ -71,5 +71,27 @@ else
 fi
 
 echo
+
+# **주석은 설정이 아니다.** compose의 `# - X=${COMMENTED:-1}`은 compose가 읽지 않는다 —
+# 그걸 요구하면 운영자에게 **존재하지 않는 손잡이**를 문서화하라고 시키는 오차단이 된다.
+# (2026-07-10: 정적 검사 게이트 셋이 같은 방식으로 주석에 속았다.)
+echo "── 주석은 설정이 아니다 (오차단 방지) ──"
+check 0 "compose의 주석 속 변수는 요구하지 않는다" \
+	'services:
+  core:
+    environment:
+      # - COMMENTED=${COMMENTED_ONLY:-x}
+      - KNOWN=${KNOWN:-1}' \
+	'KNOWN=1'
+
+check 1 "주석 옆의 진짜 변수는 여전히 요구한다" \
+	'services:
+  core:
+    environment:
+      # 아래는 진짜다
+      - REAL=${REAL_VAR:-x}' \
+	'KNOWN=1'
+
+echo
 if [ "$fail" -eq 0 ]; then echo "ALL PASS"; else echo "SOME FAILED"; fi
 exit "$fail"
