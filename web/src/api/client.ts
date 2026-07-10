@@ -1,4 +1,5 @@
 import type {
+  AlertPolicyView,
   ApiError,
   BenchmarkView,
   CadenceView,
@@ -9,6 +10,7 @@ import type {
   RecordPurchaseCommand,
   RegisterProductCommand,
   SignalView,
+  UpdateAlertPolicyCommand,
   VariantView,
 } from './types'
 
@@ -64,6 +66,15 @@ export const api = {
   recordPurchase: (command: RecordPurchaseCommand) =>
     request<PurchaseRecorded>('/api/v1/purchases', {
       method: 'POST',
+      body: JSON.stringify(command),
+    }),
+
+  // REG-03 알림 정책. 미설정 variant도 200(`configured:false`) — 404는 variant가 없다는 뜻이다.
+  getAlertPolicy: (variantId: number) => request<AlertPolicyView>(`/api/v1/variants/${variantId}/alert-policy`),
+
+  updateAlertPolicy: (variantId: number, command: UpdateAlertPolicyCommand) =>
+    request<AlertPolicyView>(`/api/v1/variants/${variantId}/alert-policy`, {
+      method: 'PUT',
       body: JSON.stringify(command),
     }),
 }

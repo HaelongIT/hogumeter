@@ -46,6 +46,7 @@ describe('DecisionPage', () => {
     vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([]) // 패널이 같은 화면에 있다
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false }) // 알림 정책 패널도
   })
 
   it('variant를 고르면 신호등·기준가·갭·주기를 한 화면에 낸다', async () => {
@@ -140,6 +141,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([]) // 패널이 같은 화면에 있다
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false }) // 알림 정책 패널도
   })
 
   it('기본은 6개월이고, 기준가·주기를 그 기간으로 부른다', async () => {
@@ -166,10 +168,12 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
     await pick()
 
-    expect(screen.queryByRole('note')).not.toBeInTheDocument() // 6개월이면 군더더기 없음
+    expect(screen.queryByRole('note', { name: '신호등 기간 안내' })).not.toBeInTheDocument() // 6개월이면 군더더기 없음
     await userEvent.selectOptions(screen.getByLabelText('기간'), '3')
 
-    expect(await screen.findByRole('note')).toHaveTextContent('신호등은 기간 설정과 무관하게 최근 6개월')
+    expect(await screen.findByRole('note', { name: '신호등 기간 안내' })).toHaveTextContent(
+      '신호등은 기간 설정과 무관하게 최근 6개월',
+    )
     // core는 신호등에 기간을 받지 않는다 — 인자를 지어내지 않았다.
     expect(api.getSignal).toHaveBeenLastCalledWith(11)
   })

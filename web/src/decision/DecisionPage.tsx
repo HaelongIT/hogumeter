@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { BenchmarkView, CadenceView, ProductSummary, SignalView } from '../api/types'
+import { AlertPolicyPanel } from '../policy/AlertPolicyPanel'
 import { PurchasePanel } from '../purchase/PurchasePanel'
 import { benchmarkLine, cadenceLine, gapLine, signalBadge } from './present'
 
@@ -108,7 +109,7 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
           </p>
           {/* 기간을 바꿔도 신호등은 안 바뀐다. 그 사실을 숨기면 사용자는 바뀐 줄 안다(과대약속 금지). */}
           {periodMonths !== SIGNAL_PERIOD_MONTHS && (
-            <p role="note">
+            <p role="note" aria-label="신호등 기간 안내">
               신호등은 기간 설정과 무관하게 최근 {SIGNAL_PERIOD_MONTHS}개월로 판정합니다. 아래 기준가·주기만
               최근 {periodMonths}개월입니다.
             </p>
@@ -156,6 +157,9 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
       {/* 판단 바로 아래에 기록을 둔다 — 사후에 "호구였나"를 물으려면 같은 variant 문맥이어야 한다.
           조회가 실패해도(위의 error) 이미 산 것을 기록하는 길은 막지 않는다. */}
       {variantId !== null && <PurchasePanel variantId={variantId} />}
+
+      {/* "지금은 아니다"의 다음 행동은 "그럼 얼마면 알려줘"다. 그래서 판단 화면에 둔다(REG-03). */}
+      {variantId !== null && <AlertPolicyPanel variantId={variantId} />}
     </main>
   )
 }

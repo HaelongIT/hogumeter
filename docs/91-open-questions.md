@@ -314,7 +314,7 @@ _(Q-50. OBS-04 전용 헬스 엔드포인트 — **해소됨 2026-07-10**: `adap
 - **해소된 부분(2026-07-10)**: `AlertPolicyController`(GET/PUT `/api/v1/variants/{id}/alert-policy`) + `AlertPolicySettingsUseCase` + `AlertPolicySettings`(순수 검증) + `InvalidAlertPolicyException` + `AlertPolicyExceptionHandler` — **전부 신규 파일**, core 기존 파일 무수정. 이전까지 `alert_policy`에는 **프로덕션 writer가 없었다** — `EvaluateAlertOnDealUseCase`가 읽기는 했으나 행이 영원히 생기지 않아 확정본 §107의 "OR [사용자 목표가 이하]" 트리거와 방해금지(AL-04)가 발화할 수 없었다. 스모크 5-1d가 `intensity=TARGET`으로 정책이 판정에 닿는 것을 증명한다.
 - **남은 것**: `AlertPolicyEntity`가 `k_display`·`exclude_keywords`·`demand_axis_filter`를 **매핑하지 않는다**(⚠️라벨 토글도 컬럼 부재). 그래서 REG-03의 6개 항목 중 넷(targetPrice·기간 P·quiet hours 2개)만 저장된다. 갱신은 **벌크 UPDATE**라 미매핑 컬럼을 보존한다(delete+insert였다면 DB 기본값으로 되돌아가 매핑을 붙이는 날 데이터가 사라진다 — `updatePreservesColumnsTheEntityDoesNotMap`이 못박는다).
 - **또 하나**: 미설정 variant의 GET은 `periodMonths: null`을 낸다. 알림 판정이 쓰는 기본 6개월은 `EvaluateAlertOnDealUseCase`의 **private 상수**라 어댑터가 읽을 수 없다. 지어내 채우면 그 값이 세 번째 사본이 되고 사본은 드리프트한다.
-- **잠정값**: 위 넷만. web REG-03 화면은 이 REST 위에 올린다(별건).
+- **잠정값**: 위 넷만. web 화면은 붙였다(`policy/AlertPolicyPanel`, 판단 화면 안 — "지금은 아니다"의 다음 행동이 "그럼 얼마면 알려줘"라서). **없는 손잡이는 그리지 않는다** — 그리면 저장되는 줄 안다. 미설정이면 "목표가 알림은 발화하지 않습니다"라고 말하고, 판정 기간의 시스템 기본값은 **숫자로 말하지 않는다**(과대약속 금지 + 세 번째 사본 금지).
 - **재개 트리거**: ① `AlertPolicyEntity`에 세 컬럼이 매핑되어야 한다 ② `DEFAULT_PERIOD_MONTHS`가 한 곳에서 소유되어 어댑터도 읽을 수 있어야 한다 ③ 예외 핸들러가 한 곳으로 합쳐져야 한다. 셋 다 **core 기존 파일**이라 상대와 조율. (구현 수단은 여러 가지다 — 위 셋은 "무엇이 참이 되어야 하는가"이지 방법이 아니다.)
 
 ## [열림] Q-46. 조건 태그(`applied_conditions`)를 담을 컬럼이 `raw_deal_post`에 없다

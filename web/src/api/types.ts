@@ -157,8 +157,33 @@ export interface PurchaseRecorded {
   purchaseId: number
 }
 
-/** ApiExceptionHandler가 돌려주는 유일한 에러 형태. 코드는 현재 2종뿐이다. */
+/** 에러 형태는 하나다(`{code, message}`). 코드 카탈로그는 `docs/benchmark/07`. */
 export interface ApiError {
-  code: 'BM_VARIANT_NOT_FOUND' | 'BM_INVALID_PERIOD' | (string & {})
+  code: 'BM_VARIANT_NOT_FOUND' | 'BM_INVALID_PERIOD' | 'REG_INVALID_ALERT_POLICY' | (string & {})
   message: string
+}
+
+/**
+ * GET/PUT /api/v1/variants/{id}/alert-policy (REG-03)
+ *
+ * core의 `AlertPolicyView`는 `@JsonInclude(NON_NULL)`이라 **null인 필드는 키 자체가 없다.**
+ * 그래서 `number | null`이 아니라 optional이다 — "값이 null"과 "키가 없음"을 섞으면 화면이 거짓말한다.
+ *
+ * `configured: false`면 나머지가 전부 없다. 알림 판정이 쓰는 기본 기간(6개월)은 core의 private 상수라
+ * 이 응답에 실리지 않는다(docs/91 Q-48) — 화면이 지어내 채우면 그 값이 세 번째 사본이 된다.
+ */
+export interface AlertPolicyView {
+  configured: boolean
+  targetPrice?: number
+  periodMonths?: number
+  quietHoursStart?: number
+  quietHoursEnd?: number
+}
+
+/** PUT 본문. 부재는 **null**로 명시한다 — 키를 빼면 core가 "기간 P 누락"으로 400을 낸다. */
+export interface UpdateAlertPolicyCommand {
+  targetPrice: number | null
+  periodMonths: number
+  quietHoursStart: number | null
+  quietHoursEnd: number | null
 }

@@ -1,0 +1,145 @@
+import { useEffect, useState } from 'react'
+import { ApiFailure, api } from '../api/client'
+import type { AlertPolicyView } from '../api/types'
+import { InvalidForm } from '../registration/buildCommand'
+import { buildPolicyCommand, type PolicyForm } from './buildPolicyCommand'
+
+const EMPTY: PolicyForm = { targetPrice: '', periodMonths: '', quietHoursStart: '', quietHoursEnd: '' }
+
+/** 기간 P 후보. 판단 화면의 "표시 기간"과 **다른 손잡이**다 — 이건 알림 판정에 쓰인다. */
+const PERIODS = [3, 6, 12] as const
+
+const describe = (failure: unknown) => {
+  if (failure instanceof InvalidForm) return failure.message
+  if (failure instanceof ApiFailure) return `정책 저장 실패 (${failure.code})`
+  return '정책 저장 실패: 알 수 없는 오류'
+}
+
+const won = (value: number) => value.toLocaleString('en-US')
+
+/** 저장된 정책 → 폼. 없는 값은 빈 칸이다. `0`으로 채우면 "공짜여야 알림"이 된다. */
+function toForm(policy: AlertPolicyView): PolicyForm {
+  return {
+    targetPrice: policy.targetPrice === undefined ? '' : won(policy.targetPrice),
+    periodMonths: policy.periodMonths === undefined ? '' : String(policy.periodMonths),
+    quietHoursStart: policy.quietHoursStart === undefined ? '' : String(policy.quietHoursStart),
+    quietHoursEnd: policy.quietHoursEnd === undefined ? '' : String(policy.quietHoursEnd),
+  }
+}
+
+/**
+ * REG-03 알림 정책 설정. 확정본 §7의 web 최소 슬라이스가 요구하는 "목표가 설정"이 여기다.
+ *
+ * <p>다루는 것은 넷뿐이다 — K_display·제외 키워드·⚠️라벨 토글은 core 엔티티가 아직 매핑하지 않는다
+ * (docs/91 Q-48). 없는 손잡이를 그려 두면 저장되는 줄 안다.
+ */
+export function AlertPolicyPanel({ variantId }: { variantId: number }) {
+  const [form, setForm] = useState<PolicyForm>(EMPTY)
+  const [configured, setConfigured] = useState<boolean | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    setConfigured(null)
+    setError(null)
+    setSaved(false)
+    api
+      .getAlertPolicy(variantId)
+      .then((policy) => {
+        if (!live) return
+        setForm(toForm(policy))
+        setConfigured(policy.configured)
+      })
+      .catch((failure) => {
+        if (!live) return
+        setError(failure instanceof ApiFailure ? `정책을 불러오지 못했습니다 (${failure.code})` : '정책을 불러오지 못했습니다.')
+      })
+    return () => {
+      live = false
+    }
+  }, [variantId])
+
+  const set = (key: keyof PolicyForm) => (event: { target: { value: string } }) => {
+    setSaved(false)
+    setForm((current) => ({ ...current, [key]: event.target.value }))
+  }
+
+  const submit = async (event: { preventDefault: () => void }) => {
+    event.preventDefault()
+    setError(null)
+    setBusy(true)
+    try {
+      const policy = await api.updateAlertPolicy(variantId, buildPolicyCommand(form))
+      setForm(toForm(policy))
+      setConfigured(policy.configured)
+      setSaved(true)
+    } catch (failure) {
+      setError(describe(failure))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // 못 불러왔으면 폼을 그리지 않는다 — 빈 폼을 저장하면 있던 정책을 덮어쓴다.
+  if (configured === null) {
+    return <section aria-label="알림 정책">{error ? <p role="alert">{error}</p> : <p>불러오는 중…</p>}</section>
+  }
+
+  return (
+    <section aria-label="알림 정책">
+      <h2>알림 정책</h2>
+
+      {/* 미설정을 "기본값 적용 중"으로 그리면 사용자는 목표가 알림이 켜져 있다고 믿는다. 실제로는
+          `alert_policy` 행이 없어 목표가 트리거가 발화하지 않는다(확정본 §107). 판정 기간의 시스템
+          기본값은 core의 private 상수라 여기서 숫자로 말하지 않는다(과대약속 금지). */}
+      {!configured && (
+        <p role="note" aria-label="정책 미설정 안내">
+          아직 저장된 정책이 없습니다. <strong>목표가 알림은 발화하지 않습니다.</strong> 판정 기간은 시스템
+          기본값을 씁니다.
+        </p>
+      )}
+
+      <form onSubmit={submit}>
+        <label>
+          목표가 (원, 비우면 목표가 알림 없음)
+          <input inputMode="numeric" value={form.targetPrice} onChange={set('targetPrice')} />
+        </label>
+
+        <label>
+          알림 판정 기간
+          <select value={form.periodMonths} onChange={set('periodMonths')}>
+            <option value="">선택하세요</option>
+            {PERIODS.map((months) => (
+              <option key={months} value={months}>
+                최근 {months}개월
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {/* 🔥 대박딜은 방해금지를 관통한다(확정본 §102). 그 사실을 숨기면 "다 막았다"고 믿는다. */}
+        <fieldset>
+          <legend>방해금지 시간 (시, 0~23 · 끝 시각 제외 · 비우면 없음)</legend>
+          <label>
+            방해금지 시작
+            <input inputMode="numeric" value={form.quietHoursStart} onChange={set('quietHoursStart')} />
+          </label>
+          <label>
+            방해금지 끝
+            <input inputMode="numeric" value={form.quietHoursEnd} onChange={set('quietHoursEnd')} />
+          </label>
+          <p>보류된 알림은 방해금지가 끝나면 발송됩니다. 대박딜(🔥)은 방해금지를 관통합니다.</p>
+        </fieldset>
+
+        <button type="submit" disabled={busy}>
+          정책 저장
+        </button>
+      </form>
+
+      {error && <p role="alert">{error}</p>}
+      {saved && !error && <p role="status">저장했습니다.</p>}
+    </section>
+  )
+}
