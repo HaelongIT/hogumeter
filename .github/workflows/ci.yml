@@ -46,7 +46,7 @@ jobs:
         working-directory: collector
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
       # 통합 테스트(-m integration)는 Postgres 컨테이너를 띄워 core의 마이그레이션을 전부 적용한다.
@@ -93,7 +93,7 @@ jobs:
         working-directory: .
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
       - name: robots 게이트 리허설 (로컬 서버, 실 사이트 미접촉)
