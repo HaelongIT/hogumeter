@@ -25,13 +25,20 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
+from collections.abc import Callable
+
 from .db.raw_deal_sink import RawDealSink, connect_from_env
 from .observability import counters, event
 from .pipeline.ingest import oversized, to_raw_records
 from .scheduler.drift import DriftHistory, DriftPolicy, observe
-from .scheduler.fetcher import HttpFetcher, RobotsGate, urllib_opener
-from .scheduler.loop import run_cycle
-from .scheduler.policy import BackoffPolicy
+from .scheduler.fetcher import (
+    HttpFetcher,
+    RobotsGate,
+    effective_interval_with_robots,
+    urllib_opener,
+)
+from .scheduler.loop import SiteSpec, run_cycle
+from .scheduler.policy import BackoffPolicy, effective_interval
 from .scheduler.sites import hotdeal_boards
 
 ALLOW_NETWORK_ENV = "COLLECTOR_ALLOW_NETWORK"
@@ -71,7 +78,10 @@ def main(
              message=f"실 네트워크 폴링은 기본 비활성입니다(정지조건). {ALLOW_NETWORK_ENV}=1 로 켜세요.")
         return 0
 
-    fetch = _build_fetcher(opener or urllib_opener)
+    # RobotsGate는 하나만 만들어 fetcher와 주기 포트가 **캐시를 공유**한다(호스트당 robots.txt 1회).
+    robots = RobotsGate(opener=opener or urllib_opener)
+    fetch = _build_fetcher(opener or urllib_opener, robots)
+    interval_for = _interval_port(robots)
     sink = sink or _build_sink()
     specs = hotdeal_boards()
     states: dict = {}
@@ -84,7 +94,7 @@ def main(
 
     while max_cycles is None or cycles < max_cycles:
         now = clock()
-        result = run_cycle(specs, states, now, fetch, BACKOFF)
+        result = run_cycle(specs, states, now, fetch, BACKOFF, interval_for=interval_for)
         states = result.states
 
         # SEC-05: 상한을 넘긴 딜은 적재하지 않는다. 조용히 버리지 않고 무엇을 왜 버렸는지 남긴다.
@@ -144,8 +154,25 @@ def _log(name: str, at: datetime, **fields) -> None:
     print(event(name, at, **fields))
 
 
-def _build_fetcher(opener) -> HttpFetcher:
-    return HttpFetcher(opener=opener, robots=RobotsGate(opener=opener))
+def _build_fetcher(opener, robots: RobotsGate) -> HttpFetcher:
+    return HttpFetcher(opener=opener, robots=robots)
+
+
+def _interval_port(robots: RobotsGate) -> Callable[[SiteSpec], timedelta]:
+    """다음 시도까지의 주기 = 설정·robots의 `Crawl-delay`·우리 하한 중 **가장 느린 것**(SEC-08).
+
+    하한은 설정으로도 robots로도 완화되지 않는다 — 사이트가 1초를 허락해도 게시판은 60초다.
+    반대로 사이트가 우리보다 느리게 요구하면 그쪽을 따른다(절대 원칙 5: 플랫폼 잣대).
+
+    robots 조회는 네트워크를 타므로 순수 루프(`run_cycle`)가 알아선 안 된다. 그래서 포트로 주입한다.
+    이 함수가 생기기 전까지 `effective_interval_with_robots`는 테스트에서만 불렸고,
+    **선언된 Crawl-delay는 한 번도 지켜진 적이 없었다.**
+    """
+
+    def interval_for(spec: SiteSpec) -> timedelta:
+        return effective_interval(effective_interval_with_robots(spec, robots), spec.kind)
+
+    return interval_for
 
 
 def _build_sink() -> RawDealSink | None:

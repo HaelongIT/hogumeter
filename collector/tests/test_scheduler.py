@@ -294,3 +294,44 @@ def test_configured_interval_below_floor_is_clamped_in_cycle():
     result = run_cycle([spec], {}, NOW, fetch, BACKOFF)
 
     assert result.states["ruliweb"].next_attempt_at == NOW + timedelta(seconds=60)
+
+
+# ── SEC-08: robots의 Crawl-delay를 실제로 따르는가 ──────────────────────
+#
+# `effective_interval_with_robots`는 순수 함수로 GREEN이었지만 **프로덕션 호출자가 0이었다**
+# (2026-07-10 실측). 즉 뽐뿌가 `Crawl-delay: 120`을 선언해도 우리는 60초마다 두드렸다 —
+# SEC-08 위반이고 절대 원칙 5(기술적 차단·플랫폼 잣대) 위반이다.
+
+
+def _spec_for_interval(seconds: int) -> SiteSpec:
+    return SiteSpec(
+        name="ppomppu",
+        kind=SiteKind.BOARD,
+        interval=timedelta(seconds=seconds),
+        url="https://www.ppomppu.co.kr/zboard/list.php",
+        encoding="utf-8",
+        parse=lambda body, now: [],
+    )
+
+
+def test_run_cycle_uses_injected_interval_for_next_attempt():
+    """주기 결정을 주입 가능한 포트로 뺀다 — robots를 참조하려면 네트워크가 필요하기 때문이다."""
+    spec = _spec_for_interval(60)
+    now = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+
+    result = run_cycle(
+        [spec], {}, now, lambda s: FetchResult(status_code=200, body=""), BACKOFF,
+        interval_for=lambda s: timedelta(seconds=120),
+    )
+
+    assert result.states["ppomppu"].next_attempt_at == now + timedelta(seconds=120)
+
+
+def test_run_cycle_defaults_to_the_rate_floor_when_no_port_is_given():
+    """기존 호출자를 깨지 않는다. 기본은 사이트 종류의 하한(게시판 60초)."""
+    spec = _spec_for_interval(1)  # 하한보다 짧게 설정해도 60초로 clamp된다
+    now = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+
+    result = run_cycle([spec], {}, now, lambda s: FetchResult(status_code=200, body=""), BACKOFF)
+
+    assert result.states["ppomppu"].next_attempt_at == now + timedelta(seconds=60)

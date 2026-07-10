@@ -75,8 +75,15 @@ def run_cycle(
     now: datetime,
     fetch: Callable[[SiteSpec], FetchResult],
     policy: BackoffPolicy,
+    interval_for: Callable[[SiteSpec], timedelta] | None = None,
 ) -> CycleResult:
-    """due한 사이트만 1회씩 폴링·파싱하고 새 상태를 반환. 한 사이트의 실패는 다른 사이트를 막지 않는다."""
+    """due한 사이트만 1회씩 폴링·파싱하고 새 상태를 반환. 한 사이트의 실패는 다른 사이트를 막지 않는다.
+
+    `interval_for`는 **다음 시도까지의 주기를 정하는 포트**다. 기본은 사이트 종류의 레이트 하한
+    (게시판 60초 / 마켓 600초)만 적용한다. `__main__`은 여기에 **robots의 `Crawl-delay`**를 얹는다
+    (SEC-08: 선언된 지연이 우리 주기보다 길면 그쪽을 따른다). 포트로 뺀 이유는 robots 조회가
+    네트워크를 타기 때문이다 — 순수 루프가 소켓을 알 필요는 없다.
+    """
     next_states: dict[str, SiteState] = {}
     deals: list[ParsedDeal] = []
     alerts: list[Alert] = []
@@ -100,9 +107,10 @@ def run_cycle(
                     at=now,
                 )
             )
-        next_states[spec.name] = advance(
-            state, outcome, now, effective_interval(spec.interval, spec.kind), policy
+        interval = (
+            interval_for(spec) if interval_for else effective_interval(spec.interval, spec.kind)
         )
+        next_states[spec.name] = advance(state, outcome, now, interval, policy)
 
     return CycleResult(states=next_states, deals=deals, alerts=alerts, observations=observations)
 

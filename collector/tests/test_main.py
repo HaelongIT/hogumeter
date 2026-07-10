@@ -6,7 +6,10 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from collector.__main__ import ALLOW_NETWORK_ENV, SINK_FAILURE_LIMIT, main
+from collector.__main__ import ALLOW_NETWORK_ENV, SINK_FAILURE_LIMIT, _interval_port, main
+from collector.scheduler.fetcher import RobotsGate
+from collector.scheduler.loop import SiteSpec
+from collector.scheduler.policy import SiteKind
 from collector.scheduler.sites import hotdeal_boards
 
 
@@ -390,3 +393,88 @@ def test_normal_cycle_reports_zero_skipped(monkeypatch, capsys):
 
     cycle = next(e for e in _events(capsys.readouterr().out) if e["event"] == "cycle")
     assert cycle["skipped"] == 0 and cycle["written"] == 1
+
+
+# ── SEC-08: robots Crawl-delay가 실제로 폴링 주기에 반영되는가 ─────────
+#
+# `effective_interval_with_robots`는 처음부터 GREEN이었다 — **부르는 곳이 없었을 뿐이다.**
+# `run_cycle`은 우리 하한(60초)만 봤고, 뽐뿌가 120초를 선언해도 60초마다 두드렸다.
+# 그래서 여기엔 두 층의 테스트가 있다:
+#   ① `_interval_port` 합성 규칙 (max(설정, Crawl-delay, 하한))
+#   ② **`main()`이 그 포트를 실제로 주입하는가** — ①만으로는 오늘의 버그를 한 층 위에 재현한다.
+
+
+class CrawlDelayOpener(RecordingOpener):
+    """robots.txt로 `Crawl-delay`를 선언하는 사이트. 페이지는 빈 HTML."""
+
+    def __init__(self, seconds: int):
+        super().__init__()
+        self._robots = f"User-agent: *\nCrawl-delay: {seconds}\n".encode()
+
+    def __call__(self, url: str):
+        self.calls.append(url)
+        if url.endswith("/robots.txt"):
+            return (200, self._robots)
+        return (200, b"<html></html>")
+
+
+def test_declared_crawl_delay_actually_throttles_the_polling_loop(monkeypatch):
+    """robots가 1시간을 요구하면 두 번째 사이클엔 폴링하지 않는다.
+
+    이것이 배선을 보는 유일한 테스트다 — `main()`에서 `interval_for=`를 지우면 여기만 RED가 되고
+    아래 단위 테스트 3개는 GREEN을 유지한다. 순수 함수의 GREEN은 호출자의 존재를 증명하지 않는다.
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    opener = CrawlDelayOpener(seconds=3600)
+    # clock(): 루프 진입 전 1회 + 사이클당 1회. 두 번째 사이클은 90초 뒤 — 하한(60초)이라면 due다.
+    ticks = iter([NOW, NOW, NOW + timedelta(seconds=90)])
+
+    main(opener=opener, sleep=lambda _: None, clock=lambda: next(ticks), max_cycles=2)
+
+    pages = [u for u in opener.calls if not u.endswith("/robots.txt")]
+    assert len(pages) == len(hotdeal_boards())  # 사이클 2회, 사이트당 폴링은 1회뿐
+
+    # robots.txt는 호스트당 1회만 — fetcher와 주기 포트가 같은 RobotsGate(캐시)를 공유한다.
+    robots = [u for u in opener.calls if u.endswith("/robots.txt")]
+    assert len(robots) == len(set(robots)) == len(hotdeal_boards())
+
+
+def _board(seconds: int = 60) -> SiteSpec:
+    return SiteSpec(name="ppomppu", kind=SiteKind.BOARD, interval=timedelta(seconds=seconds),
+                    url="https://www.ppomppu.co.kr/zboard/list.php", encoding="utf-8",
+                    parse=lambda body, now: [])
+
+
+def _robots(body: str) -> RobotsGate:
+    return RobotsGate(opener=lambda url: (200, body.encode("utf-8")))
+
+
+def test_declared_crawl_delay_longer_than_ours_wins():
+    """뽐뿌가 120초를 선언하면 우리는 120초를 기다린다(SEC-08, 절대 원칙 5)."""
+    port = _interval_port(_robots("User-agent: *\nCrawl-delay: 120\n"))
+
+    assert port(_board(60)) == timedelta(seconds=120)
+
+
+def test_declared_crawl_delay_shorter_than_our_floor_loses():
+    """`설정으로 완화 불가` — 사이트가 1초를 허락해도 게시판 하한 60초를 지킨다."""
+    port = _interval_port(_robots("User-agent: *\nCrawl-delay: 1\n"))
+
+    assert port(_board(60)) == timedelta(seconds=60)
+
+
+def test_no_declared_delay_falls_back_to_our_floor():
+    port = _interval_port(_robots("User-agent: *\nDisallow: /admin/\n"))
+
+    assert port(_board(1)) == timedelta(seconds=60)  # 설정이 짧아도 하한으로 clamp
+
+
+def test_robots_lookup_failure_does_not_break_polling():
+    """robots를 못 읽으면 제약 없음(표준 관행). 그래도 우리 하한은 지킨다."""
+
+    def broken(url: str):
+        raise OSError("연결 거부")
+
+    port = _interval_port(RobotsGate(opener=broken))
+
+    assert port(_board(60)) == timedelta(seconds=60)

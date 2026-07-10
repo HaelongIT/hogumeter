@@ -39,5 +39,6 @@ paths:
 - `raw_deal_post`는 `(site, post_id)` UNIQUE **업서트**. `status` 허용집합은 **`ACTIVE`/`SOLD_OUT`/`DELETED`**(DB CHECK와 동일). `ENDED`는 `deal_event.status`의 값이지 여기 값이 아니다 — 한때 `parse_bunjang`이 이걸 내 `to_raw_records`가 터졌다(해소 2026-07-09).
   ⚠️ 번개 status 코드표는 여전히 **미실측**(`"0"=판매중`만 안다). 비-`"0"`을 전부 `SOLD_OUT`으로 보는 건 잠정 — `docs/91` Q-44.
 - 레이트 하한(게시판 60s / 마켓 600s)은 **설정으로 완화 불가**(SEC-08). `scheduler/policy.py`의 상수를 낮추지 말 것.
+- **robots `Crawl-delay`의 프로덕션 경로는 `__main__._interval_port` 하나뿐**이다 — `run_cycle(interval_for=...)`로 주입된다. 주기 = `max(설정, Crawl-delay, 하한)`. `run_cycle`은 순수해야 하므로 robots를 직접 부르지 않는다. **배선을 지우면 `test_declared_crawl_delay_actually_throttles_the_polling_loop`가 RED가 된다** — 이 함수는 한때 GREEN인 채로 호출자가 0이었다. (99: 2026-07-10)
 - 사이트 셀렉터·차단 징후·fixture 채취일의 실측은 `docs/98-field-notes.md`에 기록한다.
 - **SEC-07: `raw`(jsonb)에 담는 키는 허용집합 안에서만 늘린다.** 번개 응답에는 `uid`(판매자 식별자)·`location`(동 단위 주소)·`imp_id`(광고 추적자)가 온다 — `raw={**item}` 한 줄이면 전부 DB로 간다. `tests/test_privacy.py`가 golden 전수로 키와 **값**을 함께 잠근다(키 이름만 바꾼 우회도 잡는다). (99: 2026-07-10)
