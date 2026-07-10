@@ -81,6 +81,7 @@ def test_counters_report_yield_per_site():
         "conditional": 0,
         "shipping_unknown": 0,
         "shipping_unknown_by_site": {"ppomppu": 0, "ruliweb": 0, "fmkorea": 0},
+        "sold_out_by_site": {"ppomppu": 0, "ruliweb": 0, "fmkorea": 0},
         "stopped_sites": [],
     }
 
@@ -220,3 +221,31 @@ def test_shipping_unknown_by_site_lists_every_polled_site_even_at_zero():
     result = _result([SiteObservation("fmkorea", Outcome.OK, 0, 0)], deals=[])
 
     assert counters(result)["shipping_unknown_by_site"] == {"fmkorea": 0}
+
+
+def test_sold_out_is_counted_per_site():
+    """품절 표식이 죽어도 golden 테스트는 GREEN이다 — golden은 고정이고 사이트는 변한다.
+
+    **알림이 아니라 카운터로 낸다.** 뽐뿌는 골든에서 `.end2`가 0건이라(Q-19 미검증) 알림으로
+    만들면 매 사이클 오알림한다. 사실은 세고 결론은 사람이 낸다(절대 원칙 2).
+
+    `pre-deploy`: 어떤 사이트의 `sold_out`이 며칠째 0이면 그 사이트의 품절 셀렉터를 의심한다 —
+    루리웹의 `[종료]`가 정확히 그랬다(제목 앵커 밖에 있어 파서가 볼 수 없었다).
+    """
+    result = _result(
+        [SiteObservation("ruliweb", Outcome.OK, 3, 3), SiteObservation("ppomppu", Outcome.OK, 1, 1)],
+        deals=[
+            _deal("a"),
+            ParsedDeal(site="ruliweb", post_id="b", title="t", url="u", headline_price=1, status="SOLD_OUT"),
+            ParsedDeal(site="ruliweb", post_id="c", title="t", url="u", headline_price=1, status="SOLD_OUT"),
+        ],
+    )
+
+    c = counters(result)
+    assert c["sold_out_by_site"] == {"ruliweb": 2, "ppomppu": 0}  # 0도 센다
+
+
+def test_sold_out_by_site_is_zero_when_nothing_ended():
+    result = _result([SiteObservation("fmkorea", Outcome.OK, 1, 1)], deals=[_deal("1")])
+
+    assert counters(result)["sold_out_by_site"] == {"fmkorea": 0}

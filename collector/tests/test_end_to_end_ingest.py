@@ -193,3 +193,6 @@ def test_the_cycle_event_reports_the_real_bias_per_site(monkeypatch, connection,
     # `conditional`은 `shipping_unknown`의 **상위집합**이다: 배송비미상 8 + `카할` 1 + `수령:픽업` 1.
     # 픽업은 조건이지만 **배송 문제가 아니다** — 두 카운터가 다른 사실을 말한다는 증거다.
     assert cycle["conditional"] == 10
+    # 뽐뿌 0은 **Q-19의 증거**다: `.end2`가 골든에 0건이라 SOLD_OUT 경로가 검증된 적 없다.
+    # 운영에서 며칠째 0이면 셀렉터를 의심한다 — 루리웹의 `[종료]`가 정확히 그랬다.
+    assert cycle["sold_out_by_site"] == {"ppomppu": 0, "ruliweb": 3, "fmkorea": 2}
