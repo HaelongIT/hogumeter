@@ -350,3 +350,41 @@ def test_ppomppu_without_end2_is_active():
     (deal,) = parse_ppomppu(_ppomppu_row("baseList-title").decode("cp949"), NOW)
 
     assert deal.status == "ACTIVE"
+
+
+# ── 루리웹의 "가격 없음" 10건은 무엇인가 (실측 내역) ──────────────────────
+#
+# `no_price` 카운터가 36%를 가리키면 파서 버그로 오독하기 쉽다. 내역을 못박아 둔다.
+#   ① 제목이 `…`로 잘려 가격을 잃은 것 2건 (docs/91 Q-18 — 목록만으로는 못 고친다)
+#   ② 무료 상품 4건 — `무료`는 가격 패턴이 아니다(BM-02 AC-3). **0원으로 만들지 않는다**:
+#      0원이 분포에 들어가면 기준가를 무너뜨린다.
+#   ③ 나머지는 애초에 가격이 없는 글(공지·"가격다양").
+
+
+def test_free_items_are_skipped_not_priced_at_zero():
+    """`무료`를 0원으로 읽으면 그 0이 기준가 분포에 들어간다. 값 없음을 값으로 쓰지 않는다."""
+    deals = parse_ruliweb(_read("ruliweb/list_normal.html"), NOW)
+
+    free = [d for d in deals if '무료' in d.title and d.headline_price is None]
+    assert len(free) >= 3
+    assert all(d.headline_price is None for d in free)
+
+
+def test_truncated_titles_sometimes_lose_the_price():
+    """목록이 긴 제목을 `...`(ASCII 3점, U+2026 아님)으로 자른다 — `(163,`만 남으면 콤마 패턴이 안 된다.
+
+    **잘림 6건 중 가격을 잃은 것은 2건뿐이다.** 나머지는 가격 뒤에서 잘렸다 — "잘렸으면 가격이 없다"는
+    내 첫 단정은 틀렸고 이 테스트가 잡았다. 고칠 수 없는 것은 세어서 노출한다(`no_price`). 글 본문이 필요하다(Q-18).
+    """
+    deals = parse_ruliweb(_read("ruliweb/list_normal.html"), NOW)
+
+    truncated = [d for d in deals if d.title.endswith('...')]
+    assert len(truncated) == 6
+    assert sum(1 for d in truncated if d.headline_price is None) == 2
+
+
+def test_ruliweb_no_price_count_is_ten():
+    """숫자를 고정한다 — 파서를 고칠 때 이 수가 움직이면 무엇이 바뀌었는지 설명해야 한다."""
+    deals = parse_ruliweb(_read("ruliweb/list_normal.html"), NOW)
+
+    assert sum(1 for d in deals if d.headline_price is None) == 10
