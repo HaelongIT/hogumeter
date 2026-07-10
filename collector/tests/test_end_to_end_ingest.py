@@ -173,3 +173,23 @@ def test_shipping_unknown_tags_reach_the_database(monkeypatch, connection, golde
         by_site = dict(cursor.fetchall())
 
     assert by_site == {"fmkorea": 3, "ppomppu": 1, "ruliweb": 4}
+
+
+@pytest.mark.integration
+def test_the_cycle_event_reports_the_real_bias_per_site(monkeypatch, connection, golden_opener, capsys):
+    """`docker logs`가 폴링을 켠 사람의 **유일한 창**이다. 그 창에 실제 값이 나오는지 본다.
+
+    카운터가 순수 함수로 GREEN이어도, 엔트리포인트가 그것을 이벤트에 싣지 않으면 아무도 못 본다.
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    main(opener=golden_opener, sink=RawDealSink(connection), sleep=lambda _: None,
+         clock=lambda: NOW, max_cycles=1)
+
+    cycle = next(e for e in _events(capsys.readouterr().out) if e["event"] == "cycle")
+
+    assert cycle["shipping_unknown"] == 8
+    assert cycle["shipping_unknown_by_site"] == {"ppomppu": 1, "ruliweb": 4, "fmkorea": 3}
+    assert cycle["no_price"] == 10  # 루리웹 전량(docs/98: 잘림 2 · 무료 4 · 가격 없음 4)
+    # `conditional`은 `shipping_unknown`의 **상위집합**이다: 배송비미상 8 + `카할` 1 + `수령:픽업` 1.
+    # 픽업은 조건이지만 **배송 문제가 아니다** — 두 카운터가 다른 사실을 말한다는 증거다.
+    assert cycle["conditional"] == 10
