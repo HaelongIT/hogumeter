@@ -49,6 +49,6 @@
 | [`91-open-questions.md`](91-open-questions.md) | 기술 보류(잠정값 + 재개 트리거) |
 | [`98-field-notes.md`](98-field-notes.md) | 사이트별 실측(셀렉터·응답 특성·차단 징후) |
 | [`99-lessons.md`](99-lessons.md) | TDD·디버깅 교훈 누적 |
-| [`../working-area/`](../working-area/) | 결정 보드(정할 것/정한 것)·배포 체크리스트 |
+| [`../working-area/`](../working-area/) | **`progress-log`(무중단 중 알릴 것, 최신 위)** · 결정 보드(정할 것/정한 것) · 배포 체크리스트 |
 
 > 문서 지도의 요약 버전은 [`../CLAUDE.md`](../CLAUDE.md) `## 문서 지도`에도 있다(작업용).

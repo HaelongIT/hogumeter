@@ -16,6 +16,15 @@
 
 ---
 
+## 2026-07-10 — 지침·문서 전수 감사 (거짓말 18건 정정, Q-59 신설)
+
+- **한 일**: 해소된 Q 11개를 역참조로 훑어 **현재형으로 거짓을 말하는 곳**을 전부 고쳤다. 코드 주석 5곳(`scheduler/__init__.py`가 "DB 적재는 아직 없다"고 했다) · 규칙 파일 2곳 · `docs/01` 패키지 트리(없는 `used/watch/priority`를 실재처럼 그림, 있는 `signal/cadence/dealset/review/time` 누락, `adapter/scheduler` 설명이 "알림 평가·캐시 만료") · `CLAUDE.md`(첫머리가 "현재 개발 대상=benchmark, 선행 M0", 빌드 명령에 scripts 6종 누락, 문서 지도에 progress-log·rules 없음) · `README`(스택 표, 저장소 구조에 scripts/.github/.githooks/.claude 누락) · `docs/README` · `docs/31`.
+- **가장 위험했던 것**: `decisions-needed`와 `pre-deploy`가 **"Q-36(커서 영속화)"**라고 불렀는데 Q-36은 "collector DB 적재기"였고 해소됐다. 그래서 **REL-03(커서 영속화)을 추적하는 항목이 어디에도 없었다.** → `docs/91` **Q-59 신설**. 또 `pre-deploy`가 collector를 `restart: always`라 했는데 실제는 `on-failure`다(반대로 적혀 있었다).
+- **자율로 정한 것**: `docs/01` 트리는 계획 패키지를 **지우지 않고 📐로 표시**했다(기획이 살아 있으므로 지우면 그것도 거짓). `.claude/rules/core-java.md`에 스케줄러 함정 3줄 추가(`@EnableScheduling` 없으면 조용히 무시 / `fixedDelay`는 기동 즉시 1회 / 틱마다 수치 남기기).
+- **못 고친 것**: `core/domain/BenchmarkParams.java:8`이 해소된 Q-1을 가리킨다. **core 기존 파일이라 모듈 소유권상 손대지 않았다** — 상대가 고칠 몫.
+- **⚠️ 당신이 볼 것**: 없음(전부 문서·주석). 코드 동작 무변경을 회귀로 증명(collector 192 · web 94 · core GREEN).
+- **다음**: 우리 레인에 막히지 않은 코드 항목 없음. 인수인계 지점 유지.
+
 ## 2026-07-10 — 🛑 인수인계 지점 (여기서 멈춤)
 
 **상태**: 워킹트리 깨끗 · 전 테스트 GREEN · 잔여 컨테이너 0. 미푸시 커밋만 남았다(`git push origin main`은 사용자 몫).

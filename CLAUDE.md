@@ -6,7 +6,9 @@
 ## 프로젝트 한 줄 정의
 핫딜 커뮤니티 데이터로 "핫딜 기준가"를 산출하고, 현재가와의 갭으로 "지금 사도 호구가 아닌지"를 알려주는 **1인용** 구매 의사결정 보조 시스템.
 
-> **현재 개발 대상 = `benchmark`(기준가 엔진) 모듈 — 정본은 `docs/benchmark/00~07`.** 선행 작업은 M0(스캐폴딩·수치 확정·스파이크, `docs/30-roadmap.md`). 최신 상태·한계는 항상 코드·git·`docs/91-open-questions.md`가 정본.
+> **현재 = M1(신품 코어 루프) 진행 중.** M0 완료. 수집→적재→파이프라인 트리거→기준가→web 판단 화면까지 `docker compose up -d` 하나로 흐른다(`scripts/smoke.sh`가 매번 종단 검증). 기준가 엔진 정본은 `docs/benchmark/00~07`.
+> M1을 막는 것: 텔레그램 토큰(Q-20)·네이버 키(Q-3)·실 폴링 승인·D-3 결정, 그리고 **코드 안의 블로커 Q-27 ③**(품절 딜 오알림 — 토큰 켜기 전 필수).
+> **최신 상태·한계는 항상 코드·git·`docs/91-open-questions.md`·`working-area/progress-log.md`가 정본.** 이 문단도 낡을 수 있다.
 
 ## 절대 원칙 (모든 코드 결정의 잣대)
 1. **정직성**: 표본 빈약 시 통계 용어 금지. 기준가는 항상 "n건(교차 m건)" 동반.
@@ -21,7 +23,7 @@
 - **collector**: Python 3.12 별도 컨테이너 — 핫딜 3사(뽐뿌/루리웹/펨코) + 번개장터 폴링. krepe90/user-hotdeal-bot 골격 최대 재활용. 도구: uv + pytest.
 - **DB**: PostgreSQL 16 단일. Flyway 마이그레이션(core 단독 소유). JSONB는 크롤링 원본 보관 전용.
 - **알림**: 텔레그램 봇 (+ 인라인 버튼 승격 액션).
-- **web**: React — 최소 슬라이스(등록+설정) 선개발, 나머지 후순위. 빌드: Vite + TypeScript.
+- **web**: React — 제품 등록 + **읽기 전용 판단 화면**(신호등·기준가·갭·주기) + **구매 기록(PUR)**. 비교·승격 큐는 후순위. 빌드: Vite + TypeScript.
 - **extension**: 크롬 확장(쿠팡 리더) — 기능4 단계에서만.
 - **배포**: Docker Compose, AWS EC2. AWS 종속 관리형 서비스에 코어 로직 금지(이식성). CI: GitHub Actions(테스트 실행).
 
@@ -94,21 +96,28 @@
 - **브랜치 전환·머지·리베이스는 사용자 지시가 있을 때만.** `git pull`도 머지다 — 지시받으면 하고, 충돌 후보를 먼저 대조해 보고한다.
 - `.gitignore` 필수: `.env*`(텔레그램 봇 토큰·네이버 API 키 등 로컬 시크릿)·빌드 산출물·의존성 디렉토리.
 
-## 빌드·테스트 명령 (M0 스캐폴딩 후 유효)
+## 빌드·테스트 명령
 ```bash
-# core (Spring Boot)
-./gradlew test          # 단위·통합 테스트
-./gradlew bootRun       # 로컬 실행
-# collector (Python)
-uv run pytest           # 파서·파이프라인 테스트
-# web (React)
-npm test                # 단위 테스트
-npm run build           # 타입체크 + 빌드
+# 모듈별
+cd core       && ./gradlew test        # 단위 + Testcontainers 통합
+cd collector  && uv run pytest         # 전체(Docker 필요). 빠른 루프: -m "not integration"
+cd web        && npm test && npm run build
+
 # 전체 기동
 docker compose up -d
+
+# 종단·복구·게이트 (전부 CI가 돌린다. 격리 프로젝트/일회용 컨테이너만 쓴다)
+bash scripts/smoke.sh              # 빌드→기동→web→nginx→core→postgres→파이프라인→기준가 (13단계)
+bash scripts/backup.sh             # pg_dump + gzip + 7일 보관 + 오프사이트(설정 시)
+bash scripts/restore-drill.sh      # 덤프를 일회용 컨테이너에 복원해 검증 (REL-04)
+bash scripts/rollback-drill.sh     # V 전진 → R 역순 후진 → 재전진 (REL-05)
+bash scripts/offsite-drill.sh      # MinIO에 대고 운영과 같은 업로드 경로 리허설
+bash .claude/hooks/guard.test.sh   # 네트워크 차단 훅의 차단/통과 계약
+bash .githooks/pre-commit.test.sh  # gitleaks 훅의 차단/통과 계약
 ```
 - 테스트 DB: **Testcontainers(PostgreSQL 16)** — 통합 테스트 전용. 순수 도메인은 DB 없이 단위 테스트로 검증.
 - 로컬 시크릿: 루트 `.env`(gitignore) — 텔레그램 봇 토큰·네이버 쇼핑 API 키·DB 비밀번호.
+- **복구 절차(백업·롤백·오프사이트)는 리허설로만 존재를 증명한다.** 드릴은 전부 일회용 격리 컨테이너에서 돈다 — 운영/개발 DB에 절대 닿지 않는다.
 
 ## Autonomous(무중단) 모드 — 기본 운전 방식
 > **기본값: 한 번 시작하면 "진짜 중요한 것" 말고는 멈추지 않고, 스스로 계획하며 계속 개발한다.**
@@ -146,4 +155,6 @@ docker compose up -d
 - `docs/90-planning-final.md` 기획 확정본 (최종 권위)
 - `docs/benchmark/00~07` 기준가 엔진 모듈 상세 — 개요·아키텍처·데이터모델·API·**04 인수조건(=TDD 기준)**·비기능·TDD·에러코드
 - `docs/91-open-questions.md` 기술 보류 보드(잠정값+재개 트리거) / `docs/98-field-notes.md` 사이트별 실측 / `docs/99-lessons.md` 교훈 누적
-- `working-area/` 작업 보드 — `decisions-needed`(정할 것)·`decision-log`(정한 것)·`pre-deploy-checklist`(운영 배포 갭)·`review-template/`(코드리뷰 틀, 복사해서 사용)
+- `working-area/` 작업 보드 — `progress-log`(무중단 중 사용자에게 알릴 것, 최신 위)·`decisions-needed`(정할 것)·`decision-log`(정한 것)·`pre-deploy-checklist`(운영 배포 갭)·`review-template/`(코드리뷰 틀, 복사해서 사용)
+- `.claude/rules/<scope>.md` 언어·디렉토리 한정 규칙(`paths:` frontmatter — 해당 파일을 열 때만 로드). `core-java`·`collector-python`·`web-react`
+- `.claude/hooks/` `session-brief`(SessionStart: 열린 보드·드리프트 지표 주입)·`guard`(PreToolUse: 실 네트워크 차단) + 각 `*.test.sh`

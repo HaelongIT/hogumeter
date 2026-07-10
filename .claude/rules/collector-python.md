@@ -19,7 +19,7 @@ paths:
 ## 도구
 
 - 테스트: `uv run pytest`. **shebang/경로 문제로 죽으면** `uv run python -m pytest`로 우회하거나 `uv sync --reinstall`로 venv 재생성(콘솔 스크립트가 옛 경로로 baked됨). (99: 2026-07-04)
-- 신규 런타임 의존은 **승인 대상**이다(현재 런타임 의존은 `beautifulsoup4` 하나). psycopg·Testcontainers-python 도입은 `docs/91` Q-36.
+- 신규 런타임 의존은 **승인 대상**이다. 현재 런타임 의존은 `beautifulsoup4`·`psycopg[binary]` 둘, 테스트 의존에 `testcontainers[postgres]`(2026-07-09 승인, decision-log).
 - **stdout은 JSON Lines다**(OBS-01, `observability.py`). 문장이 아니라 이벤트를 낸다 — 테스트·스모크는 문자열을 grep하지 말고 `json.loads`로 이벤트를 읽는다(문구는 바뀌어도 계약은 안 바뀐다). `ensure_ascii`가 한글을 이스케이프해 cp949 콘솔에서도 죽지 않는다. 그래도 출력 문구는 `text.encode("ascii")`로 단언한다. (99: 2026-07-09)
 - **엔트리포인트는 테스트 GREEN이어도 한 번은 실제로 실행해본다.**
 

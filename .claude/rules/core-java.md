@@ -20,4 +20,10 @@ paths:
 
 - **윈도우 확장은 "표본이 실제로 증가했을 때만" 유효 범위·표기를 갱신한다**(`wider.size() > sample.size()` 가드). 그래야 "과거 딜 없음 → 확장 무발동(null)"이 성립해 경계 테스트가 tier만 순수 격리한다. 상한(12개월) 밖 딜은 어떤 경우도 미포함. BM-04 병합 윈도우·BM-05 표본 윈도우에도 같이 적용. (99: 2026-07-04)
 
-> TDD·순수 도메인·파라미터 주입·Flyway 소유권 규율은 CLAUDE.md에 있다. 여기 옮겨 적지 않는다 — 중복 지침은 준수율을 떨어뜨린다.
+## 스케줄러 (`adapter/scheduler`)
+
+- **`@EnableScheduling`이 없으면 `@Scheduled`는 조용히 무시된다.** 에러도 로그도 없고 그냥 안 돈다. 애노테이션 존재가 아니라 **등록 사실**을 단언하라 — `ScheduledTaskHolder.getScheduledTasks()`에 그 메서드가 있는가(`PipelineSchedulerWiringTest`). `sleep`으로 실행을 기다리지 않는다. (99: 2026-07-10)
+- **`fixedDelay`는 기본적으로 기동 즉시 1회 돈다.** 그러면 `@SpringBootTest`가 스케줄러에 오염된다(컨테이너 공유 + 롤백 없음). `initialDelay = interval`로 미루고, `src/test/resources/application.properties`가 `core.pipeline.enabled=false`로 전역 차단한다(배선 테스트만 `properties`로 되켬).
+- **주기 작업은 매 틱 무엇을 했는지 수치로 남긴다**(OBS-02). 전후 스냅샷의 **차이**를 내고 `pending`(처리되지 않고 남은 입력)을 포함한다 — 단조 증가하면 도는 척하는 것이다. 로그 문구를 테스트하지 말고 `Consumer<Report>` seam으로 **값**을 시험한다.
+
+> TDD·순수 도메인·파라미터 주입·Flyway 소유권·**모듈 소유권(core=상대, 신규 파일 additive만 자율)**은 CLAUDE.md에 있다. 여기 옮겨 적지 않는다 — 중복 지침은 준수율을 떨어뜨린다.

@@ -97,7 +97,7 @@
 | collector | Python 3.12 · uv · pytest · BeautifulSoup |
 | DB | PostgreSQL 16 (Flyway 마이그레이션은 core 단독 소유, JSONB는 크롤링 원본 보관 전용) |
 | 알림 | Telegram Bot (인라인 버튼 승격) |
-| web | React · Vite · TypeScript (최소 슬라이스 선개발) |
+| web | React · Vite · TypeScript (등록 + 판단 화면 + 구매 기록) |
 | extension | Chrome 확장 (쿠팡 리더, 기능4 단계) |
 | 배포·CI | Docker Compose · AWS EC2 · GitHub Actions |
 
@@ -147,7 +147,11 @@ hogumeter/
 ├── collector/       # Python — 핫딜 3사 + 번개장터 폴링·파싱
 ├── web/             # React — 판단 화면(신호등·기준가·갭·주기·구매기록) + 제품 등록
 ├── docs/            # 기획·설계 정본 (1·2차) — 읽기 순서는 docs/README.md
-├── working-area/    # 작업 보드 (결정·로그·배포 체크리스트)
+├── working-area/    # 작업 보드 (진행 로그·결정·배포 체크리스트)
+├── scripts/         # 종단 스모크 · 백업/복원/롤백/오프사이트 드릴 (전부 CI가 돌린다)
+├── .github/         # CI 워크플로 + Dependabot
+├── .githooks/       # 선택 활성화: 커밋 전 시크릿 스캔 (+ 계약 테스트)
+├── .claude/         # 에이전트 하네스 — rules(경로별 규칙) · hooks(브리핑·네트워크 가드)
 ├── docker-compose.yml
 ├── .env.example
 └── CLAUDE.md        # 프로젝트 헌법 (작업 규율·TDD·기록 프로토콜)

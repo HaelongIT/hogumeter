@@ -113,7 +113,8 @@ def _poll(
     """한 사이트 폴링. fetch·parse의 어떤 예외도 TRANSIENT로 흡수한다(REL-02 격리).
 
     파싱 실패를 TRANSIENT로 두는 건 사이트 구조 변경이 일시 장애와 구분되지 않기 때문이다.
-    구조 변경의 본격 감지는 성공률 임계(REL-06) — 이번 범위 밖(docs/91 Q-40).
+    구조 변경의 본격 감지는 성공률 임계(REL-06) — `scheduler/drift.py`가 맡는다.
+    이 함수는 관측(`SiteObservation`)만 내고 판정하지 않는다.
     """
     try:
         result = fetch(spec)

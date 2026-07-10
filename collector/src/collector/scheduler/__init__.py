@@ -6,5 +6,5 @@
 - `fetcher`— `Opener` 포트 뒤에 네트워크를 격리. robots 게이트 포함.
 
 실 네트워크는 `fetcher.urllib_opener` 한 곳뿐이고, `__main__`이 `COLLECTOR_ALLOW_NETWORK=1`
-없이는 그걸 부르지 않는다. DB 적재는 아직 없다(docs/91 Q-36).
+없이는 그걸 부르지 않는다. 수집한 딜은 `db/raw_deal_sink.py`가 `raw_deal_post`에 업서트한다.
 """

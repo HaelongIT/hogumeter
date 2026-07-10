@@ -14,28 +14,31 @@
 TDD의 성패는 도메인의 순수성에 달려 있다. 아래 경계를 지킬 것.
 
 ```
-core/
+core/                          # ✅ = 실재 / 📐 = 계획(아직 패키지 없음)
 ├── domain/                    # 순수 Java. Spring/JPA/IO 의존 금지. 단위 테스트만으로 완결
-│   ├── product/               # Product, Variant, 축 모델
-│   ├── deal/                  # DealEvent, 병합 판정, 상태기계(전이 규칙)
-│   ├── benchmark/             # 기준가 엔진: 정규화, 이상치 판정, median/P25, 3단 표본 판정
-│   ├── matching/              # 문자열 정규화·토큰화·별칭사전 매칭, 3단 판정(확정/후보/기각)
-│   ├── alert/                 # 알림 판정: 트리거 평가, 최고강도 1발, 방해금지 보류, 후속 알림 규칙
-│   ├── used/                  # 3계층 필터(AND/OR그룹 A·B모드/NOT), 매물 생애주기, 스냅샷
-│   ├── purchase/              # (2차) Purchase 상태기계, 상태×트리거 판정, 스냅샷·성적표 as-of. docs/15
-│   ├── digest/                # (2차) 다이제스트 창·귀속·섹션 합성(순수). docs/18
-│   ├── watch/                 # (2차·[WATCH-유보]) 핀 자격·결말 전이·회고. docs/17
-│   └── priority/              # (2차·[PRI-계류]) 대기 술어·발화 판정. docs/19
-│   #  신호·주기(SIG/CAD, docs/16)는 신규 수집 0 read-model — benchmark 위 순수 함수(색 판정·주기)로 배치, 모듈 승격은 구현 시 판단
-│   #  집합 술어·시간 좌표계(docs/03)는 deal/benchmark의 공유 순수 규칙
+│   ├── ✅ product/            # Product, Variant, 축 모델
+│   ├── ✅ deal/               # DealEvent, 병합 판정, 상태기계, 가격 재처리 산술(PriceRefresh)
+│   ├── ✅ benchmark/          # 기준가 엔진: 정규화, 이상치 판정, median/P25, 3단 표본 판정
+│   ├── ✅ matching/           # 문자열 정규화·토큰화·별칭사전 매칭, 3단 판정(확정/후보/기각)
+│   ├── ✅ alert/              # 알림 판정: 트리거 평가, 최고강도 1발, 방해금지 보류, 후속 알림 규칙
+│   ├── ✅ purchase/           # (2차) Purchase 상태기계, 상태×트리거 판정, 스냅샷·성적표 as-of. docs/15
+│   ├── ✅ digest/             # (2차) 다이제스트 창·귀속·섹션 합성(순수). docs/18
+│   ├── ✅ signal/             # (2차) SIG 신호등 색 판정. docs/16
+│   ├── ✅ cadence/            # (2차) CAD 딜 주기(발생·간격·경과일, 예측 없음). docs/16
+│   ├── ✅ dealset/            # 집합 술어(pricingSet/occurrenceSet/signalSet). docs/03
+│   ├── ✅ review/             # 승격 큐 항목(이상치·미상 분류)
+│   ├── ✅ time/               # 시간 좌표계·유효 창·신선도. docs/03
+│   ├── 📐 used/               # 3계층 필터·매물 생애주기·스냅샷 (M2)
+│   ├── 📐 watch/              # (2차·[WATCH-유보]) 핀 자격·결말 전이·회고. docs/17 (M6 조건부)
+│   └── 📐 priority/           # (2차·[PRI-계류]) 대기 술어·발화 판정. docs/19 (M6 축소)
 ├── application/               # 유스케이스 오케스트레이션. port 인터페이스 정의
-│   └── port/ (out: repository, naverClient, telegramSender, clock / in: usecase)
+│   └── port/ (out: repository, currentPriceProvider, alertSender, clock / in: usecase)
 └── adapter/
-    ├── persistence/           # JPA 구현. @DataJpaTest + Testcontainers
-    ├── web/                   # REST 컨트롤러 (web + extension ingest). @WebMvcTest
-    ├── telegram/              # 봇 어댑터 (발송 + 인라인 버튼 콜백 → reviewQueue 유스케이스)
-    ├── naver/                 # 네이버 쇼핑 API 클라이언트. WireMock 테스트
-    └── scheduler/             # 알림 평가·방해금지 플러시·캐시 만료
+    ├── ✅ persistence/        # JPA 구현. Testcontainers
+    ├── ✅ web/                # REST 컨트롤러. @WebMvcTest (extension ingest는 M3)
+    ├── ✅ telegram/           # 봇 어댑터 — **현재 StubAlertSender(로그만)**. 실 어댑터는 토큰 발급 후(Q-20)
+    ├── ✅ naver/              # 네이버 쇼핑 클라이언트 — **현재 StubCurrentPriceProvider(0 반환)**. 키 발급 후(Q-3·Q-53)
+    └── ✅ scheduler/          # **파이프라인 트리거** — 아래 "누가 언제 소비하는가" 참조
 ```
 
 **규칙**

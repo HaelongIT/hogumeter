@@ -12,7 +12,7 @@ const respond = (status: number, body: unknown) =>
 describe('api client', () => {
   beforeEach(() => vi.restoreAllMocks())
 
-  it('제품 목록을 그대로 돌려준다 (봉투 없음, Q-2)', async () => {
+  it('제품 목록을 그대로 돌려준다 (봉투 없음 — Q-2 확정)', async () => {
     respond(200, [{ productId: 1, name: 'x', category: null, demandAxisMode: 'GROUPED', variants: [] }])
 
     await expect(api.listProducts()).resolves.toHaveLength(1)

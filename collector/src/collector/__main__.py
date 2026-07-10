@@ -39,7 +39,7 @@ ALLOW_NETWORK_ENV = "COLLECTOR_ALLOW_NETWORK"
 # docs/31 위임 수치(미승인 잠정) — docs/91 Q-37.
 BACKOFF = BackoffPolicy(base=timedelta(seconds=60), factor=2, cap=timedelta(minutes=30))
 
-# docs/31 위임 수치(미승인 잠정) — docs/91 Q-40. 실 수집 데이터로 재조정한다.
+# docs/31 위임 수치(미승인 잠정) — docs/91 Q-45. 실 수집 데이터로 재조정한다.
 DRIFT = DriftPolicy(window=10, min_success_rate=0.6, zero_yield_streak=3)
 
 # 사이클 간 대기. 실제 폴링 주기는 사이트별 next_attempt_at이 강제하므로(하한 60s)

@@ -80,7 +80,10 @@ def backoff_delay(failures: int, policy: BackoffPolicy) -> timedelta:
 
 @dataclass(frozen=True)
 class SiteState:
-    """사이트별 폴링 커서. 영속화(REL-03)는 DB 도달 후 — docs/91 Q-36.
+    """사이트별 폴링 커서. **메모리에만 있다** — 영속화(REL-03)는 `docs/91` Q-59.
+
+    막고 있는 것은 DB가 아니다(적재기는 이미 있다). **차단당한 사이트의 재개 경로**가 미결이라
+    (`decisions-needed` D-3) 지금 디스크에 남기면 `stopped=True`가 영구히 굳는다.
 
     next_attempt_at=None은 두 가지 뜻이라 단독으로 읽지 말고 is_due()를 쓸 것:
     신규 상태(즉시 due) 또는 stopped(영구 미due). stopped가 우선한다.
