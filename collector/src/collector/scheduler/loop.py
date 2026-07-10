@@ -53,11 +53,19 @@ class SiteObservation:
 
     `ok=True, deal_count=0`이 구조 변경의 전형적 징후다 — 예외 없이 조용히 빈 목록을 낸다.
     (실제로 뽐뿌 셀렉터 체인이 끊겼을 때 그랬다.)
+
+    `priced_count`는 그 **한 층 아래** 징후다: 딜 수는 그대로인데 제목 셀렉터만 끊기면 가격이
+    전부 사라진다. 딜이 0이 아니므로 위 신호로는 절대 안 잡힌다. 루리웹은 정상 상태에서도
+    36%가 가격 없음이라 "일부"로는 못 가른다 — **전부**일 때만 구조 변경으로 본다.
+
+    `priced_count`에 기본값을 주지 않는다 — 생산자가 안 채우면 정상 사이클이 "가격 0"으로
+    오알림한다. 기본값은 침묵하는 거짓말이다(축적된 규칙: "값 없음"을 값으로 표현하지 않는다).
     """
 
     site: str
     outcome: Outcome
     deal_count: int
+    priced_count: int
 
 
 @dataclass(frozen=True)
@@ -97,7 +105,15 @@ def run_cycle(
 
         outcome, site_deals, status_code = _poll(spec, fetch, now)
         deals.extend(site_deals)
-        observations.append(SiteObservation(spec.name, outcome, len(site_deals)))
+        observations.append(
+            SiteObservation(
+                spec.name,
+                outcome,
+                len(site_deals),
+                # 제목 셀렉터만 끊기면 딜 수는 그대로인데 가격이 전부 사라진다(REL-06).
+                sum(1 for deal in site_deals if deal.headline_price is not None),
+            )
+        )
         if outcome is Outcome.BLOCKED:
             alerts.append(
                 Alert(

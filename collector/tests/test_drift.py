@@ -17,11 +17,11 @@ POLICY = DriftPolicy(window=5, min_success_rate=0.6, zero_yield_streak=3)
 
 
 def _ok(deals: int = 10) -> SiteObservation:
-    return SiteObservation("ppomppu", Outcome.OK, deals)
+    return SiteObservation("ppomppu", Outcome.OK, deals, deals)
 
 
 def _fail() -> SiteObservation:
-    return SiteObservation("ppomppu", Outcome.TRANSIENT, 0)
+    return SiteObservation("ppomppu", Outcome.TRANSIENT, 0, 0)
 
 
 def _feed(observations, policy=POLICY):
@@ -111,9 +111,9 @@ def test_recovery_re_arms_the_alert():
 def test_sites_are_tracked_independently():
     history, alerts = DriftHistory(), []
     for _ in range(4):
-        history, emitted = observe(history, SiteObservation("ppomppu", Outcome.OK, 0), POLICY, NOW)
+        history, emitted = observe(history, SiteObservation("ppomppu", Outcome.OK, 0, 0), POLICY, NOW)
         alerts.extend(emitted)
-        history, emitted = observe(history, SiteObservation("ruliweb", Outcome.OK, 9), POLICY, NOW)
+        history, emitted = observe(history, SiteObservation("ruliweb", Outcome.OK, 9, 9), POLICY, NOW)
         alerts.extend(emitted)
 
     assert [a.site for a in alerts] == ["ppomppu"]
@@ -124,7 +124,7 @@ def test_sites_are_tracked_independently():
 
 def test_blocked_is_not_counted_as_drift():
     """차단은 이미 사이트 중지 + Alert로 처리된다. 드리프트 알림까지 겹치면 소음이다."""
-    blocked = SiteObservation("ppomppu", Outcome.BLOCKED, 0)
+    blocked = SiteObservation("ppomppu", Outcome.BLOCKED, 0, 0)
 
     _, alerts = _feed([_ok()] + [blocked] * 5)
 
@@ -136,3 +136,64 @@ def test_policy_rejects_nonsense():
         DriftPolicy(window=0, min_success_rate=0.6, zero_yield_streak=3)
     with pytest.raises(ValueError):
         DriftPolicy(window=5, min_success_rate=1.5, zero_yield_streak=3)
+
+
+# ── 딜은 나오는데 **가격이 하나도 없다** ────────────────────────────────
+#
+# REL-06은 `deals == 0` 연속만 본다. 그런데 오늘 찾은 파서 결함 다섯 중 셋은
+# **딜은 그대로 나오는데 값이 틀리거나 사라지는** 부류였다(품절 표식 사망·가격 오검출·배송비 유실).
+#
+# 그중 기계가 잡을 수 있는 것은 하나다: 제목 셀렉터가 끊기면 딜 수는 그대로인데
+# **가격이 전부 None**이 된다. 루리웹은 정상 상태에서도 36%가 가격 없음이라 "일부"로는 못 잡는다 —
+# **전부**일 때만 잡는다.
+
+
+def test_deals_without_any_price_raise_drift():
+    policy = DriftPolicy(window=10, min_success_rate=0.6, zero_yield_streak=3)
+    history = DriftHistory()
+
+    for _ in range(3):
+        history, alerts = observe(history, _obs("ruliweb", deals=28, priced=0), policy, NOW)
+
+    assert alerts
+    assert "가격이 하나도 없습니다" in alerts[0].reason
+    assert "**" not in alerts[0].reason  # 콘솔 로그는 렌더링되지 않는다
+
+
+def test_some_deals_without_price_is_normal():
+    """루리웹은 정상 상태에서도 28건 중 10건이 가격 없음이다. 오차단은 게이트를 꺼지게 만든다."""
+    policy = DriftPolicy(window=10, min_success_rate=0.6, zero_yield_streak=3)
+    history = DriftHistory()
+
+    for _ in range(6):
+        history, alerts = observe(history, _obs("ruliweb", deals=28, priced=18), policy, NOW)
+        assert alerts == []
+
+
+def test_price_yield_recovers_and_can_alert_again():
+    policy = DriftPolicy(window=10, min_success_rate=0.6, zero_yield_streak=2)
+    history = DriftHistory()
+
+    for _ in range(2):
+        history, first = observe(history, _obs("ppomppu", deals=21, priced=0), policy, NOW)
+    assert first
+    history, _ = observe(history, _obs("ppomppu", deals=21, priced=21), policy, NOW)  # 회복
+    for _ in range(2):
+        history, again = observe(history, _obs("ppomppu", deals=21, priced=0), policy, NOW)
+
+    assert again  # 무장 해제 후 다시 알린다
+
+
+def test_zero_deals_is_still_the_old_signal():
+    """`deals == 0`은 여전히 별개 신호다. 두 사실을 한 알림으로 뭉치지 않는다."""
+    policy = DriftPolicy(window=10, min_success_rate=0.6, zero_yield_streak=2)
+    history = DriftHistory()
+
+    for _ in range(2):
+        history, alerts = observe(history, _obs("fmkorea", deals=0, priced=0), policy, NOW)
+
+    assert alerts and "0건" in alerts[0].reason
+
+
+def _obs(site: str, *, deals: int, priced: int) -> SiteObservation:
+    return SiteObservation(site=site, outcome=Outcome.OK, deal_count=deals, priced_count=priced)

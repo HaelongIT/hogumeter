@@ -64,9 +64,9 @@ def _deal(post_id: str, conditions=()) -> ParsedDeal:
 def test_counters_report_yield_per_site():
     result = _result(
         [
-            SiteObservation("ppomppu", Outcome.OK, 21),
-            SiteObservation("ruliweb", Outcome.OK, 28),
-            SiteObservation("fmkorea", Outcome.OK, 20),
+            SiteObservation("ppomppu", Outcome.OK, 21, 21),
+            SiteObservation("ruliweb", Outcome.OK, 28, 28),
+            SiteObservation("fmkorea", Outcome.OK, 20, 20),
         ]
     )
 
@@ -89,9 +89,9 @@ def test_counters_separate_transient_failures_from_blocks():
     """일시 장애와 차단은 대응이 다르다(백오프 vs 중지). 세는 칸도 달라야 한다."""
     result = _result(
         [
-            SiteObservation("ppomppu", Outcome.TRANSIENT, 0),
-            SiteObservation("ruliweb", Outcome.BLOCKED, 0),
-            SiteObservation("fmkorea", Outcome.OK, 20),
+            SiteObservation("ppomppu", Outcome.TRANSIENT, 0, 0),
+            SiteObservation("ruliweb", Outcome.BLOCKED, 0, 0),
+            SiteObservation("fmkorea", Outcome.OK, 20, 20),
         ],
         alerts=[Alert(site="ruliweb", reason="차단", at=NOW)],
         stopped=("ruliweb",),
@@ -112,7 +112,7 @@ def test_counters_of_a_skipped_cycle_are_all_zero():
 
 def test_zero_yield_is_visible_not_hidden():
     """`ok=True, deals=0`은 구조 변경의 전형이다. 0을 로그에서 지우면 안 된다."""
-    c = counters(_result([SiteObservation("ppomppu", Outcome.OK, 0)]))
+    c = counters(_result([SiteObservation("ppomppu", Outcome.OK, 0, 0)]))
 
     assert c["by_site"] == {"ppomppu": 0}
     assert c["deals"] == 0
@@ -126,7 +126,7 @@ def test_counters_count_conditional_prices():
     비율을 즉시 본다(골든 실측: 뽐뿌 9.5% · 펨코 15%). 화면·알림 표시는 아직 없다.
     """
     result = _result(
-        [SiteObservation("ppomppu", Outcome.OK, 3)],
+        [SiteObservation("ppomppu", Outcome.OK, 3, 3)],
         deals=[_deal("1"), _deal("2", ["카할"]), _deal("3", ["유료배송(금액미상)"])],
     )
 
@@ -135,13 +135,13 @@ def test_counters_count_conditional_prices():
 
 def test_conditional_zero_is_not_omitted():
     """0을 생략하면 "조건부 0건"과 "안 셌다"가 구별되지 않는다(OBS-02)."""
-    result = _result([SiteObservation("ppomppu", Outcome.OK, 1)], deals=[_deal("1")])
+    result = _result([SiteObservation("ppomppu", Outcome.OK, 1, 1)], deals=[_deal("1")])
 
     assert counters(result)["conditional"] == 0
 
 
 def test_counters_serialize_cleanly_as_an_event():
-    result = _result([SiteObservation("ppomppu", Outcome.OK, 21)])
+    result = _result([SiteObservation("ppomppu", Outcome.OK, 21, 21)])
 
     line = event("cycle", NOW + timedelta(seconds=1), **counters(result))
 
@@ -156,7 +156,7 @@ def test_shipping_unknown_is_a_strict_subset_of_conditional():
     폴링을 켠 사람이 `docker logs`에서 오염률을 바로 본다 — 로그에도 없으면 아무도 모른다.
     """
     result = _result(
-        [SiteObservation("ppomppu", Outcome.OK, 3)],
+        [SiteObservation("ppomppu", Outcome.OK, 3, 3)],
         deals=[
             _deal("a", ["카할"]),
             _deal("b", ["유료배송(금액미상)", SHIPPING_UNKNOWN]),
@@ -175,7 +175,7 @@ def test_no_price_deals_are_counted_not_swallowed():
     "표본이 왜 안 쌓이지"를 알 수 없다. 0도 센다(OBS-02).
     """
     result = _result(
-        [SiteObservation("ruliweb", Outcome.OK, 3)],
+        [SiteObservation("ruliweb", Outcome.OK, 3, 3)],
         deals=[_deal("a"), _priceless("b"), _priceless("c")],
     )
 
@@ -185,7 +185,7 @@ def test_no_price_deals_are_counted_not_swallowed():
 
 
 def test_no_price_zero_is_not_omitted():
-    result = _result([SiteObservation("ppomppu", Outcome.OK, 1)], deals=[_deal("1")])
+    result = _result([SiteObservation("ppomppu", Outcome.OK, 1, 1)], deals=[_deal("1")])
 
     assert counters(result)["no_price"] == 0
 
@@ -198,12 +198,12 @@ def _priceless(post_id: str) -> ParsedDeal:
 def test_shipping_unknown_is_broken_down_by_site():
     """사이트마다 편향이 다르다 — 합산 하나로는 그 사실이 사라진다.
 
-    golden 실측: 번개 60% · 펨코 15% · 뽐뿌 4.8% · 루리웹 0%. 폴링을 켠 사람은 "어느 사이트의
+    golden 실측: 번개 60% · 펨코 15% · 루리웹 14.3% · 뽐뿌 4.8%. 폴링을 켠 사람은 "어느 사이트의
     표본이 얼마나 하한인가"를 알아야 사이트 간 기준가를 섞을지 판단할 수 있다.
-    **0도 센다** — 루리웹의 0%는 좋은 소식이 아니라 배송 무표기를 태그하지 않는다는 뜻이다(Q-64).
+    **0도 센다** — 어떤 사이트의 0%는 좋은 소식이 아니라 태그가 죽었다는 뜻일 수 있다.
     """
     result = _result(
-        [SiteObservation("ppomppu", Outcome.OK, 2), SiteObservation("ruliweb", Outcome.OK, 1)],
+        [SiteObservation("ppomppu", Outcome.OK, 2, 2), SiteObservation("ruliweb", Outcome.OK, 1, 1)],
         deals=[
             _deal("a", [SHIPPING_UNKNOWN]),
             _deal("b", ["카할"]),
@@ -217,6 +217,6 @@ def test_shipping_unknown_is_broken_down_by_site():
 
 
 def test_shipping_unknown_by_site_lists_every_polled_site_even_at_zero():
-    result = _result([SiteObservation("fmkorea", Outcome.OK, 0)], deals=[])
+    result = _result([SiteObservation("fmkorea", Outcome.OK, 0, 0)], deals=[])
 
     assert counters(result)["shipping_unknown_by_site"] == {"fmkorea": 0}

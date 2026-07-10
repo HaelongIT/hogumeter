@@ -335,3 +335,22 @@ def test_run_cycle_defaults_to_the_rate_floor_when_no_port_is_given():
     result = run_cycle([spec], {}, now, lambda s: FetchResult(status_code=200, body=""), BACKOFF)
 
     assert result.states["ppomppu"].next_attempt_at == now + timedelta(seconds=60)
+
+
+def test_run_cycle_counts_how_many_deals_actually_have_a_price():
+    """REL-06: 제목 셀렉터만 끊기면 딜 수는 그대로인데 가격이 전부 사라진다.
+
+    드리프트 단위 테스트는 `SiteObservation`을 직접 만들어 **배선을 보지 않는다** —
+    이 테스트가 `run_cycle`이 `priced_count`를 실제로 채우는지 본다(축적된 규칙: 포트의 주입을 시험하라).
+    """
+    priced = ParsedDeal(site="ppomppu", post_id="1", title="t", url="u", headline_price=1000)
+    priceless = ParsedDeal(site="ppomppu", post_id="2", title="t", url="u", headline_price=None)
+    spec = SiteSpec(name="ppomppu", kind=SiteKind.BOARD, interval=timedelta(seconds=60),
+                    url="https://example.invalid/list", encoding="utf-8",
+                    parse=lambda body, now: [priced, priceless, priceless])
+
+    result = run_cycle([spec], {}, NOW, lambda _: FetchResult(200, "<html/>"), BACKOFF)
+
+    (observation,) = result.observations
+    assert observation.deal_count == 3
+    assert observation.priced_count == 1  # 셋 중 하나만 가격이 있다

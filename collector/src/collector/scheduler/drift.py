@@ -4,9 +4,14 @@
 실제로 뽐뿌에서 그랬다 — 오픈소스 셀렉터 체인이 첫 단계에서 끊겼는데 예외 없이 0건이었고,
 그 사실이 문서에 "셀렉터 전무"로 잘못 기록된 채 석 달을 갔다.
 
-그래서 두 가지를 본다:
-  1. **조용한 0건** — 성공(OK)인데 연속으로 딜이 0건. 구조 변경의 전형.
-  2. **성공률 저하** — 창 안에서 실패(TRANSIENT) 비율이 임계를 넘음.
+그래서 세 가지를 본다:
+  1. **조용한 0건** — 성공(OK)인데 연속으로 딜이 0건. 목록 셀렉터가 끊긴 전형.
+  2. **조용한 가격 0건** — 딜은 나오는데 가격이 전부 없음. **제목** 셀렉터만 끊기면 딜 수는 그대로라
+     1번 신호로는 절대 안 잡힌다(2026-07-10 추가: 그날 찾은 파서 결함 다섯 중 셋이 이 부류였다).
+     루리웹은 정상 상태에서도 36%가 가격 없음이라 "일부"로는 못 가른다 — **전부**일 때만 본다.
+  3. **성공률 저하** — 창 안에서 실패(TRANSIENT) 비율이 임계를 넘음.
+
+세 신호는 원인이 다르므로 **한 알림으로 뭉치지 않는다**(합산은 차이를 지운다).
 
 BLOCKED는 세지 않는다. 차단은 이미 사이트 중지 + Alert로 처리되며, 드리프트 알림까지 겹치면 소음이다.
 
@@ -81,6 +86,17 @@ def _diagnose(window: tuple[SiteObservation, ...], policy: DriftPolicy) -> str |
     if streak >= policy.zero_yield_streak:
         return f"파싱은 성공했는데 {streak}회 연속 0건입니다. 사이트 구조 변경 의심(REL-06)."
 
+    # 딜은 나오는데 **가격이 하나도 없다** — 제목 셀렉터만 끊긴 경우다. 딜 수가 0이 아니므로
+    # 위 신호로는 절대 안 잡힌다. 루리웹은 정상 상태에서도 36%가 가격 없음이라 "일부"로는
+    # 못 가른다 — 전부일 때만 본다(오차단은 사람이 게이트를 꺼 버리게 만든다).
+    priceless = _priceless_streak(window)
+    if priceless >= policy.zero_yield_streak:
+        # 이 문구는 콘솔로 나간다. 마크다운 강조(`**`)를 쓰지 않는다 — 로그는 렌더링되지 않는다.
+        return (
+            f"딜은 나오는데 {priceless}회 연속 가격이 하나도 없습니다. "
+            "제목 셀렉터 변경 의심(REL-06)."
+        )
+
     # 창을 채우기 전엔 판정하지 않는다 — 첫 실패로 알림이 터지면 안 된다.
     if len(window) < policy.window:
         return None
@@ -99,6 +115,25 @@ def _zero_yield_streak(window: tuple[SiteObservation, ...]) -> int:
     streak = 0
     for observation in reversed(window):
         if observation.outcome is Outcome.OK and observation.deal_count == 0:
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def _priceless_streak(window: tuple[SiteObservation, ...]) -> int:
+    """딜은 나왔는데 가격이 하나도 없는 연속 횟수.
+
+    `deal_count > 0`을 요구하므로 `_zero_yield_streak`와 겹치지 않는다 — 두 사실을 한 알림으로
+    뭉치지 않는다(0건과 "가격 0건"은 원인이 다르다: 목록 셀렉터 vs 제목 셀렉터).
+    """
+    streak = 0
+    for observation in reversed(window):
+        if (
+            observation.outcome is Outcome.OK
+            and observation.deal_count > 0
+            and observation.priced_count == 0
+        ):
             streak += 1
         else:
             break
