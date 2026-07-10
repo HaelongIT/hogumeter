@@ -53,7 +53,7 @@
 ### 2026-07-04 리스트 셀렉터 확보(오픈소스 + 실측 일치)
 - **리스트 URL**: `https://bbs.ruliweb.com/market/board/1020?view=thumbnail&page=1` (유저 예판 핫딜). RSS: `.../1020/rss`.
 - **셀렉터**: 테이블 `table.board_list_table` → 행 `tr.table_body.normal:not(.best, .notice)`, 글번호 `.info_article_id[value]`, 제목래퍼 `.title_wrapper`(카테고리는 title_wrapper의 앞 텍스트노드 `[..]`), 작성자 `.nick a`, 추천 `.recomd > strong`, 조회 `.hit > strong`. 글 URL = `/market/board/1020/read/{id}`.
-- **종료 판정**: 제목에 `품절/종료/매진/마감` 포함 여부(휴리스틱).
+- ~~**종료 판정**: 제목에 `품절/종료/매진/마감` 포함 여부(휴리스틱).~~ **정정 2026-07-10**: 그 휴리스틱은 **한 번도 참이 된 적이 없었다.** 마커 `[종료]`는 제목 앵커(`a.subject_link`) **밖**의 `<span>`(클래스 없음)이라 제목 텍스트에 들어오지 않는다. golden 28딜 중 3건이 종료인데 전부 ACTIVE로 파싱됐다. 지금은 `.title_wrapper`의 **제목 앵커 밖 텍스트**에서 `[종료]`·`[품절]`·`[매진]`·`[마감]`을 찾는다(제목 속 `종료 임박`은 오탐이 아니다). 아래 상세 참조.
 - **실측 일치**: 229KB 응답에 `board_list_table` 1건, `info_article_id` **28건** 확인. golden fixture로 적합 → `tests/fixtures/ruliweb/list_normal.html`.
 
 ## 펨코 (에펨코리아)

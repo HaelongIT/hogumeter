@@ -318,3 +318,35 @@ def test_ruliweb_other_end_markers():
         marker = f'<span style="color:red">[{word}]</span>'
         (deal,) = parse_ruliweb(_ruliweb_row(marker, "스위치2 (759,600원/무료)"), NOW)
         assert deal.status == "SOLD_OUT", word
+
+
+# ── 뽐뿌 `.end2`(품절) 가지는 golden에서 0번 돈다 ──────────────────────────
+#
+# fixture에 `.end2`가 하나도 없어 이 분기는 **한 번도 실행된 적이 없다.** 루리웹에서 같은 상황이
+# 통째로 죽은 코드였다(마커가 파서가 읽지 않는 자리에 있었다). 셀렉터의 진위는 실 사이트로만
+# 확인할 수 있고 그건 정지조건이다(docs/91 Q-19). 그때까지 **분기 자체는 합성으로 잠근다** —
+# 리팩터가 조용히 지우지 못하게.
+
+
+def _ppomppu_row(title_class: str) -> bytes:
+    html = f"""
+    <table id="revolution_main_table"><tr class="baseList bbs_new1">
+      <td class="baseList-numb">717710</td>
+      <td><a class="{title_class}" href="view.php?id=ppomppu&no=717710">벨트 (11,800원/무료)</a></td>
+      <td class="baseList-rec">3 - 0</td>
+      <td class="baseList-time">21:10:11</td>
+    </tr></table>
+    """
+    return html.encode("cp949")
+
+
+def test_ppomppu_end2_marks_sold_out():
+    (deal,) = parse_ppomppu(_ppomppu_row("baseList-title end2").decode("cp949"), NOW)
+
+    assert deal.status == "SOLD_OUT"
+
+
+def test_ppomppu_without_end2_is_active():
+    (deal,) = parse_ppomppu(_ppomppu_row("baseList-title").decode("cp949"), NOW)
+
+    assert deal.status == "ACTIVE"
