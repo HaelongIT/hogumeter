@@ -34,7 +34,7 @@
 ## E. 인프라 의존성
 - **[완료]** Docker Compose 서비스 전체 기동 확인 — postgres·core·**web**·collector 4서비스. `bash scripts/smoke.sh`가 빌드→기동→web 정적 자산→SPA 폴백→`/api` 프록시→등록 POST→postgres 왕복→목록 반영까지 검증한다(CI `smoke` 잡). 한글 UTF-8 왕복 포함.
 - **[필수]** 볼륨 마운트 경로/권한(재배포 유실 방지) — `pgdata` 명명 볼륨. **운영에서 `docker compose down -v`를 치지 말 것**(데이터 삭제). 스모크는 전용 프로젝트 이름으로 격리돼 있다.
-- **[완료 — 임시방편]** 헬스체크(OBS-04) — postgres·core·web에 compose healthcheck를 걸었다. web은 `auth_basic`이 꺼진 `/healthz`, core는 `/api/v1/products`(actuator 부재, `docs/91` Q-50). collector는 배치라 **의도적으로 없다**. `scripts/smoke.sh` 0단계가 `compose ps`에서 실제 `healthy` 보고를 확인한다 — "정의했다"와 "healthy를 낸다"는 다른 사건이다.
+- **[완료]** 헬스체크(OBS-04) — postgres(`pg_isready`) · core(`/api/v1/health`, 컴포넌트별) · web(`auth_basic`이 꺼진 `/healthz`)에 compose healthcheck를 걸었다. collector는 배치라 **의도적으로 없다**. `scripts/smoke.sh` 0단계가 `compose ps`에서 실제 `healthy` 보고를 확인하고("정의했다"와 "healthy를 낸다"는 다른 사건이다), **0-1단계가 postgres만 죽여** core가 살아서 503 + `db: DOWN`을 주고 복귀하는지까지 확인한다.
 - **[권장]** 호스트 포트 충돌 — `POSTGRES_PORT`/`CORE_PORT`/`WEB_PORT`로 비켜갈 수 있다(전부 `127.0.0.1` 바인딩).
 - **[필수]** 이식성 확인(OPS-02) — compose만으로 다른 호스트 이전 가능해야 함. AWS 관리형 서비스 의존은 백업용 S3만 허용.
 

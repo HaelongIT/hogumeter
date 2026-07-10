@@ -42,16 +42,19 @@ services:
       # collector는 이미 JSON Lines를 낸다 — 두 컨테이너의 로그가 같은 모양이어야 한 곳에서 읽는다.
       # core 파일을 하나도 건드리지 않고 환경변수로만 켠다(application.yml은 상대 영역).
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ${CORE_LOG_FORMAT-ecs}
+      # DB가 죽었을 때 커넥션 대여를 얼마나 기다릴지. Hikari 기본은 30초라 헬스 엔드포인트가 그만큼
+      # 매달린다 — healthcheck의 timeout(5s)이 먼저 끊어 **왜 죽었는지 본문을 못 본다.**
+      # 1인용 로컬 스택에서 3초 안에 커넥션을 못 받으면 DB는 사실상 죽은 것이다.
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 3000
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      # OBS-04 임시방편. 전용 헬스 엔드포인트가 없어(actuator 미도입, docs/91 Q-50)
-      # 조회 엔드포인트로 대신한다. DB까지 닿아야 200이므로 liveness가 아니라 readiness에 가깝다
-      # — DB가 죽으면 core도 unhealthy가 된다. 그 판정은 지금 상태에선 정확하다(core는 DB 없이 쓸모없다).
-      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/api/v1/products"]
+      # OBS-04 전용 엔드포인트(`HealthController`). 커넥션 유효성만 확인하므로 딜이 수만 건이어도
+      # 상수 시간이고, DOWN이면 **어느 컴포넌트가 죽었는지** 본문이 지목한다. 503 → curl -f가 실패.
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/api/v1/health"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 6
       start_period: 40s
     ports:

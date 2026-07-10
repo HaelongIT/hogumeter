@@ -107,4 +107,30 @@ class PipelineSchedulerTest {
 		assertThat(reported.get()).isNotNull();
 		assertThat(reported.get().dealsCreated()).isZero();
 	}
+
+	/**
+	 * DB가 죽으면 스냅샷 조회부터 터진다. 그게 {@code runStep} 밖에 있으면 틱 전체가 예외로 끝나
+	 * 단계는 한 번도 시도되지 않고, 그 예외를 삼키는 것은 Spring이라 우리 로그에는 아무 흔적도 없다.
+	 */
+	@Test
+	@DisplayName("스냅샷 조회 실패(DB 단절)는 틱을 죽이지 않는다 — 단계는 그래도 시도된다")
+	void probeFailureDoesNotSkipTheSteps() {
+		PipelineScheduler scheduler = new PipelineScheduler(ingest, prices, status, () -> {
+			throw new IllegalStateException("connection refused");
+		}, reported::set);
+
+		assertThatCode(scheduler::tick).doesNotThrowAnyException();
+
+		assertThat(calls).containsExactly("ingest", "prices", "status");
+	}
+
+	/** 스냅샷을 못 읽었으면 보고하지 않는다. 0으로 채운 리포트는 "아무 일도 없었다"는 거짓말이다. */
+	@Test
+	void probeFailureReportsNothingRatherThanZeroes() {
+		new PipelineScheduler(ingest, prices, status, () -> {
+			throw new IllegalStateException("connection refused");
+		}, reported::set).tick();
+
+		assertThat(reported.get()).isNull();
+	}
 }

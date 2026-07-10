@@ -68,6 +68,36 @@ for _ in $(seq 30); do
 done
 [ "${healthy:-0}" = 1 ] || fail "core·web이 healthy가 되지 않았다: $(compose ps --format '{{.Service}}:{{.Health}}' | tr '\n' ' ')"
 curl -fsS "${WEB}/healthz" | grep -q '^ok$' || fail "/healthz가 ok를 주지 않는다"
+curl -fsS "${WEB}/api/v1/health" | grep -q '"db":{"status":"UP"}' || fail "헬스가 db 컴포넌트를 보고하지 않는다"
+
+echo "--- 0-1) OBS-04: DB만 죽었을 때 core는 살아서 '무엇이 죽었는지' 말한다 ---"
+# Q-50 ②가 요구한 구분. 이 드릴 없이는 "503을 준다"가 단위 테스트의 주장으로만 존재한다 —
+# 실 스택에서는 Hikari가 커넥션을 30초 붙들어 healthcheck timeout이 먼저 끊을 수도 있다.
+# core를 직접 친다(healthcheck가 치는 그 경로). nginx를 거치면 502가 헬스를 가린다.
+health_body=$(mktemp)
+compose stop postgres >/dev/null 2>&1 || fail "postgres를 멈추지 못했다"
+
+code=$(curl -s -o "$health_body" -w '%{http_code}' --max-time 20 "http://127.0.0.1:${CORE_PORT}/api/v1/health") ||
+	fail "DB가 죽으니 core가 아예 응답하지 않는다 — liveness와 readiness가 붙어 있다"
+[ "$code" = 503 ] || fail "DB가 죽었는데 헬스가 ${code}다 (기대: 503)"
+grep -q '"status":"DOWN"' "$health_body" || fail "전체 상태가 DOWN이 아니다: $(cat "$health_body")"
+grep -q '"db":{"status":"DOWN"' "$health_body" || fail "죽은 컴포넌트를 지목하지 않는다: $(cat "$health_body")"
+# SEC-01: 헬스 응답은 인증 없이 노출된다. JDBC 예외 메시지에는 접속 URL·사용자명이 들어 있고,
+# 드라이버에 따라 자격증명까지 담는다. `&&`로 잇지 않는다 — 매치 없음(exit 1)이 set -e를 밟는다.
+if grep -qiE 'password|jdbc:' "$health_body" || grep -qF -e "$DB_PASSWORD" "$health_body"; then
+	fail "헬스 응답이 접속 정보를 흘린다: $(cat "$health_body")"
+fi
+rm -f "$health_body"
+
+compose start postgres >/dev/null 2>&1 || fail "postgres를 되살리지 못했다"
+for _ in $(seq 30); do
+	if curl -fsS -o /dev/null --max-time 10 "http://127.0.0.1:${CORE_PORT}/api/v1/health" 2>/dev/null; then
+		recovered=1
+		break
+	fi
+	sleep 2
+done
+[ "${recovered:-0}" = 1 ] || fail "DB가 돌아왔는데 core 헬스가 UP으로 복귀하지 않는다 (커넥션 풀이 굳었다)"
 
 echo "--- 1) 정적 자산이 서빙된다 ---"
 curl -fsS "${WEB}/" | grep -q '<div id="root">' || fail "index.html이 아니다"

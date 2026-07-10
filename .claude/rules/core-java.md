@@ -25,5 +25,11 @@ paths:
 - **`@EnableScheduling`이 없으면 `@Scheduled`는 조용히 무시된다.** 에러도 로그도 없고 그냥 안 돈다. 애노테이션 존재가 아니라 **등록 사실**을 단언하라 — `ScheduledTaskHolder.getScheduledTasks()`에 그 메서드가 있는가(`PipelineSchedulerWiringTest`). `sleep`으로 실행을 기다리지 않는다. (99: 2026-07-10)
 - **`fixedDelay`는 기본적으로 기동 즉시 1회 돈다.** 그러면 `@SpringBootTest`가 스케줄러에 오염된다(컨테이너 공유 + 롤백 없음). `initialDelay = interval`로 미루고, `src/test/resources/application.properties`가 `core.pipeline.enabled=false`로 전역 차단한다(배선 테스트만 `properties`로 되켬).
 - **주기 작업은 매 틱 무엇을 했는지 수치로 남긴다**(OBS-02). 전후 스냅샷의 **차이**를 내고 `pending`(처리되지 않고 남은 입력)을 포함한다 — 단조 증가하면 도는 척하는 것이다. 로그 문구를 테스트하지 말고 `Consumer<Report>` seam으로 **값**을 시험한다.
+- **`try/catch`로 감싼 줄만 격리된다.** 스냅샷 조회도 DB를 탄다 — `runStep` 밖에 두니 DB 단절 시 첫 줄에서 터져 **단계가 한 번도 시도되지 않았고**, 예외를 삼키는 건 Spring이라 우리 로그엔 흔적도 없었다. 격리 장치를 만들면 **그 바깥에 남은 IO를 세어 본다**. (99: 2026-07-10)
+
+## 헬스·DB (`adapter/web/HealthController`)
+
+- **헬스 응답에 예외 메시지를 싣지 않는다** — JDBC 예외 메시지는 접속 URL·사용자명을 담고 헬스는 인증 없이 노출된다. **예외 타입 이름만**(`SQLException`). 관측이 유출이 되면 안 된다(SEC-01).
+- **죽은 DB 앞에서 `getConnection()`은 Hikari `connectionTimeout`(기본 30s)만큼 매달린다.** compose에서 3초로 좁혀 뒀다 — 헬스는 빨리 실패해야 "무엇이 죽었나"에 답할 수 있다. 빈 컴포넌트 집합의 `allMatch`는 `true`이므로 `HealthReport.of({})`는 예외를 던진다.
 
 > TDD·순수 도메인·파라미터 주입·Flyway 소유권·**모듈 소유권(core=상대, 신규 파일 additive만 자율)**은 CLAUDE.md에 있다. 여기 옮겨 적지 않는다 — 중복 지침은 준수율을 떨어뜨린다.

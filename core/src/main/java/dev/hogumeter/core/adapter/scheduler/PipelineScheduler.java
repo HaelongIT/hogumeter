@@ -79,12 +79,33 @@ public class PipelineScheduler {
 	@Scheduled(fixedDelayString = "${core.pipeline.interval-ms:60000}",
 			initialDelayString = "${core.pipeline.interval-ms:60000}")
 	public void tick() {
-		PipelineSnapshot before = probe.get();
+		PipelineSnapshot before = snapshot();
 		runStep("ingest", ingest);
 		runStep("reprocess-prices", reprocessPrices);
 		runStep("reprocess-status", reprocessStatus);
+		PipelineSnapshot after = snapshot();
+		if (before == null || after == null) {
+			return; // DB가 닿지 않는다. snapshot()이 이미 남겼고, 0으로 채운 리포트는 거짓말이다.
+		}
 		// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다.
-		report.accept(PipelineTickReport.between(before, probe.get()));
+		report.accept(PipelineTickReport.between(before, after));
+	}
+
+	/**
+	 * 스냅샷 조회도 DB를 탄다. {@code runStep} 밖에 두면 DB 단절 시 틱 전체가 예외로 끝나 <b>단계는
+	 * 한 번도 시도되지 않고</b>, 그 예외를 삼키는 것은 Spring이라 우리 로그에는 아무 흔적도 없다.
+	 *
+	 * @return 못 읽었으면 {@code null} — 부재는 부재로 표현한다(0으로 채운 리포트는 "아무 일도 없었다"는
+	 *     거짓말이 된다). 해석은 {@link #tick()} 한 곳에 가둔다.
+	 */
+	private PipelineSnapshot snapshot() {
+		try {
+			return probe.get();
+		}
+		catch (RuntimeException failure) {
+			log.error("pipeline snapshot failed", failure);
+			return null;
+		}
 	}
 
 	/**
