@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ReviewQueueItem } from '../api/types'
-import { reviewLine } from './present'
+import { reviewLine, seenLine } from './present'
 
 const item = (over: Partial<ReviewQueueItem>): ReviewQueueItem => ({
   id: 1,
@@ -60,5 +60,40 @@ describe('reviewLine', () => {
 
     expect(line.detail).not.toContain('원')
     expect(line.detail).toContain('칠십만')
+  })
+})
+
+/**
+ * `firstSeenAt`·`lastSeenAt`은 core가 내는데 **화면이 아무도 읽지 않았다** — 우리가 만든 죽은 필드다.
+ * `occurrences`만 보면 "47번 쌓였다"는 알지만 "언제부터"를 모른다.
+ */
+describe('seenLine', () => {
+  it('한 번만 쌓였으면 접수 날짜만 말한다', () => {
+    const line = seenLine(item({ occurrences: 1, firstSeenAt: '2026-07-10T00:00:00Z', lastSeenAt: '2026-07-10T00:00:00Z' }))
+
+    expect(line).toBe('2026-07-10 접수')
+    expect(line).not.toContain('다시 쌓였습니다')
+  })
+
+  it('같은 날 여러 번이면 날짜를 두 번 쓰지 않는다', () => {
+    const line = seenLine(item({ occurrences: 47, firstSeenAt: '2026-07-10T01:00:00Z', lastSeenAt: '2026-07-10T05:00:00Z' }))
+
+    expect(line).toContain('2026-07-10 ·')
+    expect(line).toContain('47번 다시 쌓였습니다')
+    expect(line).not.toContain('~')
+  })
+
+  it('여러 날에 걸쳤으면 구간을 말한다 — "언제부터"가 곧 결함의 나이다', () => {
+    const line = seenLine(item({ occurrences: 1440, firstSeenAt: '2026-07-08T00:00:00Z', lastSeenAt: '2026-07-10T00:00:00Z' }))
+
+    expect(line).toContain('2026-07-08 ~ 2026-07-10')
+    expect(line).toContain('1440번')
+  })
+
+  /** 시각은 KST로 읽는다 — UTC 15:30은 이미 다음 날이다(`purchase/present.ts`의 규약을 그대로 쓴다). */
+  it('KST 경계를 넘는 시각은 다음 날로 읽는다', () => {
+    const line = seenLine(item({ occurrences: 1, firstSeenAt: '2026-07-10T15:30:00Z', lastSeenAt: '2026-07-10T15:30:00Z' }))
+
+    expect(line).toBe('2026-07-11 접수')
   })
 })

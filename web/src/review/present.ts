@@ -7,10 +7,28 @@
  *     그 사실을 말하고 근거(payload)를 그대로 내놓는다. `undefined`를 그리지 않는다.
  */
 import type { ReviewQueueItem } from '../api/types'
+// KST 해석은 한 곳에서만 한다. 여기서 다시 구현하면 오프셋 계산이 두 벌이 되고, 사본은 드리프트한다.
+// 세 번째 소비자가 생기면 공용 모듈로 옮긴다.
+import { kstDate } from '../purchase/present'
 
 export interface ReviewLine {
   reason: string
   detail: string
+}
+
+/**
+ * "언제부터 쌓였나". `occurrences`만으로는 47번이 하루 새 일인지 한 달째인지 알 수 없다 —
+ * **구간의 길이가 곧 결함의 나이**다(Q-27 ④: 매 틱 재처리).
+ */
+export function seenLine(item: ReviewQueueItem): string {
+  const first = kstDate(item.firstSeenAt)
+  const last = kstDate(item.lastSeenAt)
+
+  if (item.occurrences === 1) {
+    return `${first} 접수`
+  }
+  const span = first === last ? first : `${first} ~ ${last}`
+  return `${span} · 같은 항목이 ${item.occurrences}번 다시 쌓였습니다 (수집 파이프라인이 매 주기 재처리합니다)`
 }
 
 const won = (amount: number) => `${amount.toLocaleString('en-US')}원`

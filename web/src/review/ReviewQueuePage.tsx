@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { ReviewQueueItem } from '../api/types'
-import { reviewLine } from './present'
+import { reviewLine, seenLine } from './present'
 
 const describe = (failure: unknown) =>
   failure instanceof ApiFailure
@@ -62,10 +62,9 @@ export function ReviewQueuePage() {
                     <span>원문 링크 없음</span>
                   )}
                 </p>
-                {/* 접힌 중복을 숨기지 않는다 — 이 숫자가 곧 "재처리 멱등이 없다"는 증거다(Q-27 ④). */}
-                {item.occurrences > 1 && (
-                  <p>같은 항목이 {item.occurrences}번 다시 쌓였습니다 (수집 파이프라인이 매 주기 재처리합니다).</p>
-                )}
+                {/* 접힌 중복을 숨기지 않는다 — 이 숫자가 곧 "재처리 멱등이 없다"는 증거이고,
+                    구간의 길이가 그 결함의 나이다(Q-27 ④). */}
+                <p>{seenLine(item)}</p>
               </li>
             )
           })}
