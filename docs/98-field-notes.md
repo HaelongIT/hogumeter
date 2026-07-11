@@ -350,3 +350,5 @@
 
 - **의도적 미사용은 여기 없다**: `deal_event.shipping`(headline에 합산, BM-02)·`base_price`(역산 금지, AC-2)는 근거가 있고 스모크가 계약으로 못박는다(`shipping=0`·`base_price=NULL`).
 - **감사 방법**: `create table`의 컬럼 → `grep -vE '^\s*(//|\*|/\*|#)'`로 주석 걷은 뒤 snake/camel 검색. 지난(2026-07-10) 감사는 주석을 안 걷어 `confidence`(javadoc에만 등장)를 놓쳤다.
+
+**게이트로 안 만드는 이유**(지난 규칙: 못 만들면 왜 못 하는지 적는다): ① 죽은 테이블 컬럼(`updated_at`·`fetched_at`)은 `check-table-wiring`이 테이블 단위로 이미 잡아 중복이다. ② 살아있는 테이블의 죽은 컬럼(`confidence` 등 5개)은 전부 core 마이그레이션/기존 파일 소유라 우리 액션이 없고, 이미 열린 Q에 귀속돼 관리된다. ③ `shipping`(→`shippingUnknownTotal`)·`base_price`(→`basePrice`) 부분 문자열 오탐이 게이트 신뢰도를 떨어뜨려 의도적 미사용을 오차단할 위험. **다음 세션은 위 감사 방법으로 재감사**하면 된다 — 게이트 없이 전수표로 관리한다.
