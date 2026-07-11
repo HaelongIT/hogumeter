@@ -36,7 +36,7 @@
 
 0-1. **⚠️ 코드 안의 블로커 — `docs/91` Q-27 ④(실측 2026-07-10)**: 매칭 실패 원문은 `deal_event_source` 링크를 만들지 않아 `findUnprocessed()`가 계속 미처리로 본다 → **매 틱 다시 리뷰 큐에 쌓인다**(운영 60초 주기면 원문 하나당 하루 1,440행). 조회는 접어서 `occurrences`로 세어 보여주지만(숨기지 않는다), **승격·기각은 이게 고쳐져야 가능하다** — 하나를 처리해도 나머지가 남는다. core 기존 파일 수정이라 상대와 조율.
 
-0. **⚠️ 코드 안의 블로커 — `docs/91` Q-27 ③**: 최초 수집 시 이미 품절인 원문에 대해 **"지금 사라" 알림이 나간다.** `IngestDealsUseCase:137`이 원문 상태와 무관하게 딜을 `ACTIVE`로 만들고 곧바로 알림 판정을 태우기 때문이다. 파이프라인이 같은 틱에 `ENDED`로 자가치유하지만 **알림은 이미 나간 뒤다.** 지금은 스텁이라 로그뿐 — **봇 토큰(Q-20)을 켜기 전에 반드시 고친다.** core 기존 파일 수정이라 상대와 조율.
+0. **✅ 해소(2026-07-11) — `docs/91` Q-27 ③**: 최초 수집 시 이미 품절인 원문에 "지금 사라" 알림이 나가던 결함. `candidateFrom`이 `DealStatus.fromRawPostStatus(post.getStatus())`로 초기 상태를 정하고(SOLD_OUT/DELETED→ENDED), `AlertEvaluator`가 ENDED 딜을 억제한다. 관통 테스트 `initiallySoldOutPostIsBornEndedAndNotAlerted`(스파이 sender로 send 0회). **core 소유권 조율로 우리가 수정**(이전엔 "상대와 조율"로 봉인).
 
 **나머지는 코드 밖:**
 

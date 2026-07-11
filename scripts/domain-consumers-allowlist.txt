@@ -17,3 +17,7 @@ KeywordSuggester      Q-22  키워드 사후학습 배선 미구현.
 DigestRules           Q-33  다이제스트(docs/18)는 M1 범위 밖.
 ReportCardCalculator  Q-62  성적표 발급(PUR-04) 미구현 — 저장소도 유스케이스도 없다.
 ReportIssueGate       Q-62  같은 이유. 발급 게이트만 있고 발급이 없다.
+ListingDiff           Q-72  M2 목록 diff — 소비처(목록 diff 유스케이스가 used_listing_observation을 읽음)가 collector 실 폴링(정지조건) 뒤라 미배선.
+UsedAlertPolicy       Q-72  M2 중고 알림 판정 — 소비처(collector 번개 폴링 → Listing → 알림)가 실 폴링 뒤라 미배선.
+UsedRiskSignals       Q-72  M2 URL 평가기(USED-04) 위험 신호 — 평가기 유스케이스 미배선.
+UsedMatcher           Q-72  M2 3계층 필터 — 유일한 호출자(UsedAlertPolicy·UsedRiskSignals)가 위에서 죽은 것으로 선언돼 전이적으로 소비처 0.

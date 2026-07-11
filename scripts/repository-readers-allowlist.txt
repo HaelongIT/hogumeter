@@ -12,3 +12,5 @@
 
 ProductAxisRepository.findByProductId   Q-66  수요축 기능 전체가 미구현이라 축을 읽는 코드가 없다(product_axis는 쓰기 전용).
 ReviewQueueItemRepository.findByType    Q-15  큐 조회는 네이티브 SQL이 대신한다(엔티티가 status·created_at 미매핑). 이 메서드는 대체됐고 파일은 상대 소유라 지우지 않는다.
+UsedSearchRepository.findByProductId              Q-72  M2 등록은 쓰기만 — 제품별 UsedSearch 조회 소비처(GET/collector 검색어 소스)가 아직 없다.
+UsedSearchBonusGroupRepository.findByUsedSearchId  Q-72  같은 이유 — bonus 그룹을 읽는 소비처(목록 폴링·조회)가 collector 뒤라 미배선.
