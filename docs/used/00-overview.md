@@ -50,4 +50,5 @@
 
 ## 문서 지도 (이 묶음)
 - `00-overview.md`(본 문서) · `01-architecture.md`(모듈 경계·TDD 이음새) · `02-data-model.md`(개체·V3 스키마 방향·모듈 계약) · `04-acceptance.md`(인수조건 = TDD 기준)
-- 후속: `03-api-specification.md` · `05-non-functional.md` · `06-tdd-guide.md`(core V3 착수 시)
+- `03-api-specification.md`(REST 표면 **제안**·정직성 계약) · `05-non-functional-requirements.md`(보안·성능·신뢰성·관측) · `06-tdd-guide.md`(테스트 전략)
+- **03·05·06은 방향(제안)이다** — 엔드포인트·필드·스키마는 core V3가 TDD로 확정한다. 못박지 않는다(`docs/91` Q-50).
