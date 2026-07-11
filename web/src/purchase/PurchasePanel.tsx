@@ -14,6 +14,19 @@ const describe = (failure: unknown) => {
 }
 
 /**
+ * 사후 판정색 근거 — 활성 딜 대비 얼마나 더/덜 냈나(overpaidWon 부호). 표시 색만 정하고 문구는
+ * `observationLine`이 낸다. ACTIVE_DEAL·값 있음일 때만 판정한다(다른 모드엔 비교 대상이 없다).
+ * 과한 알람을 피해 over=주의(amber), under=안심(green)으로 둔다 — "호구"라 단정하지 않는다(절대 원칙 2).
+ */
+function verdictOf(purchase: PurchaseObservation): 'over' | 'under' | 'even' | undefined {
+  const { mode, overpaidWon } = purchase.context
+  if (mode !== 'ACTIVE_DEAL' || overpaidWon === null) return undefined
+  if (overpaidWon > 0) return 'over'
+  if (overpaidWon < 0) return 'under'
+  return 'even'
+}
+
+/**
  * PUR — "지금 사도 되나" 바로 아래에 "샀다"를 놓는다. 판단과 기록이 같은 variant 문맥에 있어야
  * 사후에 "호구였나"를 물을 수 있다(docs/15 구매 이후 루프).
  */
@@ -82,16 +95,21 @@ export function PurchasePanel({ variantId }: { variantId: number }) {
 
       {error && <p role="alert">{error}</p>}
 
-      {purchases?.length === 0 && <p>이 variant의 구매 기록이 없습니다.</p>}
+      {purchases?.length === 0 && <p className="empty">이 variant의 구매 기록이 없습니다.</p>}
 
       {purchases && purchases.length > 0 && (
         <ul aria-label="구매 목록">
           {purchases.map((purchase) => (
-            <li key={purchase.purchaseId}>
-              <span aria-label="구매가">{purchase.paidPrice.toLocaleString('en-US')}원</span> ·{' '}
-              {kstDate(purchase.purchasedAt)} · {stateLabel(purchase.state)}
-              <br />
-              <span aria-label={`관찰 문맥 ${purchase.purchaseId}`}>{observationLine(purchase)}</span>
+            <li key={purchase.purchaseId} className="purchase-item" data-verdict={verdictOf(purchase)}>
+              <p className="purchase-head">
+                <span aria-label="구매가">{purchase.paidPrice.toLocaleString('en-US')}원</span>
+                <span className="purchase-meta">
+                  {kstDate(purchase.purchasedAt)} · <span className="state-chip">{stateLabel(purchase.state)}</span>
+                </span>
+              </p>
+              <span className="purchase-obs" aria-label={`관찰 문맥 ${purchase.purchaseId}`}>
+                {observationLine(purchase)}
+              </span>
             </li>
           ))}
         </ul>

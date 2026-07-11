@@ -439,7 +439,7 @@
 
 .gauge-axis {
   position: relative;
-  height: 30px;
+  height: 40px;
   margin-top: 10px;
 }
 
@@ -588,14 +588,25 @@
   color: var(--ink-dim);
 }
 
-.shell ul[aria-label='미상 큐'] p {
+/* 미상 큐 콘솔/로그 판독 — 유형별 좌측 rail은 아래 폴리시 섹션에서 준다. */
+.review-reason {
   margin: 0;
+  font-size: 0.875rem;
+  color: var(--ink);
 }
 
-.shell ul[aria-label='미상 큐'] p + p {
-  margin-top: 4px;
-  color: var(--ink-dim);
+.review-detail {
+  margin: 4px 0 0;
   font-size: 0.8125rem;
+  color: var(--ink-dim);
+}
+
+.review-seen {
+  margin: 7px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.01em;
+  color: var(--ink-faint);
 }
 
 /* 가격·id는 mono 등숫자로 — 가격이 주인공. */
@@ -627,10 +638,222 @@
   align-self: flex-start;
 }
 
+/* 생성될 variant 미리보기 — 판독 블록(무엇이 만들어지나) */
 .shell section[aria-label='생성될 variant'] {
-  margin-top: 4px;
+  margin-top: 6px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.preview-count {
+  margin: 0 0 9px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.preview-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.preview-list li {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 4px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--dial);
+  color: var(--ink-dim);
+}
+
+.product-item > strong {
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+/* ── 폴리시 2차: 판정색·콘솔·상태·모션 ───────────────── */
+
+/* ① 구매 기록 — 사후 판정 rail(overpaidWon 부호). over=주의(amber)·under=안심(green)·even=중립. */
+.shell ul[aria-label='구매 목록'] > li {
+  border-left-width: 3px;
+}
+.shell ul[aria-label='구매 목록'] > li[data-verdict='under'] {
+  border-left-color: var(--sig-green);
+  background: var(--sig-green-soft);
+}
+.shell ul[aria-label='구매 목록'] > li[data-verdict='over'] {
+  border-left-color: var(--sig-amber);
+  background: var(--sig-amber-soft);
+}
+.shell ul[aria-label='구매 목록'] > li[data-verdict='even'] {
+  border-left-color: var(--steel);
+}
+
+.purchase-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 5px;
+}
+
+.purchase-meta {
+  flex: none;
+  font-size: 0.75rem;
+  color: var(--ink-dim);
+}
+
+.state-chip {
+  display: inline-block;
+  font-size: 0.6875rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  color: var(--ink-dim);
+}
+
+.purchase-obs {
   font-size: 0.8125rem;
   color: var(--ink-dim);
+}
+
+/* ① 미상 큐 — 유형별 좌측 rail(이상치=amber, 미상=steel, unknown=중립). */
+.shell ul[aria-label='미상 큐'] > li {
+  border-left-width: 3px;
+}
+.shell ul[aria-label='미상 큐'] > li[data-type='OUTLIER_LOWER'] {
+  border-left-color: var(--sig-amber);
+}
+.shell ul[aria-label='미상 큐'] > li[data-type='UNCLASSIFIED'] {
+  border-left-color: var(--steel);
+}
+
+/* ② 빈 상태 — "행동으로의 초대" */
+.empty {
+  margin-block: 8px;
+  padding: 14px 15px;
+  font-size: 0.875rem;
+  color: var(--ink-dim);
+  background: var(--panel);
+  border: 1px dashed var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.empty-decision {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+  padding: 24px 20px;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.empty-decision .gauge {
+  width: 100%;
+  opacity: 0.55;
+}
+
+.empty-decision .empty {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* ② 로딩 — 텍스트 펄스 + 히어로 스켈레톤 */
+.loading {
+  font-size: 0.875rem;
+  color: var(--ink-faint);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.summary-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.skeleton {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--panel) 25%, var(--panel-2) 50%, var(--panel) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-verdict {
+  height: 54px;
+  border-radius: var(--radius);
+}
+.skeleton-gauge {
+  height: 48px;
+}
+.skeleton-readouts {
+  height: 190px;
+  border-radius: var(--radius);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ③ 모션 — 게이지 리빌(존 페이드, 바늘 스윕과 합주) */
+.gauge-zone {
+  opacity: 0;
+  transition: opacity 0.55s ease;
+}
+
+.gauge-bar[data-revealed='true'] .gauge-zone {
+  opacity: 1;
+}
+
+/* ③ 게이지 눈금 겹침 — 근접 눈금은 마크를 늘려 라벨을 둘째 줄로 */
+.gauge-tick[data-stagger='true'] .gauge-tick-mark {
+  height: 18px;
+}
+
+/* ③ 화면 진입 페이드(탭 전환 시 본문) — 한 번의 절제된 모먼트 */
+.shell main {
+  animation: content-in 0.28s ease both;
+}
+
+@keyframes content-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ── 반응형 ─────────────────────────────────────────── */
@@ -641,7 +864,8 @@
   .context-row {
     grid-template-columns: 1fr;
   }
-  .tabs button {
-    flex: 0 0 auto;
+  .purchase-head {
+    flex-direction: column;
+    gap: 3px;
   }
 }

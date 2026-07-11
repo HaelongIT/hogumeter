@@ -102,8 +102,24 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
         </label>
       </div>
 
-      {options.length === 0 && !error && <p>등록된 variant가 없습니다. 먼저 제품을 등록하세요.</p>}
+      {options.length === 0 && !error && (
+        <div className="empty-decision">
+          {/* 꺼진 계기 — 등록하면 여기 계기가 켜진다(빈 화면은 초대다). */}
+          <div className="gauge gauge--uncal" aria-hidden="true">
+            <div className="gauge-bar" />
+          </div>
+          <p className="empty">등록된 variant가 없습니다. 먼저 제품을 등록하세요.</p>
+        </div>
+      )}
       {error && <p role="alert">{error}</p>}
+
+      {variantId !== null && !loaded && !error && (
+        <div className="summary-skeleton" aria-hidden="true">
+          <div className="skeleton skeleton-verdict" />
+          <div className="skeleton skeleton-gauge" />
+          <div className="skeleton skeleton-readouts" />
+        </div>
+      )}
 
       {loaded && badge && (
         <section aria-label="판단 요약" className="summary">

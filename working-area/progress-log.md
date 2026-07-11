@@ -1,3 +1,23 @@
+## 2026-07-11 — web UI 계기판 폴리시 2차 (secondary 화면·상태·모션·마감)
+
+**한 일**: 1차(히어로)에 이어 나머지 화면을 계기 정체성으로 통일. 사용자가 4개 폴리시 전부 선택.
+마크업·CSS·**데이터 기반 색(data-attr)**만 — 문구·aria·테스트 substring 불변. 147 GREEN, build GREEN.
+
+- **① 판정 언어 전 화면 확장**: 구매 기록에 사후 판정 rail(`overpaidWon` 부호 → over=amber·under=green·
+  even=중립, present.ts 문구 불변) — 호구미터의 "샀는데 호구였나" 루프를 시각화. 미상 큐를 콘솔/로그로
+  (유형별 rail: 이상치=amber·미상=steel, seenLine=흐린 mono 푸터 "결함의 나이"). 등록 미리보기를 판독
+  블록(eyebrow + mono 칩)·제품 목록 정리.
+- **② 빈·로딩·에러**: 판단 화면 빈 상태에 꺼진 계기(off-gauge, aria-hidden) + 초대 문구, 히어로 로딩
+  스켈레톤(shimmer), 빈 큐/목록 dashed 카드(초대 문구로 보강, 테스트 substring 유지), 로딩 텍스트 펄스.
+- **③ 모션 절제**: 게이지 존 페이드(바늘 스윕과 합주, 한 `mounted` 플래그), 탭 전환 본문 fade-in.
+  전부 prefers-reduced-motion 아래. hover는 상호작용 요소에만.
+- **④ 마감**: 계기 파비콘(`web/public/favicon.svg` SVG 게이지) + `<link rel=icon>`, 게이지 눈금 겹침
+  해소(근접 눈금 마크 늘려 라벨 2행). **폰트 self-host는 의도적 보류** — Space Grotesk는 가변폰트,
+  KR은 subset 필요라 바이너리 커밋 대비 이득 적고, 현재 폴백(Pretendard/system)이 CDN 다운을 이미 흡수.
+
+**검증**: Playwright로 다크/라이트 전 상태(구매 over/under/even·리뷰 콘솔·빈/스켈레톤·게이지 stagger) 실측.
+web 147 GREEN · tsc+vite build GREEN · api/types.ts 무변경.
+
 ## 2026-07-11 — web UI 계기판 비주얼 아이덴티티 (사용자 지휘, /frontend-design)
 
 **한 일**: 사용자가 프론트 UI 지휘를 시작(메모리 규칙대로 지시 대기 중이었음). /frontend-design으로 3안

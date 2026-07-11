@@ -35,16 +35,19 @@ export function Gauge({ view }: { view: BenchmarkView }) {
 
   const currentPos = calibrated ? pos(current) : 0
 
-  // 바늘 스윕: 좌→현재가. reduced-motion이면 CSS가 전이를 꺼 즉시 놓인다.
-  const [needleLeft, setNeedleLeft] = useState(0)
+  // 로드 리빌: 바늘 스윕(좌→현재가)과 존 페이드를 한 플래그로 합주. reduced-motion이면 CSS가 전이를 꺼 즉시.
+  const [mounted, setMounted] = useState(false)
   useEffect(() => {
-    if (!calibrated) return
-    setNeedleLeft(0)
-    if (typeof requestAnimationFrame !== 'function') {
-      setNeedleLeft(currentPos)
+    if (!calibrated) {
+      setMounted(false)
       return
     }
-    const id = requestAnimationFrame(() => setNeedleLeft(currentPos))
+    setMounted(false)
+    if (typeof requestAnimationFrame !== 'function') {
+      setMounted(true)
+      return
+    }
+    const id = requestAnimationFrame(() => setMounted(true))
     return () => cancelAnimationFrame(id)
   }, [calibrated, currentPos])
 
@@ -60,16 +63,25 @@ export function Gauge({ view }: { view: BenchmarkView }) {
   const bench = benchmark as number
   const splitZones = good !== null && good <= bench
 
-  const ticks: { value: number; label: string; now?: boolean }[] = [
+  // 눈금 위치 계산 + 근접 시 라벨 어긋내기(최저·굿딜이 붙을 때 겹침 방지).
+  const STAGGER_GAP = 11
+  const ticks = [
     ...(lowest !== null ? [{ value: lowest, label: '최저' }] : []),
     ...(good !== null ? [{ value: good, label: '굿딜' }] : []),
     { value: bench, label: '기준가' },
     { value: current, label: '현재가', now: true },
   ]
+    .map((tick) => ({ ...tick, p: pos(tick.value), stagger: false }))
+    .sort((a, b) => a.p - b.p)
+  let prevP = -Infinity
+  for (const tick of ticks) {
+    tick.stagger = tick.p - prevP < STAGGER_GAP
+    prevP = tick.p
+  }
 
   return (
     <div className="gauge" aria-hidden="true">
-      <div className="gauge-bar">
+      <div className="gauge-bar" data-revealed={mounted ? 'true' : undefined}>
         {splitZones ? (
           <>
             <div className="gauge-zone gauge-zone--green" style={{ left: 0, width: `${pos(good as number)}%` }} />
@@ -85,14 +97,15 @@ export function Gauge({ view }: { view: BenchmarkView }) {
             <div className="gauge-zone gauge-zone--red" style={{ left: `${pos(bench)}%`, right: 0 }} />
           </>
         )}
-        <div className="gauge-needle" style={{ left: `${needleLeft}%` }} />
+        <div className="gauge-needle" style={{ left: `${mounted ? currentPos : 0}%` }} />
       </div>
       <div className="gauge-axis">
         {ticks.map((tick) => (
           <div
             key={tick.label}
             className={`gauge-tick${tick.now ? ' gauge-tick--now' : ''}`}
-            style={{ left: `${pos(tick.value)}%` }}
+            data-stagger={tick.stagger ? 'true' : undefined}
+            style={{ left: `${tick.p}%` }}
           >
             <span className="gauge-tick-mark" />
             <span className="gauge-tick-label">{tick.label}</span>

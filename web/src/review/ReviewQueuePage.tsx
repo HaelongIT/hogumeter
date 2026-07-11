@@ -42,17 +42,19 @@ export function ReviewQueuePage() {
       </p>
 
       {error && <p role="alert">{error}</p>}
-      {!error && items === null && <p>불러오는 중…</p>}
-      {items !== null && items.length === 0 && <p>대기 중인 항목이 없습니다.</p>}
+      {!error && items === null && <p className="loading">불러오는 중…</p>}
+      {items !== null && items.length === 0 && (
+        <p className="empty">대기 중인 항목이 없습니다. 매칭이 확정하지 못한 딜이 생기면 여기 쌓입니다.</p>
+      )}
 
       {items !== null && items.length > 0 && (
         <ul aria-label="미상 큐">
           {items.map((item) => {
             const line = reviewLine(item)
             return (
-              <li key={item.id}>
-                <p>{line.reason}</p>
-                <p>
+              <li key={item.id} className="review-item" data-type={item.type}>
+                <p className="review-reason">{line.reason}</p>
+                <p className="review-detail">
                   {line.detail} ·{' '}
                   {item.sourceUrl ? (
                     <a href={item.sourceUrl} target="_blank" rel="noreferrer">
@@ -64,7 +66,7 @@ export function ReviewQueuePage() {
                 </p>
                 {/* 접힌 중복을 숨기지 않는다 — 이 숫자가 곧 "재처리 멱등이 없다"는 증거이고,
                     구간의 길이가 그 결함의 나이다(Q-27 ④). */}
-                <p>{seenLine(item)}</p>
+                <p className="review-seen">{seenLine(item)}</p>
               </li>
             )
           })}

@@ -163,9 +163,9 @@ export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variant
         <p>분리(SPLIT)는 아직 표본을 나누지 않습니다 — 값은 저장되지만 동작은 묶음과 같습니다.</p>
 
         {preview.length > 0 && (
-          <section aria-label="생성될 variant">
-            <p>생성될 variant {preview.length}개</p>
-            <ul>
+          <section aria-label="생성될 variant" className="preview">
+            <p className="preview-count">생성될 variant {preview.length}개</p>
+            <ul className="preview-list">
               {preview.map((label) => (
                 <li key={label}>{label}</li>
               ))}
@@ -182,13 +182,13 @@ export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variant
 
       <h2>등록된 제품</h2>
       {products === null ? (
-        <p>불러오는 중...</p>
+        <p className="loading">불러오는 중...</p>
       ) : products.length === 0 ? (
-        <p>아직 등록된 제품이 없습니다.</p>
+        <p className="empty">아직 등록된 제품이 없습니다. 위에서 첫 제품을 등록하면 여기 쌓입니다.</p>
       ) : (
         <ul aria-label="등록된 제품">
           {products.map((product) => (
-            <li key={product.productId}>
+            <li key={product.productId} className="product-item">
               <strong>{product.name}</strong>
               <ul>
                 {product.variants.map((variant) => (
