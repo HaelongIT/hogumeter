@@ -1,3 +1,23 @@
+## 2026-07-11 — UsedSearch 등록 REST 어댑터 (USED-01, 막히지 않은 첫 어댑터)
+
+**한 일**: 중고 검색 등록을 web 호출 가능한 완결 REST 계약으로 배선. 제품 등록(RegistrationController)과 동형.
+- 엔티티: `UsedSearchEntity`(required/exclude text[] via `@JdbcTypeCode(ARRAY)`)·`UsedSearchBonusGroupEntity`
+  (mode enum + keywords text[]). 리포지토리 2(JpaRepository).
+- `RegisterUsedSearchCommand`(+ BonusGroupCommand) · `RegisterUsedSearchUseCase`(한 트랜잭션, platform
+  BUNJANG 고정, **poll 하한 10 강제** MARKETPLACE/SEC-08) · `UsedSearchController`(POST
+  /api/v1/products/{id}/used-searches → 201).
+- TDD: UseCase 통합(스텁→3 RED→GREEN, text[]·bonus_group 저장·poll 하한 검증) + MockMvc 관통
+  (REST→UseCase→저장, B(A())). **core 전체 GREEN**(회귀 없음).
+
+**게이트**: `check-table-wiring`이 미배선 5테이블(observation·listing·EAV 3)을 정확히 잡음 → Q-72로
+allowlist 선언(배선 12·미배선 선언 7 OK). used_search·bonus_group은 배선되어 통과.
+
+**막히지 않은 어댑터 잔여(다음)**: `comparison_axis` 정의 REST(product 종속, 막히지 않음)만 남음.
+`listing`·`used_listing_observation`은 collector 실 폴링(정지조건)에, `listing_note`·`listing_axis_value`는
+listing(→collector)에 종속해 막힘(Q-72). web 프론트는 지시 대기.
+
+---
+
 ## 2026-07-11 — core V3 스키마(used) + R3 롤백
 
 **한 일**: V3__used.sql(7테이블) + R3__used_rollback.sql. docs/used/02 방향 + V1 관례(text[] 배열).

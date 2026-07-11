@@ -9,3 +9,8 @@
 
 price_history   Q-3    네이버 쇼핑 API 키 미발급 - 현재가 수집기가 없다(StubCurrentPriceProvider가 0을 반환)
 global_setting  Q-28   제외키워드 정책의 표본 조립 배선이 미구현(딜 제목 접근 필요)
+used_listing_observation  Q-72  collector 번개 폴링 미배선(실 네트워크·검색어 소스 read = 정지조건)
+listing                   Q-72  목록 diff 유스케이스 미배선(observation 소비가 선행)
+listing_note              Q-72  메모 REST(USED-05) 미배선 - 다음 증분(막히지 않음)
+comparison_axis           Q-72  비교축 REST(USED-05) 미배선 - 다음 증분(막히지 않음)
+listing_axis_value        Q-72  축값 승격 REST(USED-05) 미배선 - 다음 증분(막히지 않음)
