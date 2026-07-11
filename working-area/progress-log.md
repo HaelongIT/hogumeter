@@ -1,3 +1,34 @@
+## 2026-07-11 — 배치 종료: 막히지 않고 완결되는 core V3 어댑터 소진 (②)
+
+**이번 턴 요약(사용자 지시 반영 후)**: 사용자가 (1) Q-27③ 우리 수정, (2) core 무중단 조율, (3) web
+프론트만 지시 대기를 지시. 이후 무중단으로:
+- **Q-27③ 해소**(품절 딜 오알림): AlertEvaluator ENDED 억제 + candidateFrom status 기반. "한 줄 권고"가
+  실은 두 지점이었음(권고도 가설).
+- **USED 순수 도메인 전체**: 3계층 필터(01)·목록 diff·Listing 상태기계·신규/후속 알림(02)·위험 신호(04).
+  전부 IO 0, 단위+뮤테이션 검증.
+- **core V3 스키마**(used 7테이블) + R3 롤백(rollback-drill PASS).
+- **UsedSearch 등록 REST 어댑터**: 엔티티·리포지토리·UseCase·REST·MockMvc 관통. web 호출 가능한 완결 계약.
+
+**② 도달 근거(막히지 않고 완결되는 core V3 어댑터 소진)**:
+- ⓐ docs/30 M2: 순수 도메인·V3 스키마·UsedSearch 등록 완료. 나머지 어댑터는 아래 ⓒ로 막힘.
+- ⓑ docs/91 열린 항목: Q-69·70·71·72는 방금 진행/기록(막힘 아님). collector 관련 Q-44·Q-4는 실 네트워크
+  (정지조건), Q-3·Q-20은 사람(네이버 키·텔레그램 토큰).
+- ⓒ 소비처0·생산자0(check-table-wiring): 미배선 5테이블 전부 막힘 — `used_listing_observation`·`listing`은
+  collector 실 폴링(정지조건)에, `listing_note`·`listing_axis_value`는 listing에 종속. **`comparison_axis`
+  정의 REST조차 소비처(비교표·축값 승격)가 listing에 막혀, 지금 배선하면 "쓰기만 하는 테이블"(죽은 배선).**
+  그래서 하지 않았다 — 규율("죽은 배선 만들지 마라").
+- ⓓ CI: V3 스키마=rollback-drill(동적, V3/R3 자동), 미배선 테이블=check-table-wiring+Q-72, 순수 도메인=
+  단위+뮤테이션, UsedSearch 등록=UseCase 통합+MockMvc. 새 게이트는 안 만들어 ci.yml 갱신 불요.
+
+**사람/다음 세션이 풀 것**: collector 실 폴링 승인 + UsedSearch read 어댑터(검색어 소스) → observation·listing
+어댑터 → 목록 diff·알림 배선. 네이버 키(Q-3)·텔레그램 토큰(Q-20). web 프론트(사용자 지시 대기).
+
+TURN-END: ② 일감 소진 — 막히지 않고 완결되는 core V3 어댑터는 UsedSearch 등록으로 소진. 나머지는 전부
+collector 실 폴링(정지조건)·소비처 막힘에 묶여, 지금 배선하면 죽은 배선이 된다. 사람 결정(collector 키/승인)
+또는 web 지시가 다음을 연다.
+
+---
+
 ## 2026-07-11 — UsedSearch 등록 REST 어댑터 (USED-01, 막히지 않은 첫 어댑터)
 
 **한 일**: 중고 검색 등록을 web 호출 가능한 완결 REST 계약으로 배선. 제품 등록(RegistrationController)과 동형.
