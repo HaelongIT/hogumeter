@@ -1,3 +1,25 @@
+## 2026-07-11 — USED-01 3계층 필터 (M2 순수 도메인 착수)
+
+**한 일**: M2 core의 첫 순수 도메인 = USED-01 3계층 필터(docs/used/04 AC-1~6). 신규 패키지
+`domain/used` — IO 0, 스키마 없이 단위 테스트만으로 검증.
+
+- 값객체: `BonusMode`(SORT|TRIGGER) · `BonusGroup`(keywords OR + mode) · `UsedSearchSpec`(required
+  AND / bonusGroups / exclude NOT) · `UsedMatchResult`(candidate·triggerSatisfied·hasSortBadge,
+  alertEligible=candidate&&trigger).
+- `UsedMatcher.evaluate`(순수): exclude 우선(AC-4) → required AND(AC-1) → TRIGGER 게이트(AC-3) →
+  SORT 배지(AC-2). 정규화(AC-6)는 `TitleNormalizer.joined` + `toLowerCase(ROOT)`로 대소문자·공백 무관.
+  동의어(AC-5)는 그룹 내 OR — 내장 사전 없음.
+- TDD: 구현+테스트 동시(신규 순수)라 RED를 못 봐, **뮤테이션 2개로 장치 증명** — 소문자화 제거→AC-6만
+  RED, exclude 우선 제거→AC-4만 RED. 복원 후 GREEN.
+
+**자율 결정(되돌리기 쉬움)**: 다중 TRIGGER 그룹 = **그룹 간 AND**(required와 대칭). AC-3은 단일 그룹만
+규정하므로 잠정 → `docs/91` Q-69(재개 트리거: 실사용에서 OR 필요 시 anyMatch, seam 1곳). 테스트로 잠금.
+
+**다음(무중단)**: USED-02 목록 diff 생애주기(AC-7~11, 순수) → 이후 core V3 스키마·어댑터. web 프론트는
+사용자 지시 대기.
+
+---
+
 ## 2026-07-11 — Q-27③ 해소(품절 딜 오알림) + core 소유권 조율
 
 **한 일**: 사용자가 (1) Q-27③ 우리가 수정, (2) **core 기존 파일도 무중단으로 수정(조율됨)**, (3) web
