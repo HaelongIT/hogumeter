@@ -40,7 +40,8 @@ public final class UsedMatcher {
 		return group.keywords().stream().anyMatch(k -> normalizedTitle.contains(normalize(k)));
 	}
 
-	private static String normalize(String s) {
+	/** 3계층·위험신호가 공유하는 정규화(대소문자·공백 무관). 같은 패키지에서 재사용. */
+	static String normalize(String s) {
 		return TitleNormalizer.joined(s).toLowerCase(Locale.ROOT);
 	}
 }

@@ -1,3 +1,20 @@
+## 2026-07-11 — USED-04 위험 신호 룰 (순수, AC-13·14)
+
+**한 일**: `UsedRiskSignals.detect` + `RiskSignal`(category·detail). 업자 레퍼토리 키워드 히트 +
+"스냅샷 최저 대비 X% 이상 저렴" 플래그를 **나열**한다. **판정하지 않는다**(AC-14) — 결론은 사람.
+- 정규화 공유: `UsedMatcher.normalize`를 package-private으로 노출(대소문자·공백 무관 매칭 재사용).
+  "이민급처"(붙여쓰기)도 "이민 급처" 히트.
+- 가격 플래그: snapshotLowest·cheapThresholdPct 파라미터화. null 최저는 플래그 생략(0 위장 안 함).
+- **판정 문구 부재를 테스트로 단언**(neverAsserts: category+detail에 "사기/위험/안전/정상" 없음).
+- TDD: 스텁(빈 리스트)로 4 RED → 구현 GREEN.
+
+**USED 순수 도메인 현황**: 3계층 필터·목록 diff·Listing 상태기계·신규 알림·위험 신호 완료. 남은 순수:
+후속 알림(AC-8·9 promoted 한정) · 평가기 출력 조립(가격맥락) · 메모·축 값객체.
+
+**다음(무중단)**: 후속 알림(AC-8·9) → 이후 core V3 스키마(Flyway)·어댑터 배선. web 프론트는 지시 대기.
+
+---
+
 ## 2026-07-11 — USED-02 신규 매물 알림 판정 (순수, AC-7)
 
 **한 일**: `UsedAlertPolicy.shouldAlertOnNew` — 3계층 필터 통과(required AND + TRIGGER 충족) AND
