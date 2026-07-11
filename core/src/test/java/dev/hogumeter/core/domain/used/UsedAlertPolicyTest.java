@@ -43,4 +43,22 @@ class UsedAlertPolicyTest {
 	void doesNotAlertWhenRequiredMissing() {
 		assertThat(UsedAlertPolicy.shouldAlertOnNew("갤럭시 256 미개봉", 1, SPEC, 850_000L)).isFalse();
 	}
+
+	// AC-8: 승격 매물의 가격 하락만 후속 알림
+	@Test
+	void followsUpOnPriceDropOnlyWhenPromoted() {
+		PriceChange drop = new PriceChange("A", 900_000, 850_000);
+		PriceChange rise = new PriceChange("A", 850_000, 900_000);
+
+		assertThat(UsedAlertPolicy.shouldAlertOnPriceChange(drop, true)).isTrue();
+		assertThat(UsedAlertPolicy.shouldAlertOnPriceChange(drop, false)).isFalse(); // 미승격
+		assertThat(UsedAlertPolicy.shouldAlertOnPriceChange(rise, true)).isFalse(); // 상승은 배지만
+	}
+
+	// AC-9: 승격 매물의 판매완료만 알림
+	@Test
+	void followsUpOnSoldOutOnlyWhenPromoted() {
+		assertThat(UsedAlertPolicy.shouldAlertOnSoldOut(true)).isTrue();
+		assertThat(UsedAlertPolicy.shouldAlertOnSoldOut(false)).isFalse();
+	}
 }

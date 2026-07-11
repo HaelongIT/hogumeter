@@ -18,4 +18,17 @@ public final class UsedAlertPolicy {
 		return UsedMatcher.evaluate(title, spec).alertEligible()
 				&& (targetPrice == null || price <= targetPrice);
 	}
+
+	/**
+	 * AC-8 후속 알림: 승격된(promoted) 매물의 <b>가격 하락</b>만 후속 알림한다(더 좋은 딜). 상승은 배지·정렬만
+	 * (스팸 방지). 미승격 매물의 변동은 알림 안 함. 하락만 두는 것은 잠정(docs/91 Q-70) — seam은 이 한 줄.
+	 */
+	public static boolean shouldAlertOnPriceChange(PriceChange change, boolean promoted) {
+		return promoted && change.currentPrice() < change.previousPrice();
+	}
+
+	/** AC-9 후속 알림: 승격된 매물이 목록에서 소실(판매완료 추정)되면 알림. 미승격은 스냅샷 전체 미적용. */
+	public static boolean shouldAlertOnSoldOut(boolean promoted) {
+		return promoted;
+	}
 }

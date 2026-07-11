@@ -1,3 +1,19 @@
+## 2026-07-11 — USED-02 후속 알림 (순수, AC-8·9) + USED 순수 도메인 일단락
+
+**한 일**: `UsedAlertPolicy`에 후속 알림 2종 추가.
+- AC-8 `shouldAlertOnPriceChange(change, promoted)` = promoted && 가격 **하락**(상승은 배지만).
+- AC-9 `shouldAlertOnSoldOut(promoted)` = promoted(승격 매물만 판매완료 알림, 스냅샷 전체 미적용).
+- 하락만 후속은 잠정 → `docs/91` Q-70(seam 한 줄). 뮤테이션(`<`→`!=`)으로 방향 조건이 무는지 증명.
+
+**USED 순수 도메인 완료**: 3계층 필터(01) · 목록 diff·Listing 상태기계·신규/후속 알림(02) · 위험 신호(04).
+전부 IO 0, 스키마 선행 없이 단위+뮤테이션으로 검증. 남은 순수는 없음에 가깝다(평가기 출력 조립·메모/축은
+어댑터·저장 층).
+
+**다음 = core V3 스키마 + 어댑터(IO)**. 데이터모델 형태(bonus_groups 정규화 vs 배열, EAV 구조,
+used_search 컬럼)는 되돌리기 어려운 결정이라 사용자에게 방향 확인 후 착수. web 프론트는 지시 대기.
+
+---
+
 ## 2026-07-11 — USED-04 위험 신호 룰 (순수, AC-13·14)
 
 **한 일**: `UsedRiskSignals.detect` + `RiskSignal`(category·detail). 업자 레퍼토리 키워드 히트 +
