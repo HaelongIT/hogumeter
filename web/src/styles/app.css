@@ -1,0 +1,647 @@
+/* 계기판 UI — 셸·세그먼트 탭·게이지·판독·폼·모듈. 문구는 present.ts, 여긴 표현만. */
+
+.shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 20px 72px;
+}
+
+/* ── 상단 바 ─────────────────────────────────────────── */
+.topbar {
+  padding: 18px 0 14px;
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: 8px;
+}
+
+.topbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.brand-tag {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* 특정도: 일반 `.shell button` 규칙을 확실히 이기게 `.shell` 접두로 (0,2,0). */
+.shell .theme-toggle {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: var(--dial);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.shell .theme-toggle:hover {
+  color: var(--ink);
+  background: var(--dial);
+  border-color: var(--steel-dim);
+}
+
+/* ── 세그먼트 탭(계기 토글 스위치) ───────────────────── */
+.tabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--dial);
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.shell .tabs button {
+  flex: 1 1 auto;
+  align-self: auto;
+  white-space: nowrap;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.shell .tabs button:hover {
+  color: var(--ink);
+  background: transparent;
+  border-color: transparent;
+}
+
+.shell .tabs button[aria-current='true'] {
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* ── 페이지 뼈대 ─────────────────────────────────────── */
+.shell main {
+  display: block;
+}
+
+.shell main > h1 {
+  font-size: 1.375rem;
+  margin: 18px 0 4px;
+}
+
+.shell main > h1 + p[role='note'],
+.shell main > p[role='note'] {
+  margin-top: 12px;
+}
+
+/* ── 안내·오류·상태 문장 ─────────────────────────────── */
+.shell p[role='note'] {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-left: 2px solid var(--steel-dim);
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+}
+
+.shell p[role='alert'] {
+  font-size: 0.875rem;
+  color: var(--sig-red);
+  background: var(--sig-red-soft);
+  border: 1px solid color-mix(in srgb, var(--sig-red) 35%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+  margin-block: 12px;
+}
+
+.shell p[role='status'] {
+  font-size: 0.875rem;
+  color: var(--sig-green);
+  margin-top: 10px;
+}
+
+/* ── 폼(라벨된 계기 입력) ────────────────────────────── */
+.shell form {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  margin-block: 14px;
+}
+
+.shell label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ink-dim);
+}
+
+.shell input,
+.shell select,
+.shell textarea {
+  width: 100%;
+  background: var(--dial);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: 0;
+}
+
+.shell input::placeholder,
+.shell textarea::placeholder {
+  color: var(--ink-faint);
+}
+
+.shell input:hover,
+.shell select:hover,
+.shell textarea:hover {
+  border-color: var(--steel-dim);
+}
+
+.shell input:focus,
+.shell select:focus,
+.shell textarea:focus {
+  border-color: var(--steel);
+  outline: none;
+}
+
+.shell select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-dim) 50%),
+    linear-gradient(135deg, var(--ink-dim) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+}
+
+.shell textarea {
+  min-height: 68px;
+  resize: vertical;
+  font-family: var(--font-sans);
+}
+
+.shell fieldset {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shell legend {
+  padding: 0 6px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.shell fieldset > p {
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  line-height: 1.55;
+}
+
+/* 등록 폼의 축(axis) 행 — 라벨 2개 + 삭제 버튼을 세로로 묶는다. */
+.shell fieldset > div {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--dial);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.shell fieldset > div input {
+  background: var(--panel);
+}
+
+/* ── 버튼 ───────────────────────────────────────────── */
+.shell button {
+  align-self: flex-start;
+  padding: 9px 16px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.shell button:hover {
+  border-color: var(--steel);
+  background: var(--panel-2);
+}
+
+.shell button[type='submit'] {
+  background: var(--steel);
+  border-color: var(--steel);
+  color: #fff;
+}
+
+.shell button[type='submit']:hover {
+  filter: brightness(1.08);
+  background: var(--steel);
+}
+
+.shell button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 탭·토글은 위에서 자체 규칙을 가진다 — 일반 버튼 규칙을 덮는다. */
+.shell .tabs button,
+.shell .theme-toggle {
+  align-self: auto;
+}
+
+/* ── 판단 요약(히어로) ───────────────────────────────── */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-block: 18px;
+}
+
+.context-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin: 14px 0 4px;
+}
+
+.context-row label:last-child select {
+  min-width: 116px;
+}
+
+/* 판정 카드 — 신호색은 여기(판정)에만 등장한다. */
+.verdict {
+  --v: var(--sig-gray);
+  --v-soft: var(--sig-gray-soft);
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0;
+  padding: 15px 17px;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--v-soft);
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--v);
+  border-radius: var(--radius);
+}
+
+.verdict[data-signal='GREEN'] {
+  --v: var(--sig-green);
+  --v-soft: var(--sig-green-soft);
+}
+.verdict[data-signal='YELLOW'] {
+  --v: var(--sig-amber);
+  --v-soft: var(--sig-amber-soft);
+}
+.verdict[data-signal='RED'] {
+  --v: var(--sig-red);
+  --v-soft: var(--sig-red-soft);
+}
+.verdict[data-signal='GRAY'] {
+  --v: var(--sig-gray);
+  --v-soft: var(--sig-gray-soft);
+}
+
+.verdict .mark {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+/* 딱지 칩 */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tags li {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-dim);
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 4px 11px;
+}
+
+/* ── 게이지(the meter) ───────────────────────────────── */
+.gauge {
+  padding: 8px 6px 2px;
+}
+
+.gauge-bar {
+  position: relative;
+  height: 14px;
+  border-radius: 8px;
+  background: var(--dial);
+  border: 1px solid var(--hairline);
+  overflow: hidden;
+}
+
+.gauge-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.gauge-zone--green {
+  background: var(--sig-green-soft);
+}
+.gauge-zone--amber {
+  background: var(--sig-amber-soft);
+}
+.gauge-zone--red {
+  background: var(--sig-red-soft);
+}
+.gauge-zone--neutral {
+  background: var(--steel-soft);
+}
+
+/* 바늘 = "현재가가 어디 있나"(사실). 캡은 중립 — 판정색은 판정 카드가 낸다. */
+.gauge-needle {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+  transition: left 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.gauge-needle::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--steel);
+  border: 1.5px solid var(--panel);
+  border-radius: 1px;
+}
+
+.gauge-axis {
+  position: relative;
+  height: 30px;
+  margin-top: 10px;
+}
+
+.gauge-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.gauge-tick-mark {
+  width: 1px;
+  height: 6px;
+  background: var(--ink-faint);
+}
+
+.gauge-tick-label {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.gauge-tick--now .gauge-tick-mark {
+  background: var(--ink);
+}
+.gauge-tick--now .gauge-tick-label {
+  color: var(--ink);
+}
+
+/* 계기 미확립 — 바늘을 지어내지 않는다(정직성). */
+.gauge--uncal .gauge-bar {
+  opacity: 0.5;
+}
+
+.gauge-uncal {
+  display: block;
+  margin-top: 10px;
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+}
+
+/* ── 판독 패널 ───────────────────────────────────────── */
+.readouts {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.readout {
+  margin: 0;
+  padding: 12px 15px;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.readout + .readout {
+  border-top: 1px solid var(--hairline);
+}
+
+.readout::before {
+  content: attr(aria-label);
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 3px;
+}
+
+/* ── 사례(SPARSE) ────────────────────────────────────── */
+.cases h2 {
+  font-size: 0.9375rem;
+  margin-bottom: 8px;
+}
+
+.cases ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cases li {
+  font-size: 0.875rem;
+  color: var(--ink-dim);
+  padding: 10px 13px;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+/* ── 서브모듈(구매 기록·알림 정책) ──────────────────── */
+.shell main > section[aria-label]:not(.summary):not(.cases) {
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-block: 14px;
+}
+
+.shell main > section[aria-label] > h2 {
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+/* ── 목록(등록된 제품·구매 목록·미상 큐) ────────────── */
+.shell ul[aria-label='등록된 제품'],
+.shell ul[aria-label='구매 목록'],
+.shell ul[aria-label='미상 큐'],
+.shell ul[aria-label='생성될 variant'] {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.shell ul[aria-label='등록된 제품'] > li,
+.shell ul[aria-label='구매 목록'] > li,
+.shell ul[aria-label='미상 큐'] > li {
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.shell ul[aria-label='등록된 제품'] ul {
+  list-style: none;
+  padding: 6px 0 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ink-dim);
+}
+
+.shell ul[aria-label='미상 큐'] p {
+  margin: 0;
+}
+
+.shell ul[aria-label='미상 큐'] p + p {
+  margin-top: 4px;
+  color: var(--ink-dim);
+  font-size: 0.8125rem;
+}
+
+/* 가격·id는 mono 등숫자로 — 가격이 주인공. */
+.shell [aria-label='구매가'],
+.shell code {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+
+.shell code {
+  color: var(--ink-dim);
+  font-weight: 500;
+}
+
+.shell h2 {
+  font-size: 1.0625rem;
+  margin: 22px 0 8px;
+}
+
+.shell section[aria-label='등록 결과'] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shell section[aria-label='등록 결과'] button {
+  align-self: flex-start;
+}
+
+.shell section[aria-label='생성될 variant'] {
+  margin-top: 4px;
+  font-size: 0.8125rem;
+  color: var(--ink-dim);
+}
+
+/* ── 반응형 ─────────────────────────────────────────── */
+@media (max-width: 560px) {
+  .shell {
+    padding: 0 14px 56px;
+  }
+  .context-row {
+    grid-template-columns: 1fr;
+  }
+  .tabs button {
+    flex: 0 0 auto;
+  }
+}

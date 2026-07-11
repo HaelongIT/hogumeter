@@ -1,0 +1,93 @@
+/*
+ * 계기판(Instrument) 디자인 토큰. 색=의미: 신호 3색은 판정에만 쓴다.
+ * 기본은 "야간 계기판"(다크). OS가 라이트면 라이트로, 사용자가 토글하면 그 선택이 이긴다(data-theme).
+ */
+
+:root {
+  --font-sans: 'IBM Plex Sans KR', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
+    'Malgun Gothic', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: 'Space Grotesk', 'IBM Plex Sans KR', var(--font-sans);
+
+  --radius: 10px;
+  --radius-sm: 7px;
+
+  /* 신호(양 테마 공통 — 판정 전용). GRAY는 표본 부족이지 빨강이 아니다. */
+  --sig-green: #33b98a;
+  --sig-amber: #e6a93c;
+  --sig-red: #e8573d;
+  --sig-gray: #8b95a2;
+
+  /* 다크 = 기본 정체성 */
+  color-scheme: dark;
+  --bg: #0f1319;
+  --panel: #171d26;
+  --panel-2: #1e2530;
+  --dial: #0b0e13;
+  --hairline: #29323e;
+  --ink: #e8ecf2;
+  --ink-dim: #97a2b1;
+  --ink-faint: #63707f;
+  --steel: #5b7db1;
+  --steel-dim: #3c4e68;
+  --focus: #7fa8e0;
+  --sig-green-soft: rgba(51, 185, 138, 0.15);
+  --sig-amber-soft: rgba(230, 169, 60, 0.15);
+  --sig-red-soft: rgba(232, 87, 61, 0.15);
+  --sig-gray-soft: rgba(139, 149, 162, 0.14);
+  --steel-soft: rgba(91, 125, 177, 0.16);
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 28px rgba(0, 0, 0, 0.36);
+}
+
+/* 라이트 토큰 — 한 벌을 두 선택자에 준다(명시 선택 + OS 선호). */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eef1f5;
+  --panel: #ffffff;
+  --panel-2: #f4f7fa;
+  --dial: #e3e8ee;
+  --hairline: #d2d9e2;
+  --ink: #1a2028;
+  --ink-dim: #55606e;
+  --ink-faint: #8a95a3;
+  --steel: #4a6da0;
+  --steel-dim: #a9bbd6;
+  --focus: #2e5b9a;
+  --sig-green: #1f9e76;
+  --sig-amber: #c7891f;
+  --sig-red: #d24328;
+  --sig-gray: #6c7580;
+  --sig-green-soft: rgba(31, 158, 118, 0.12);
+  --sig-amber-soft: rgba(199, 137, 31, 0.15);
+  --sig-red-soft: rgba(210, 67, 40, 0.1);
+  --sig-gray-soft: rgba(108, 117, 128, 0.12);
+  --steel-soft: rgba(74, 109, 160, 0.12);
+  --shadow: 0 1px 2px rgba(20, 30, 50, 0.06), 0 10px 28px rgba(30, 45, 70, 0.08);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg: #eef1f5;
+    --panel: #ffffff;
+    --panel-2: #f4f7fa;
+    --dial: #e3e8ee;
+    --hairline: #d2d9e2;
+    --ink: #1a2028;
+    --ink-dim: #55606e;
+    --ink-faint: #8a95a3;
+    --steel: #4a6da0;
+    --steel-dim: #a9bbd6;
+    --focus: #2e5b9a;
+    --sig-green: #1f9e76;
+    --sig-amber: #c7891f;
+    --sig-red: #d24328;
+    --sig-gray: #6c7580;
+    --sig-green-soft: rgba(31, 158, 118, 0.12);
+    --sig-amber-soft: rgba(199, 137, 31, 0.15);
+    --sig-red-soft: rgba(210, 67, 40, 0.1);
+    --sig-gray-soft: rgba(108, 117, 128, 0.12);
+    --steel-soft: rgba(74, 109, 160, 0.12);
+    --shadow: 0 1px 2px rgba(20, 30, 50, 0.06), 0 10px 28px rgba(30, 45, 70, 0.08);
+  }
+}

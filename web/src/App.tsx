@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ThemeToggle } from './components/ThemeToggle'
 import { DecisionPage } from './decision/DecisionPage'
 import { RegistrationPage } from './registration/RegistrationPage'
 import { ReviewQueuePage } from './review/ReviewQueuePage'
@@ -18,17 +19,26 @@ export function App() {
   }
 
   return (
-    <>
-      <nav aria-label="화면">
-        {(Object.keys(TABS) as Tab[]).map((key) => (
-          <button key={key} type="button" aria-current={tab === key} onClick={() => setTab(key)}>
-            {TABS[key]}
-          </button>
-        ))}
-      </nav>
+    <div className="shell">
+      <header className="topbar">
+        <div className="topbar-row">
+          <div className="brand">
+            <span className="wordmark">호구미터</span>
+            <span className="brand-tag">HOGU·METER</span>
+          </div>
+          <ThemeToggle />
+        </div>
+        <nav aria-label="화면" className="tabs">
+          {(Object.keys(TABS) as Tab[]).map((key) => (
+            <button key={key} type="button" aria-current={tab === key} onClick={() => setTab(key)}>
+              {TABS[key]}
+            </button>
+          ))}
+        </nav>
+      </header>
       {tab === 'decision' && <DecisionPage initialVariantId={openVariantId} />}
       {tab === 'registration' && <RegistrationPage onOpenDecision={openDecision} />}
       {tab === 'review' && <ReviewQueuePage />}
-    </>
+    </div>
   )
 }

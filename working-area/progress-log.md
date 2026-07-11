@@ -1,3 +1,23 @@
+## 2026-07-11 — web UI 계기판 비주얼 아이덴티티 (사용자 지휘, /frontend-design)
+
+**한 일**: 사용자가 프론트 UI 지휘를 시작(메모리 규칙대로 지시 대기 중이었음). /frontend-design으로 3안
+제시 → **계기판(게이지)** 선택. web은 스타일이 0(브라우저 기본 HTML)이라 백지에서 정체성을 세웠다.
+**마크업·CSS만** 손대고 문구는 검증된 presenter 그대로 — 147 테스트 GREEN, build GREEN.
+
+- 토큰(styles/tokens.css): 다크 "야간 계기판" 기본 + 라이트 "주광 계기판"(data-theme 토글 +
+  prefers-color-scheme). 신호 3색은 판정에만(색=의미), 구조는 steel로 분리.
+- 타이포: Space Grotesk·IBM Plex Sans KR·IBM Plex Mono(tabular). Google Fonts link.
+- 시그니처(decision/Gauge.tsx): 선형 게이지. 실측 위치만 + 바늘 스윕(reduced-motion 존중). **정직성
+  게이트 = present.ts gap 거절 조건과 동일** — 표본/현재가 없으면 "계기 미확립"(GRAY≠RED). aria-hidden.
+  바늘 캡은 중립(steel): 바늘=현재가 위치(사실), 판정색=판정 카드(딜 존재). 두 축을 안 섞는다.
+- 셸(App.tsx): 워드마크 + 세그먼트 탭 + ThemeToggle(matchMedia 안 씀 → 테스트 안전).
+- 품질 바닥: 최대폭·모바일 단일 컬럼·:focus-visible·reduced-motion. Playwright로 다크/라이트/390px 실측.
+
+**검증**: web 147 GREEN · tsc+vite build GREEN · aria/문구 불변 · api/types.ts 무변경(스모크 영향 0).
+**남음(후속)**: 폰트 self-host 옵션 · 실 core 연결에서 게이지/판정 종단 시각 점검(현재는 preview로 확인).
+
+---
+
 ## 2026-07-11 — 배치 종료: 막히지 않고 완결되는 core V3 어댑터 소진 (②)
 
 **이번 턴 요약(사용자 지시 반영 후)**: 사용자가 (1) Q-27③ 우리 수정, (2) core 무중단 조율, (3) web

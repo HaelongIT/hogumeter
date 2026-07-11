@@ -3,6 +3,7 @@ import { ApiFailure, api } from '../api/client'
 import type { BenchmarkView, CadenceView, ProductSummary, SignalView } from '../api/types'
 import { AlertPolicyPanel } from '../policy/AlertPolicyPanel'
 import { PurchasePanel } from '../purchase/PurchasePanel'
+import { Gauge } from './Gauge'
 import { benchmarkLine, cadenceLine, gapLine, lowestLine, signalBadge } from './present'
 
 interface Loaded {
@@ -73,39 +74,44 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
     <main>
       <h1>지금 사도 되나</h1>
 
-      <label>
-        variant
-        <select
-          value={variantId ?? ''}
-          onChange={(event) => setVariantId(event.target.value === '' ? null : Number(event.target.value))}
-        >
-          <option value="">선택하세요</option>
-          {options.map((option) => (
-            <option key={option.variantId} value={option.variantId}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="context-row">
+        <label>
+          variant
+          <select
+            value={variantId ?? ''}
+            onChange={(event) => setVariantId(event.target.value === '' ? null : Number(event.target.value))}
+          >
+            <option value="">선택하세요</option>
+            {options.map((option) => (
+              <option key={option.variantId} value={option.variantId}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <label>
-        기간
-        <select value={periodMonths} onChange={(event) => setPeriodMonths(Number(event.target.value))}>
-          {PERIODS.map((months) => (
-            <option key={months} value={months}>
-              최근 {months}개월
-            </option>
-          ))}
-        </select>
-      </label>
+        <label>
+          기간
+          <select value={periodMonths} onChange={(event) => setPeriodMonths(Number(event.target.value))}>
+            {PERIODS.map((months) => (
+              <option key={months} value={months}>
+                최근 {months}개월
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       {options.length === 0 && !error && <p>등록된 variant가 없습니다. 먼저 제품을 등록하세요.</p>}
       {error && <p role="alert">{error}</p>}
 
       {loaded && badge && (
-        <section aria-label="판단 요약">
-          <p aria-label="신호등">
-            <span aria-label={`신호 ${loaded.signal.color}`}>{badge.mark}</span> {badge.text}
+        <section aria-label="판단 요약" className="summary">
+          <p aria-label="신호등" className="verdict" data-signal={loaded.signal.color}>
+            <span className="mark" aria-label={`신호 ${loaded.signal.color}`}>
+              {badge.mark}
+            </span>{' '}
+            {badge.text}
           </p>
           {/* 기간을 바꿔도 신호등은 안 바뀐다. 그 사실을 숨기면 사용자는 바뀐 줄 안다(과대약속 금지). */}
           {periodMonths !== SIGNAL_PERIOD_MONTHS && (
@@ -115,31 +121,45 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
             </p>
           )}
           {badge.notes.length > 0 && (
-            <ul aria-label="딱지">
+            <ul aria-label="딱지" className="tags">
               {badge.notes.map((note) => (
                 <li key={note}>{note}</li>
               ))}
             </ul>
           )}
 
-          <p aria-label="기준가">{benchmarkLine(loaded.benchmark)}</p>
-          <p aria-label="갭">{gapLine(loaded.benchmark)}</p>
-          {/* "기준가보다 비싸다"만으로는 기다릴지 말지 못 정한다 — 이 기간에 얼마까지 내려갔었나. */}
-          {lowestLine(loaded.benchmark) && <p aria-label="기간 최저">{lowestLine(loaded.benchmark)}</p>}
-          <p aria-label="딜 주기">{cadenceLine(loaded.cadence)}</p>
+          {/* 계기(the meter) — 실측 위치만 그린다. 표본/현재가 없으면 스스로 "미확립"이라 말한다. */}
+          <Gauge view={loaded.benchmark} />
 
-          {loaded.benchmark.latestDeal && (
-            <p aria-label="최근 딜">
-              최근 딜 {loaded.benchmark.latestDeal.date} · {loaded.benchmark.latestDeal.site} ·{' '}
-              <a href={loaded.benchmark.latestDeal.sourceUrl} target="_blank" rel="noreferrer">
-                원문
-              </a>
+          <div className="readouts">
+            <p aria-label="기준가" className="readout">
+              {benchmarkLine(loaded.benchmark)}
             </p>
-          )}
+            <p aria-label="갭" className="readout">
+              {gapLine(loaded.benchmark)}
+            </p>
+            {/* "기준가보다 비싸다"만으로는 기다릴지 말지 못 정한다 — 이 기간에 얼마까지 내려갔었나. */}
+            {lowestLine(loaded.benchmark) && (
+              <p aria-label="기간 최저" className="readout">
+                {lowestLine(loaded.benchmark)}
+              </p>
+            )}
+            <p aria-label="딜 주기" className="readout">
+              {cadenceLine(loaded.cadence)}
+            </p>
+            {loaded.benchmark.latestDeal && (
+              <p aria-label="최근 딜" className="readout">
+                최근 딜 {loaded.benchmark.latestDeal.date} · {loaded.benchmark.latestDeal.site} ·{' '}
+                <a href={loaded.benchmark.latestDeal.sourceUrl} target="_blank" rel="noreferrer">
+                  원문
+                </a>
+              </p>
+            )}
+          </div>
 
           {/* SPARSE면 기준가 대신 사례를 그대로 보여준다 — 판단은 사람이 한다(절대 원칙 2). */}
           {loaded.benchmark.cases.length > 0 && (
-            <section aria-label="사례">
+            <section aria-label="사례" className="cases">
               <h2>사례 {loaded.benchmark.cases.length}건</h2>
               <ul>
                 {loaded.benchmark.cases.map((deal) => (
