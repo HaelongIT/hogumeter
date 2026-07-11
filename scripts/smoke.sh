@@ -567,6 +567,13 @@ base_price=$(compose exec -T postgres psql -qAt -U "${DB_USER:-hogumeter}" -d "$
 	 where rp.post_id = 'cond-e2e'" 2>/dev/null | tr -d '\r' | head -1) || true
 [ "$base_price" = "NULL" ] || fail "조건부 가격을 역산했다(base_price=$base_price). AC-2는 역산을 금지한다"
 
+# `deal_event.shipping`은 항상 0이어야 한다 — 배송비는 이미 `headline_price`에 합산된다(BM-02:
+# 저장 기준 = 실결제가 + 배송비). collector가 shipping을 별도로 채우기 시작하면 **이중계산**이다.
+# 미매핑 컬럼의 "의도적 0"을 계약으로 못박는다(Q-68: confidence는 반대로 죽은 자리다).
+shipping=$(compose exec -T postgres psql -qAt -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" -c "
+	select coalesce(max(shipping)::text, '0') from deal_event" 2>/dev/null | tr -d '\r' | head -1) || true
+[ "$shipping" = "0" ] || fail "deal_event.shipping이 0이 아니다($shipping) — 배송비 이중계산 위험(headline에 이미 합산됨)"
+
 # 배송비 미상 표식(collector 정본 → core 사본)이 DB를 건너 실제로 검색된다.
 # 표식이 어긋나면 core는 조용히 0을 세며 "오염 없음"이라고 말한다(scripts/check-tag-contract.sh).
 compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
