@@ -1,3 +1,23 @@
+## 2026-07-11 — core V3 스키마(used) + R3 롤백
+
+**한 일**: V3__used.sql(7테이블) + R3__used_rollback.sql. docs/used/02 방향 + V1 관례(text[] 배열).
+- `used_search`(product 종속: required/exclude text[]·target_price·poll_interval) · `used_search_bonus_group`
+  (그룹 행 + keywords text[], mode SORT|TRIGGER) · `used_listing_observation`(insert-only 적재 계약) ·
+  `listing`(자연키 unique(used_search_id,listing_id)·status·promoted·detail_fetched) · EAV 3테이블
+  (listing_note·comparison_axis·listing_axis_value, JSONB 금지 준수).
+- **검증**: Testcontainers 부팅 GREEN(V1·V2·V3 적용) + **rollback-drill PASS**(전진→역순 R[3 2 1]→재전진,
+  19테이블→0→19). rollback-drill은 동적(find로 V*/R* 버전순 순회)이라 V3/R3 자동 포함.
+- bonus_groups 배열 형태는 잠정 → `docs/91` Q-71(seam=리포지토리 매핑, 재개 트리거 명시).
+
+**⚠️ 다음 어댑터의 생산자 상황**: V3 테이블에 **쓰는** 주체 — `used_search`=web 등록(사용자 지시 대기)
+또는 **core REST**(우리가 만들 수 있음, MockMvc가 생산자) · `used_listing_observation`=collector 폴링
+(실 네트워크·검색어 소스 막힘). 그래서 목록 diff/Listing 배선은 collector 생산자 없이 하면 죽은 배선이
+되지만, **UsedSearch 등록 REST+UseCase+Repository는 core 층에서 완결·MockMvc로 산 채로 검증 가능**(막히지 않음).
+
+**다음(무중단)**: UsedSearch 등록 어댑터(엔티티·리포지토리·UseCase·REST) — 생산자=통합테스트. web 프론트는 지시 대기.
+
+---
+
 ## 2026-07-11 — USED-02 후속 알림 (순수, AC-8·9) + USED 순수 도메인 일단락
 
 **한 일**: `UsedAlertPolicy`에 후속 알림 2종 추가.
