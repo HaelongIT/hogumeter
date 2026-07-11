@@ -789,3 +789,10 @@
 - **오늘 게이트 셋이 주석에 속은 것과 같은 병이다**(`check-table-wiring`이 javadoc을 배선으로 읽었다). 그때 게이트는 고쳤지만 **일회성 감사 스크립트는 안 고쳤고**, 그 감사가 이 컬럼을 이미 놓친 뒤였다.
 - **교훈(규칙화)**: **정적 감사는 게이트든 일회성이든 주석을 걷어낸다.** 그리고 **"의도적 미사용"과 "의도 미실현"을 구분하라** — `shipping`·`base_price`는 미매핑이지만 의도적이고 근거(BM-02 합산·AC-2 역산 금지·스모크 5-1g)가 있다. `confidence`는 매칭 신뢰도를 담을 계획이 실현되지 않은 빈 자리다(Q-68). 둘을 섞으면 의도적 미사용을 결함으로 오탐하거나, 죽은 자리를 의도로 착각한다.
 - **관련**: `docs/91` Q-68 · 스모크 `deal_event.shipping=0`·`base_price=NULL` 계약.
+
+## 2026-07-11 — "한 줄 권고"가 두 지점이었다: 억제는 상태를 소비하는 부품 전수로 검증
+- **맥락**: Q-27③(최초 수집 시 이미 품절인 원문 → 품절 딜에 알림). `docs/91`에 우리가 적어둔 권고는 "`candidateFrom`의 초기 상태를 `post.getStatus()` 기반으로 바꾸는 **한 줄**. 그러면 종료 딜은 `ENDED`로 태어나고 `AlertEvaluator`가 자연히 걸러낸다"였다.
+- **증상**: 권고대로 `candidateFrom`만 고쳐도 알림이 계속 나갈 상황이었다.
+- **원인**: 재현해 보니 **`AlertEvaluator`는 `deal.status()`를 한 번도 참조하지 않았다**(전수 grep 0). "자연히 걸러낸다"는 전제가 코드에 없었다. 억제는 오직 가격 트리거로만 결정됐다.
+- **교훈(규칙화)**: **우리가 `docs/91`·`98`·`99`에 적어둔 권고·실측도 가설이다 — 막기(또는 고치기) 전에 재현한다**(CLAUDE.md에 이미 있으나 이번에 정확히 그 함정을 밟았다). 그리고 **"X면 억제된다"를 믿기 전에 그 상태 X를 실제로 소비하는 부품을 grep으로 전수 확인**한다. 억제를 한 지점(생성)에만 걸고 소비처(판정)가 그 상태를 무시하면, 두 부품이 각자 GREEN인 채로 결함이 산다 — candidateFrom(생성)과 AlertEvaluator(판정) 중 하나만 고치면 안 닫힌다. 값 계약(status)은 **생산자·소비자를 한 경로로 관통하는 테스트**(스파이 sender로 send 0회)로 잠근다.
+- **관련 테스트**: `IngestDealsUseCaseTest.initiallySoldOutPostIsBornEndedAndNotAlerted`(관통) · `AlertEvaluatorTest.endedDealNeverAlerts`(도메인) · `DealStatusTest`(매핑 정본). 종료 문자열 집합은 `DealStatus.ENDED_RAW_STATUSES` 한 곳(Reprocess도 참조 — 사본 제거).

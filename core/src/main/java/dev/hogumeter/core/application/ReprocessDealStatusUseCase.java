@@ -9,7 +9,6 @@ import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,8 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReprocessDealStatusUseCase {
 
-	/** raw_deal_post.status(문자열)의 "종료" 집합. */
-	private static final Set<String> ENDED_STATUSES = Set.of("SOLD_OUT", "DELETED");
 	/** 종료 전이 가능한 상태만 대상(NEW·ENDED 제외 → transitionTo 불변 보존). */
 	private static final List<DealStatus> ENDABLE = List.of(DealStatus.ACTIVE, DealStatus.VERIFIED);
 
@@ -56,7 +53,7 @@ public class ReprocessDealStatusUseCase {
 			return; // 근거 원문 없음 — 판단 불가
 		}
 		List<RawDealPost> posts = rawPosts.findAllById(rawIds);
-		if (posts.isEmpty() || !posts.stream().allMatch(p -> ENDED_STATUSES.contains(p.getStatus()))) {
+		if (posts.isEmpty() || !posts.stream().allMatch(p -> DealStatus.ENDED_RAW_STATUSES.contains(p.getStatus()))) {
 			return; // 아직 살아있는 소스 있음 → 종료 아님
 		}
 		Instant newestEvidence = posts.stream()

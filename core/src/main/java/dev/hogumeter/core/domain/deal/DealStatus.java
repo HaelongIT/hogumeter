@@ -31,4 +31,12 @@ public enum DealStatus {
 		}
 		return target;
 	}
+
+	/** raw_deal_post.status(문자열)의 "종료" 집합 — 이 판정의 정본(사본 금지, Reprocess도 이걸 참조). */
+	public static final Set<String> ENDED_RAW_STATUSES = Set.of("SOLD_OUT", "DELETED");
+
+	/** 최초 수집된 원문의 status로 초기 딜 상태를 정한다(Q-27③). 종료 문자열이면 ENDED, 그 외·null이면 ACTIVE. */
+	public static DealStatus fromRawPostStatus(String rawStatus) {
+		return rawStatus != null && ENDED_RAW_STATUSES.contains(rawStatus) ? ENDED : ACTIVE; // Set.of.contains(null)=NPE 회피
+	}
 }

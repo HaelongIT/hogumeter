@@ -15,23 +15,29 @@ import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
 import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
+import dev.hogumeter.core.application.port.out.AlertMessage;
+import dev.hogumeter.core.application.port.out.AlertSender;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 슬라이스 3 수집 파이프라인 — 매칭→병합→deal_event 저장, 애매→리뷰큐(Testcontainers). */
-@Import(TestcontainersConfiguration.class)
+@Import({ TestcontainersConfiguration.class, IngestDealsUseCaseTest.RecordingSenderConfig.class })
 @SpringBootTest
 @Transactional
 class IngestDealsUseCaseTest {
@@ -54,6 +60,8 @@ class IngestDealsUseCaseTest {
 	DealEventSourceRepository sources;
 	@Autowired
 	ReviewQueueItemRepository reviewQueue;
+	@Autowired
+	RecordingAlertSender recordingAlertSender;
 
 	private long variantId;
 	private int postSeq;
@@ -64,6 +72,7 @@ class IngestDealsUseCaseTest {
 		VariantEntity variant = variants.save(new VariantEntity(product.getId(), "256GB", Map.of("용량", "256GB")));
 		aliases.save(new AliasEntity(product.getId(), "아이폰17"));
 		variantId = variant.getId();
+		recordingAlertSender.sent.clear(); // 스파이는 싱글톤 — @Transactional이 롤백하지 않으므로 매 케이스 초기화
 	}
 
 	private void savePost(String site, String title, Long price, Instant when) {
@@ -130,5 +139,39 @@ class IngestDealsUseCaseTest {
 		DealEventEntity low = deals.stream().filter(d -> d.getPriceFirst() == 100_000L).findFirst().orElseThrow();
 		assertThat(low.getOutlierFlag()).isEqualTo(OutlierFlag.LOWER);
 		assertThat(reviewQueue.findByType(ReviewQueueType.OUTLIER_LOWER)).hasSize(1);
+	}
+
+	@Test
+	void initiallySoldOutPostIsBornEndedAndNotAlerted() {
+		// Q-27③: 최초 수집 시 이미 품절인 원문 → 딜은 ENDED로 태어나고 알림이 나가지 않는다.
+		// (예전엔 ACTIVE로 태어나 evaluate가 알림을 낸 뒤 같은 틱에 ENDED로 자가치유 — 알림은 이미 나간 뒤였다.)
+		rawPosts.save(new RawDealPost("ppomppu", "post" + postSeq++, "https://ppomppu.test/sold",
+				"아이폰 17 256기가 특가 89만", 890_000L, T, T, "SOLD_OUT"));
+
+		useCase.ingestPending();
+
+		List<DealEventEntity> deals = dealEvents.findByVariantId(variantId);
+		assertThat(deals).hasSize(1);
+		assertThat(deals.get(0).getStatus()).isEqualTo(DealStatus.ENDED);
+		assertThat(recordingAlertSender.sent).isEmpty();
+	}
+
+	@TestConfiguration
+	static class RecordingSenderConfig {
+		@Bean
+		@Primary
+		RecordingAlertSender recordingAlertSender() {
+			return new RecordingAlertSender();
+		}
+	}
+
+	/** 발송 대신 기록하는 스파이 — "알림이 나갔는가"를 통관 검증(@Primary로 StubAlertSender 대체). */
+	static class RecordingAlertSender implements AlertSender {
+		final List<AlertMessage> sent = new ArrayList<>();
+
+		@Override
+		public void send(AlertMessage message) {
+			sent.add(message);
+		}
 	}
 }

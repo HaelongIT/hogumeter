@@ -10,6 +10,7 @@ import dev.hogumeter.core.domain.benchmark.BenchmarkView.Gap;
 import dev.hogumeter.core.domain.benchmark.BenchmarkView.PricePoint;
 import dev.hogumeter.core.domain.benchmark.Tier;
 import dev.hogumeter.core.domain.deal.DealEvent;
+import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -50,6 +51,16 @@ class AlertEvaluatorTest {
 
 	private static AlertPolicy policy(Long targetPrice) {
 		return new AlertPolicy(targetPrice, null, null);
+	}
+
+	@Test
+	void endedDealNeverAlerts() {
+		// Q-27③: 종료된 딜은 가격이 아무리 좋아도(기준가·P25·목표가 전부 하회) 알림하지 않는다.
+		DealEvent d = aDealEvent().withPriceFirst(800_000L).status(DealStatus.ENDED).singleSite().build();
+
+		AlertDecision r = evaluator.evaluate(d, sufficient(), policy(900_000L), params);
+
+		assertThat(r.shouldAlert()).isFalse();
 	}
 
 	@Test

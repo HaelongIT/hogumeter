@@ -4,6 +4,7 @@ import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.benchmark.BenchmarkView;
 import dev.hogumeter.core.domain.benchmark.Tier;
 import dev.hogumeter.core.domain.deal.DealEvent;
+import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -26,6 +27,9 @@ public class AlertEvaluator {
 	 */
 	public AlertDecision evaluate(DealEvent deal, BenchmarkView view, AlertPolicy policy, BenchmarkParams params,
 			boolean paidPriceTriggerFires) {
+		if (deal.status() == DealStatus.ENDED) {
+			return new AlertDecision(false, AlertIntensity.NONE, List.of(), labels(deal, view)); // Q-27③ 종료 딜 억제
+		}
 		long price = deal.priceFirst();
 		EnumSet<AlertIntensity> satisfied = EnumSet.noneOf(AlertIntensity.class);
 

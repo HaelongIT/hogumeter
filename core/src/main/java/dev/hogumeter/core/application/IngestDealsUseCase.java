@@ -134,8 +134,8 @@ public class IngestDealsUseCase {
 		long price = post.getHeadlinePrice();
 		Instant firstSeen = post.getPostedAt() != null ? post.getPostedAt() : post.getCapturedAt();
 		return new DealEvent(variantId, false, Set.of(), price, price, price, price, Origin.LIVE,
-				Set.of(post.getSite()), OutlierFlag.NONE, false, DealStatus.ACTIVE, firstSeen, firstSeen,
-				post.getSite(), post.getUrl());
+				Set.of(post.getSite()), OutlierFlag.NONE, false, DealStatus.fromRawPostStatus(post.getStatus()),
+				firstSeen, firstSeen, post.getSite(), post.getUrl());
 	}
 
 	private void enqueueForReview(RawDealPost post, MatchResult match) {

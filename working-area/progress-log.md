@@ -1,3 +1,24 @@
+## 2026-07-11 — Q-27③ 해소(품절 딜 오알림) + core 소유권 조율
+
+**한 일**: 사용자가 (1) Q-27③ 우리가 수정, (2) **core 기존 파일도 무중단으로 수정(조율됨)**, (3) web
+프론트 UI만 지시 대기를 지시. Q-27③(최초 수집 시 이미 품절 → 품절 딜에 알림)을 TDD로 닫았다.
+
+- **실측 정정**: `docs/91`의 우리 권고("candidateFrom 한 줄 → AlertEvaluator가 자연히 걸러낸다")가
+  틀렸다. 재현하니 **AlertEvaluator는 deal.status()를 한 번도 안 봤다**(grep 0). 권고도 가설이었다.
+- **수정(두 지점)**: ① `candidateFrom` → `DealStatus.fromRawPostStatus(post.getStatus())`로 초기 상태
+  결정(SOLD_OUT/DELETED→ENDED) ② `AlertEvaluator.evaluate`가 ENDED 딜 early-return 억제. 하나만으론
+  안 닫힌다. 종료 문자열 집합은 `DealStatus.ENDED_RAW_STATUSES` 정본 하나, Reprocess도 참조(사본 제거).
+- **TDD**: RED 3개(스텁으로 컴파일→관찰) → GREEN. `Set.of.contains(null)`=NPE를 null 케이스 테스트가
+  잡아 가드 추가. 관통 테스트는 스파이 AlertSender로 send 0회 + status==ENDED. **core 전체 GREEN**.
+
+**자율 결정**: 소유권이 조율됐으므로 core 기존 4파일 수정(IngestDealsUseCase·AlertEvaluator·DealStatus·
+Reprocess). decision-log에 조율 기록. 교훈 docs/99 append(권고도 가설·상태 소비처 전수 확인).
+
+**다음(무중단 계속)**: M2 core V3 USED 스키마+도메인, Q-27②④(재처리 중복), Q-28(키워드 제외 표본)
+등 core 일감이 열렸다. web 프론트 UI는 사용자 지시 대기.
+
+---
+
 ## 2026-07-11 — M2 문서 세트 완성(03·05·06) + web UI 착수 지시 대기
 
 **한 일**: 사용자가 "M2 문서 더(03·05·06)"를 선택 → used 모듈 문서를 docs/benchmark(00~07)
