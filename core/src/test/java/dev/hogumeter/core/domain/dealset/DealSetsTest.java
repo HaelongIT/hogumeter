@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealStatus;
+import dev.hogumeter.core.domain.deal.DealTags;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import java.util.List;
 import java.util.Set;
@@ -31,6 +32,18 @@ class DealSetsTest {
 	void pricingSetKeepsNonOutlierClassifiedDeals() {
 		// 값 통계: 이상치 미해당(승격 LOWER=NONE 포함) + 미상 제외
 		assertThat(DealSets.pricingSet(all)).containsExactly(normalActive, normalEnded);
+	}
+
+	@Test
+	void pricingSetExcludesShippingUnknown() {
+		// 배송비미상 딜은 저장가가 하한이라 median/P25를 아래로 끈다 → 값 통계에서 제외(Q-46 ②).
+		DealEvent shippingUnknown = aDealEvent().withPriceFirst(7).appliedConditions(DealTags.SHIPPING_UNKNOWN).build();
+		List<DealEvent> deals = List.of(normalActive, shippingUnknown);
+
+		assertThat(DealSets.pricingSet(deals)).containsExactly(normalActive);
+		// 그래도 실제 딜이므로 발생·신호 집합엔 남는다(가격만 못 믿을 뿐).
+		assertThat(DealSets.occurrenceSet(deals)).contains(shippingUnknown);
+		assertThat(DealSets.signalSet(deals)).contains(shippingUnknown);
 	}
 
 	@Test

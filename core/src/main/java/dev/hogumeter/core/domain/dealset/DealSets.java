@@ -2,6 +2,7 @@ package dev.hogumeter.core.domain.dealset;
 
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealStatus;
+import dev.hogumeter.core.domain.deal.DealTags;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import java.util.List;
 
@@ -16,12 +17,17 @@ public final class DealSets {
 	private DealSets() {
 	}
 
-	/** 값의 통계(기준가·P25·성적표). 이상치 미해당(승격 LOWER=NONE 자동 포함)·영구제외 제외. */
+	/**
+	 * 값의 통계(기준가·P25·성적표). 이상치 미해당(승격 LOWER=NONE 자동 포함)·영구제외 제외.
+	 * <p>배송비미상 딜도 제외한다(Q-46 ②): 저장가가 실제보다 낮은 하한이라 median/P25를 아래로 끌어
+	 * <b>없는 굿딜을 있다고</b> 말하게 된다(놓침 아니라 오알림, 원칙3). 발생·신호 집합엔 남긴다 — 실제 딜이다.
+	 */
 	public static List<DealEvent> pricingSet(List<DealEvent> deals) {
 		return deals.stream()
 				.filter(DealSets::isClassified)
 				.filter(d -> d.outlierFlag() == OutlierFlag.NONE)
 				.filter(d -> !d.permanentlyExcluded())
+				.filter(d -> !d.hasCondition(DealTags.SHIPPING_UNKNOWN))
 				.toList();
 	}
 

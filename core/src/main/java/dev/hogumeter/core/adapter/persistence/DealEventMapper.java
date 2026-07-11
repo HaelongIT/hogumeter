@@ -38,10 +38,11 @@ public class DealEventMapper {
 		}
 
 		Set<Long> candidates = e.getProductCandidates() == null ? Set.of() : Set.copyOf(e.getProductCandidates());
+		Set<String> conditions = e.getAppliedConditions() == null ? Set.of() : Set.copyOf(e.getAppliedConditions());
 
 		return new DealEvent(e.getVariantId(), e.isUnclassified(), candidates,
 				e.getPriceFirst(), e.getPriceMin(), e.getPriceMax(), e.getPriceLast(),
 				e.getOrigin(), siteSet, e.getOutlierFlag(), e.isPermanentlyExcluded(), e.getStatus(),
-				e.getFirstSeen(), e.getLastSeen(), site, sourceUrl);
+				e.getFirstSeen(), e.getLastSeen(), site, sourceUrl, conditions);
 	}
 }

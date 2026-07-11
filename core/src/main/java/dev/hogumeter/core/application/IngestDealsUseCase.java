@@ -133,9 +133,10 @@ public class IngestDealsUseCase {
 	private DealEvent candidateFrom(RawDealPost post, long variantId) {
 		long price = post.getHeadlinePrice();
 		Instant firstSeen = post.getPostedAt() != null ? post.getPostedAt() : post.getCapturedAt();
+		// 새 딜은 조건 태그가 없다 — PreserveAppliedConditionsUseCase가 ingest 뒤에 원문에서 끌어올린다.
 		return new DealEvent(variantId, false, Set.of(), price, price, price, price, Origin.LIVE,
 				Set.of(post.getSite()), OutlierFlag.NONE, false, DealStatus.fromRawPostStatus(post.getStatus()),
-				firstSeen, firstSeen, post.getSite(), post.getUrl());
+				firstSeen, firstSeen, post.getSite(), post.getUrl(), Set.of());
 	}
 
 	private void enqueueForReview(RawDealPost post, MatchResult match) {

@@ -19,7 +19,7 @@ import org.hibernate.type.SqlTypes;
 /**
  * V1 deal_event 테이블 JPA 엔티티. 리치 도메인 {@code DealEvent}와의 임피던스는 {@link DealEventMapper}가 흡수
  * (sourceSites·대표 site/url은 deal_event_source에서 복원). 표본 산식에 불필요한 컬럼(shipping·base_price·
- * applied_conditions·confidence)은 미매핑(기본값·nullable).
+ * confidence)은 미매핑. applied_conditions는 읽기 전용 매핑(쓰기는 PreserveAppliedConditionsUseCase 네이티브 SQL 단독).
  */
 @Entity
 @Table(name = "deal_event")
@@ -70,6 +70,11 @@ public class DealEventEntity {
 	private Instant firstSeen;
 	@Column(name = "last_seen", nullable = false)
 	private Instant lastSeen;
+
+	/** BM-02 조건 태그 — 읽기 전용(insertable/updatable=false). 쓰기는 네이티브 SQL 단독. null = 태그 없음. */
+	@JdbcTypeCode(SqlTypes.ARRAY)
+	@Column(name = "applied_conditions", insertable = false, updatable = false)
+	private List<String> appliedConditions;
 
 	protected DealEventEntity() {
 	}
@@ -148,6 +153,11 @@ public class DealEventEntity {
 
 	public Instant getLastSeen() {
 		return lastSeen;
+	}
+
+	/** null = 태그 없음(빈 배열 아님, 값 없음을 값으로 쓰지 않는다). */
+	public List<String> getAppliedConditions() {
+		return appliedConditions;
 	}
 
 	/** 병합 결과(도메인 merge 산출)를 반영. 이상치 플래그·영구제외는 유지(C-4: 유입 1회 판정). */

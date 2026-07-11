@@ -27,8 +27,14 @@ public final class DealEventBuilder {
 	private Instant lastSeen = null;
 	private String site = "ppomppu";
 	private String sourceUrl = "https://ppomppu.test/deal";
+	private Set<String> appliedConditions = Set.of();
 
 	private DealEventBuilder() {
+	}
+
+	public DealEventBuilder appliedConditions(String... conditions) {
+		this.appliedConditions = Set.of(conditions);
+		return this;
 	}
 
 	public static DealEventBuilder aDealEvent() {
@@ -128,6 +134,7 @@ public final class DealEventBuilder {
 		long pLast = (priceLast != null) ? priceLast : priceFirst;
 		Instant ls = (lastSeen != null) ? lastSeen : firstSeen;
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, pMin, pMax, pLast,
-				origin, resolvedSites, outlierFlag, permanentlyExcluded, status, firstSeen, ls, site, sourceUrl);
+				origin, resolvedSites, outlierFlag, permanentlyExcluded, status, firstSeen, ls, site, sourceUrl,
+				appliedConditions);
 	}
 }

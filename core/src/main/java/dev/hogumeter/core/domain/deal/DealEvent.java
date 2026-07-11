@@ -13,6 +13,8 @@ import java.util.Set;
  * @param productCandidates 미상 딜의 제품 후보군(잠정 병합 겹침 판정 — BM-04 AC-3)
  * @param sourceSites 교차검증 근거 사이트 집합(m = size)
  * @param permanentlyExcluded 사기 기각 딜 — 재수집돼도 표본 복귀 없음(BM-05 AC-3)
+ * @param appliedConditions BM-02 조건 태그(`카할`·`배송비미상` 등). `deal_event.applied_conditions`에서 복원.
+ *     `배송비미상`은 저장가가 실제보다 낮은 하한이라 pricingSet에서 제외한다(Q-46 ②, 하향 편향 방지).
  */
 public record DealEvent(
 		Long variantId,
@@ -30,11 +32,18 @@ public record DealEvent(
 		Instant firstSeen,
 		Instant lastSeen,
 		String site,
-		String sourceUrl) {
+		String sourceUrl,
+		Set<String> appliedConditions) {
 
 	public DealEvent {
 		productCandidates = Set.copyOf(productCandidates);
 		sourceSites = Set.copyOf(sourceSites);
+		appliedConditions = Set.copyOf(appliedConditions);
+	}
+
+	/** 이 딜에 조건 태그가 붙었나(BM-02). `배송비미상`이면 가격이 하한이다. */
+	public boolean hasCondition(String tag) {
+		return appliedConditions.contains(tag);
 	}
 
 	/** 교차검증 성립 = 서로 다른 사이트 2곳 이상. */
@@ -76,13 +85,13 @@ public record DealEvent(
 		Instant evidence = at.isAfter(lastSeen) ? at : lastSeen;
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst,
 				Math.min(priceMin, newPrice), Math.max(priceMax, newPrice), newPrice,
-				origin, sourceSites, outlierFlag, permanentlyExcluded, status, firstSeen, evidence, site, sourceUrl);
+				origin, sourceSites, outlierFlag, permanentlyExcluded, status, firstSeen, evidence, site, sourceUrl, appliedConditions);
 	}
 
 	/** 이상치 판정 결과 플래그 부여(BM-05). */
 	public DealEvent flagOutlier(OutlierFlag flag) {
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, priceMin, priceMax, priceLast,
-				origin, sourceSites, flag, permanentlyExcluded, status, firstSeen, lastSeen, site, sourceUrl);
+				origin, sourceSites, flag, permanentlyExcluded, status, firstSeen, lastSeen, site, sourceUrl, appliedConditions);
 	}
 
 	/** 사람이 "진짜였다" 확정 → 이상치 해제, 표본 복귀(BM-05 AC-3). */
@@ -93,11 +102,11 @@ public record DealEvent(
 	/** 사람이 "사기·낚시" 기각 → 영구 제외(재수집돼도 표본 복귀 없음, BM-05 AC-3). */
 	public DealEvent reject() {
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, priceMin, priceMax, priceLast,
-				origin, sourceSites, outlierFlag, true, status, firstSeen, lastSeen, site, sourceUrl);
+				origin, sourceSites, outlierFlag, true, status, firstSeen, lastSeen, site, sourceUrl, appliedConditions);
 	}
 
 	private DealEvent withStatus(DealStatus newStatus) {
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, priceMin, priceMax, priceLast,
-				origin, sourceSites, outlierFlag, permanentlyExcluded, newStatus, firstSeen, lastSeen, site, sourceUrl);
+				origin, sourceSites, outlierFlag, permanentlyExcluded, newStatus, firstSeen, lastSeen, site, sourceUrl, appliedConditions);
 	}
 }

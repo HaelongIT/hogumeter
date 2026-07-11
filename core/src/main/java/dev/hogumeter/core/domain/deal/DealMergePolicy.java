@@ -55,7 +55,8 @@ public class DealMergePolicy {
 				first.firstSeen(),
 				last.lastSeen(),
 				first.site(),
-				first.sourceUrl());
+				first.sourceUrl(),
+				union(existing.appliedConditions(), incoming.appliedConditions()));
 	}
 
 	private static boolean sameTarget(DealEvent a, DealEvent b) {
