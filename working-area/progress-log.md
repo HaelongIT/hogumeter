@@ -1,3 +1,22 @@
+## 2026-07-11 — USED-02 목록 diff 생애주기 (순수)
+
+**한 일**: USED-02의 순수 diff(docs/used/04 AC-7~10). 연속 두 스냅샷 → 신규·가격변동·소실.
+
+- `ObservedListing`(listingId 자연키 + price) · `PriceChange` · `ListingDiffResult`(appeared·
+  priceChanged·disappeared) · `ListingDiff.diff`(순수).
+- AC-7 신규(current에만) · AC-8 가격변동(양쪽·가격 상이) · AC-9 소실(previous에만, SOLD 추정) ·
+  AC-10 끌올(양쪽 존재 → 신규·변동 아님). 스냅샷 내 중복 listingId는 스냅샷 단위 dedupe(마지막 승리).
+- **diff는 사실만** 낸다 — "promoted 매물만 후속 알림"(AC-8·9) 같은 정책 필터는 소비 층(알림 판정)의
+  몫으로 분리(diff는 무정책·순수). 결정성 위해 LinkedHashMap로 입력 순서 보존(로케일 정렬 회피).
+- TDD: 스텁(빈 결과)로 4 RED 확인(끌올은 빈 결과라 우연 GREEN) → 구현 GREEN.
+
+**미착수(다음)**: AC-11(상세 fetch 승격 시 1회)은 Listing 상태(detail_fetched) 전이라 diff 아님 →
+Listing 상태기계 증분에서. 그 후 알림 판정(신규+TRIGGER+targetPrice, promoted 한정 후속).
+
+TURN-END 후보 아님 — 무중단 계속. web 프론트만 사용자 지시 대기.
+
+---
+
 ## 2026-07-11 — USED-01 3계층 필터 (M2 순수 도메인 착수)
 
 **한 일**: M2 core의 첫 순수 도메인 = USED-01 3계층 필터(docs/used/04 AC-1~6). 신규 패키지
