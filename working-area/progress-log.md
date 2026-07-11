@@ -1,3 +1,18 @@
+## 2026-07-11 — priceless 드리프트가 엔트리포인트에서 실제 발화하는지 종단 검증했다
+
+**한 일**: REL-06의 새 신호("딜은 나오는데 가격이 하나도 없다")는 배선(scheduler)·단위(drift) 테스트만
+있었고 `__main__` 종단이 없었다. zero-yield 종단 테스트는 `observe` 호출은 커버하지만 `priced_count`가
+`run_cycle→observe`로 흐르는지는 안 본다(zero-yield는 deal_count만 씀).
+
+- 실제 파서가 도는 opener: fmkorea 가격칸을 파싱 불가로, ppomppu·ruliweb은 정상 딜(가격 있음).
+  → fmkorea만 priceless 드리프트, 정상 두 사이트는 오탐 안 함(오차단 방지까지 검증).
+- 뮤테이션 증명: `run_cycle`이 `priced_count`를 `len(site_deals)`로 채우면(감지 불능) 이 테스트만 RED.
+  이 테스트는 priced_count 흐름에 의존한다.
+
+**검증**: collector 295건 GREEN.
+
+---
+
 ## 2026-07-11 배치 종료(이어서) — 죽은 컬럼 감사 완주
 
 **이번 배치**: "컬럼은 있는데 값이 도달하지 않는다"(applied_conditions의 거울상)를 전수로 봤다.

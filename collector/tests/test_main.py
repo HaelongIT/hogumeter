@@ -478,3 +478,67 @@ def test_robots_lookup_failure_does_not_break_polling():
     port = _interval_port(RobotsGate(opener=broken))
 
     assert port(_board(60)) == timedelta(seconds=60)
+
+
+# 파서가 실제로 돌아 "딜은 나오는데 가격이 하나도 없다"를 만든다. fmkorea만 가격을 못 뽑고
+# ppomppu·ruliweb은 정상(가격 있음) — REL-06 priceless 드리프트가 **해당 사이트만** 발화하는가.
+class _PricelessFmkoreaOpener:
+    """fmkorea 가격칸을 파싱 불가로, 나머지 두 사이트는 정상 딜로 준다."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def __call__(self, url: str):
+        self.calls.append(url)
+        if url.endswith("/robots.txt"):
+            return (404, b"")
+        if "ppomppu" in url:  # cp949, 가격 있는 제목
+            row = (
+                '<table id="revolution_main_table"><tr class="baseList bbs_new1">'
+                '<td class="baseList-numb">7</td>'
+                '<td><a class="baseList-title" href="view.php?id=ppomppu&no=7">벨트 (11,800원/무료)</a></td>'
+                '<td class="baseList-rec">3 - 0</td>'
+                '<td class="baseList-time">21:10:11</td></tr></table>'
+            )
+            return (200, row.encode("cp949"))
+        if "ruliweb" in url:  # 정상 딜
+            row = (
+                '<table class="board_list_table"><tr class="table_body normal">'
+                '<td><input class="info_article_id" value="777"></td>'
+                '<td><div class="title_wrapper subject relative">'
+                '<a class="subject_link deco" href="https://bbs.ruliweb.com/market/board/1020/read/777">'
+                '키보드 (49,000원/무료)</a></div></td>'
+                '<td class="recomd"><strong>5</strong></td><td class="time">21:10</td></tr></table>'
+            )
+            return (200, row.encode("utf-8"))
+        # fmkorea: `.hotdeal_info`의 가격칸이 파싱 불가 → 딜은 만들어지되 headline_price=None
+        row = (
+            '<div id="content"><div class="fm_best_widget"><ul><li>'
+            '<h3 class="title"><a href="/999">가격문의 제품</a></h3>'
+            '<div class="hotdeal_info"><span><a>쿠팡</a></span>'
+            '<span><a>가격문의</a></span><span><a>무료</a></span></div>'
+            '<span class="regdate">21:10</span></li></ul></div></div>'
+        )
+        return (200, row.encode("utf-8"))
+
+
+def test_priceless_deals_raise_a_drift_alert_only_for_the_affected_site(monkeypatch, capsys):
+    """REL-06: 제목 셀렉터만 끊기면 딜 수는 그대로인데 가격이 전부 사라진다.
+
+    이 신호가 **엔트리포인트에서 실제로 발화**하는지 본다 — `run_cycle`이 채운 priced_count가
+    `observe`까지 흘러야 한다(zero-yield 종단 테스트는 그 필드가 흐르는지 안 본다).
+    fmkorea만 priceless라 fmkorea만 알림이 나야 한다 — 정상 사이트를 오탐하면 사람이 게이트를 끈다.
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    ticks = iter(NOW + timedelta(seconds=61 * i) for i in range(10))
+
+    main(opener=_PricelessFmkoreaOpener(), sleep=lambda _: None, clock=lambda: next(ticks), max_cycles=3)
+
+    out = capsys.readouterr().out
+    drift = [e for e in _events(out) if e["event"] == "alert" and e["kind"] == "drift"]
+    priceless = [e for e in drift if "가격이 하나도 없습니다" in e["reason"]]
+    assert len(priceless) == 1  # fmkorea, 사이트별 1회(반복 안 함)
+    assert priceless[0]["site"] == "fmkorea"
+    # ppomppu·ruliweb은 정상(가격 있음)이라 어떤 드리프트도 나면 안 된다(오차단 방지).
+    assert all(e["site"] == "fmkorea" for e in drift), [e["site"] for e in drift]
+    _assert_console_safe(out)
