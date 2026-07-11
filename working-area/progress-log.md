@@ -1,3 +1,16 @@
+## 2026-07-11 — USED-02 Listing 생애주기 상태기계 (순수, AC-11)
+
+**한 일**: 매물 엔티티 `Listing`(순수 record) + `ListingStatus`(ACTIVE→SOLD|REMOVED, 종착).
+- `observed(...)`=ACTIVE·미승격·미fetch로 첫 관측. `markSold/markRemoved`(전이 검증), `promote`,
+  `withDetailFetched`, `needsDetailFetch()`=promoted && !detailFetched (**AC-11** 상세 fetch 승격 시 1회).
+- 종착 상태(SOLD/REMOVED)에서 재전이는 IllegalStateException.
+- TDD: 구현+테스트(신규 순수) → 뮤테이션(`!detailFetched` 제거)으로 AC-11 테스트가 무는지 증명(RED).
+
+**다음(무중단)**: USED-02 알림 판정(신규 매물 → 3계층 통과 + TRIGGER + targetPrice 이하 → 알림;
+promoted 한정 후속) = UsedMatcher+Listing+diff 조합. 그 후 core V3 스키마·어댑터. web 프론트는 지시 대기.
+
+---
+
 ## 2026-07-11 — USED-02 목록 diff 생애주기 (순수)
 
 **한 일**: USED-02의 순수 diff(docs/used/04 AC-7~10). 연속 두 스냅샷 → 신규·가격변동·소실.
