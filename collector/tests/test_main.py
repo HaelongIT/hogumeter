@@ -542,3 +542,35 @@ def test_priceless_deals_raise_a_drift_alert_only_for_the_affected_site(monkeypa
     # ppomppu·ruliweb은 정상(가격 있음)이라 어떤 드리프트도 나면 안 된다(오차단 방지).
     assert all(e["site"] == "fmkorea" for e in drift), [e["site"] for e in drift]
     _assert_console_safe(out)
+
+
+class _AlwaysFailOpener:
+    """모든 요청이 전송 실패(예외). robots 조회 실패는 제약 없음으로 흡수되고, 페이지 fetch는
+    `_poll`이 TRANSIENT로 격리한다 → 매 폴링 성공률 0%."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def __call__(self, url: str):
+        self.calls.append(url)
+        raise OSError("연결 거부")
+
+
+def test_sustained_transient_failures_raise_a_low_success_rate_drift(monkeypatch, capsys):
+    """REL-06 세 번째 신호: 창이 꽉 찰 만큼 실패가 이어지면 '수집 불안정'을 알린다.
+
+    zero-yield·priceless와 다른 경로다(그 둘은 OK인데 산출이 0). 이것은 TRANSIENT 비율.
+    백오프(cap 30min)로 next_attempt_at이 밀리므로 시계를 1시간씩 전진시켜 매 사이클 due를 만든다.
+    창 크기(10)만큼 사이클을 돌려야 성공률 판정이 돈다(첫 실패로 터지지 않게 — 오차단 방지).
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    ticks = iter(NOW + timedelta(hours=i) for i in range(14))
+
+    main(opener=_AlwaysFailOpener(), sleep=lambda _: None, clock=lambda: next(ticks), max_cycles=10)
+
+    out = capsys.readouterr().out
+    drift = [e for e in _events(out) if e["event"] == "alert" and e["kind"] == "drift"]
+    rate_alerts = [e for e in drift if "성공률" in e["reason"] and "불안정" in e["reason"]]
+    # 3사 각각 창이 꽉 차 성공률 0% → 사이트별 1회씩(반복 안 함).
+    assert sorted(e["site"] for e in rate_alerts) == sorted(s.name for s in hotdeal_boards())
+    _assert_console_safe(out)
