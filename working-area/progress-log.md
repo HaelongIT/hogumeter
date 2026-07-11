@@ -1,3 +1,18 @@
+## 2026-07-11 — USED-02 신규 매물 알림 판정 (순수, AC-7)
+
+**한 일**: `UsedAlertPolicy.shouldAlertOnNew` — 3계층 필터 통과(required AND + TRIGGER 충족) AND
+목표가 이하 → 알림. SORT는 관여 안 함. targetPrice null이면 가격 조건 없이 필터 통과만으로 알림(관대).
+- 경계 테스트: price==target도 알림(≤). null target은 가격 무관. TRIGGER/required 미달은 알림 안 함.
+- TDD: 스텁(false)로 3 RED(알림 나야 하는 케이스) → 구현 GREEN.
+
+**순수 도메인 진척**: USED-01 3계층 필터 · USED-02 목록 diff · Listing 상태기계(AC-11) · 신규 알림(AC-7)
+완료. 남은 순수: 후속 알림(AC-8·9 promoted 한정 가격변동·판매완료) · 위험 신호 룰(USED-04 AC-14) ·
+평가기 출력 조립(USED-04).
+
+**다음(무중단)**: 위험 신호 룰(AC-14, 순수) → 이후 core V3 스키마(Flyway)·어댑터. web 프론트는 지시 대기.
+
+---
+
 ## 2026-07-11 — USED-02 Listing 생애주기 상태기계 (순수, AC-11)
 
 **한 일**: 매물 엔티티 `Listing`(순수 record) + `ListingStatus`(ACTIVE→SOLD|REMOVED, 종착).
