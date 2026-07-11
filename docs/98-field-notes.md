@@ -333,3 +333,20 @@
 - collector 쪽 상수 추출만 **우연히** 안전했다 — `^SHIPPING_UNKNOWN`으로 줄 시작을 앵커했기 때문이지 의도가 아니다.
 - 공통 처방: **전체 줄이 주석인 것만** 걷는다(`^\s*(//|#|\*|/\*)`). 코드 옆 주석은 다치지 않는다.
 - 계약 테스트에 **양방향**을 넣는다: 주석만 있으면 차단(미차단 방지) / 주석 옆 코드는 통과(오차단 방지).
+
+### 죽은 컬럼 전수 (2026-07-11) — 주석 걷어낸 재감사
+
+`create table`이 만든 컬럼 중 **프로덕션 코드(주석 제외)가 채우지도 읽지도 않는** 것 전수. 각각 귀속처를 못박아 다음 세션이 감사를 반복하지 않게 한다.
+
+| 테이블.컬럼 | 상태 | 귀속 |
+|---|---|---|
+| `deal_event.confidence` | 🔴 의도 미실현 | Q-68 — 매칭 신뢰도 자리인데 매칭이 신뢰도를 안 낸다 |
+| `raw_deal_post.body_text` | 미배선 | Q-18 — 잘린 제목 복구용 본문 자리. collector가 목록만 폴링 |
+| `review_queue_item.channel` | 미배선 | Q-15 — 승격·기각이 채울 자리 |
+| `review_queue_item.resolved_at` | 미배선 | Q-15 — 승격·기각이 채울 자리 |
+| `alert_policy.demand_axis_filter` | 미배선 | Q-48 — 엔티티 미매핑 필드 셋 중 하나 |
+| `global_setting.updated_at` | 죽은 테이블 | Q-28 — global_setting 자체가 미배선 |
+| `price_history.fetched_at` | 죽은 테이블 | Q-3 — 네이버 어댑터 미발급 |
+
+- **의도적 미사용은 여기 없다**: `deal_event.shipping`(headline에 합산, BM-02)·`base_price`(역산 금지, AC-2)는 근거가 있고 스모크가 계약으로 못박는다(`shipping=0`·`base_price=NULL`).
+- **감사 방법**: `create table`의 컬럼 → `grep -vE '^\s*(//|\*|/\*|#)'`로 주석 걷은 뒤 snake/camel 검색. 지난(2026-07-10) 감사는 주석을 안 걷어 `confidence`(javadoc에만 등장)를 놓쳤다.
