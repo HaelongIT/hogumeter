@@ -1,6 +1,8 @@
 package dev.hogumeter.core.adapter.web;
 
 import dev.hogumeter.core.application.InvalidRegistrationException;
+import dev.hogumeter.core.application.ReviewItemNotFoundException;
+import dev.hogumeter.core.application.UnclassifiedPromoteNotSupportedException;
 import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
 import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -28,6 +30,18 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ApiError invalidRegistration(InvalidRegistrationException e) {
 		return new ApiError(InvalidRegistrationException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(ReviewItemNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ApiError reviewItemNotFound(ReviewItemNotFoundException e) {
+		return new ApiError(ReviewItemNotFoundException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(UnclassifiedPromoteNotSupportedException.class)
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	public ApiError unclassifiedPromote(UnclassifiedPromoteNotSupportedException e) {
+		return new ApiError(UnclassifiedPromoteNotSupportedException.CODE, e.getMessage());
 	}
 
 	public record ApiError(String code, String message) {

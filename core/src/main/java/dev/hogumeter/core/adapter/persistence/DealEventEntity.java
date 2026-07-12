@@ -177,6 +177,11 @@ public class DealEventEntity {
 		this.outlierFlag = outlierFlag;
 	}
 
+	/** Q-15 기각 — 순수 도메인 {@code DealEvent.reject()}의 결과(영구 제외)를 반영한다. */
+	public void setPermanentlyExcluded(boolean permanentlyExcluded) {
+		this.permanentlyExcluded = permanentlyExcluded;
+	}
+
 	/** Q-27 상태변화 재처리 — status·lastSeen만 갱신(가격·이상치·firstSeen 불변). */
 	public void applyStatusChange(DealStatus status, Instant lastSeen) {
 		this.status = status;

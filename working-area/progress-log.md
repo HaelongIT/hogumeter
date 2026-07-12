@@ -44,8 +44,17 @@
   ⚠️자율결정: dedup_key unique-global이라 기각 후 재발생 시 기각 행 occurrences만 증가(재오픈 안 함) —
   보수적 기본값, Q-15 승격·기각 착수 때 정합(docs/91에 기록).
 
+- [Q-15 쓰기 해소(부분)] 미상 큐 승격·기각 REST. `ResolveReviewItemUseCase` + `POST .../{id}/{promote|reject}`.
+  승격=`DealEvent.promoteFromOutlier()`(이상치 플래그 해제), 기각=`reject()`(영구 제외) — **호출자 0이던 순수
+  도메인 메서드 부활**. status·resolved_at·**channel='WEB'** 네이티브 SQL로 `where status='PENDING'` 원자 처리
+  (**죽은 컬럼 셋 부활**). `DealEventEntity.setPermanentlyExcluded` 추가. 없음/처리됨=404, 미상승격 미지원=400.
+  Q-27④로 한 근거=한 행이라 한 번에 처리. core 전체 GREEN·배선 게이트 3종 exit 0. docs/91 Q-15 쓰기 해소.
+  ⚠️잔여: ① UNCLASSIFIED 승격은 variant 선택 입력 필요→막음(400) ② **web 승격·기각 버튼 미착수(프론트는
+  사용자 지휘 대기)** — 백엔드는 되는데 web `review/`는 아직 "못 한다"고 말함, 버튼 추가 시 그 문구 제거
+  ③ web types.ts에 새 에러코드(REVIEW_*)는 web이 그 경로를 쓸 때 추가(지금 소비 안 함).
+
 이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46①·Q-67① 전부 origin/main.
-Q-67②·Q-53·Q-57②③·Q-27④ 커밋 대기(푸시는 지시 시).
+Q-67②·Q-53·Q-57②③·Q-27④·Q-15(쓰기) 커밋 대기(푸시는 지시 시).
 
 ---
 
