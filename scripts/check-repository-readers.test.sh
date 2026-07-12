@@ -110,9 +110,9 @@ else
 	fail=1
 fi
 
-# 면제가 실제로 집계되는지 — 0이면 allowlist가 죽은 것이다.
-if bash "$CHECK" | grep -q '미사용 선언 2'; then
-	printf '  PASS  exit=0  면제 2건(product_axis · review_queue_item)이 실제로 집계된다\n'
+# 면제가 실제로 집계되는지 — 0이면 allowlist가 죽은 것이다. 개수는 allowlist 따라 변하므로 "1 이상"만 본다.
+if bash "$CHECK" | grep -qE '미사용 선언 [1-9][0-9]*'; then
+	printf '  PASS  exit=0  면제가 실제로 집계된다(allowlist가 읽힌다)\n'
 else
 	printf '  FAIL  allowlist가 읽히지 않는다\n'
 	fail=1
