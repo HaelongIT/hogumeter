@@ -1,5 +1,7 @@
 package dev.hogumeter.core.adapter.scheduler;
 
+import dev.hogumeter.core.application.IngestReport;
+
 /**
  * OBS-02 핵심 카운터 — 한 틱이 무엇을 했는가. 절대 수가 아니라 <b>차이</b>다.
  *
@@ -14,6 +16,10 @@ package dev.hogumeter.core.adapter.scheduler;
  * 사실을 말한다: 조건부 딜은 as-posted로 옳은 값이고(BM-02 AC-2), 그중 <b>배송비 미상</b> 딜만이 실제보다
  * 낮은 값으로 기준가를 끈다. 합쳐 세면 아무것도 말하지 않는다. 지금 이 카운터가 표본 오염률을 보는
  * <b>유일한 창</b>이다(화면·알림 표시와 표본 제외는 미구현, docs/91 Q-46).
+ *
+ * <p>{@code ingest}는 이번 틱 수집의 매칭 tier 분포·첫 알림 발송 수다(OBS-02, Q-57 ②③). 스냅샷 차이로는
+ * 셀 수 없다 — CANDIDATE·REJECTED는 딜을 만들지 않아 링크·딜 수에 흔적이 없다. 그래서 {@link IngestReport}로
+ * 유스케이스가 직접 세어 넘긴다. 이 값이 있어야 "매칭이 대부분 REJECTED다"(카탈로그 협소) 같은 신호가 보인다.
  */
 public record PipelineTickReport(
 		long postsLinked,
@@ -26,9 +32,10 @@ public record PipelineTickReport(
 		long conditionalTotal,
 		long shippingUnknownTotal,
 		long pending,
-		long rawTotal) {
+		long rawTotal,
+		IngestReport ingest) {
 
-	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after) {
+	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
 		return new PipelineTickReport(
@@ -42,7 +49,8 @@ public record PipelineTickReport(
 				after.conditionalDeals(),
 				after.shippingUnknownDeals(),
 				after.unprocessed(),
-				after.rawPosts());
+				after.rawPosts(),
+				ingest);
 	}
 
 	/** 한 줄 요약. 0을 생략하지 않는다 — "성공했는데 0건"이 사라지면 드리프트를 못 본다. */
@@ -58,6 +66,12 @@ public record PipelineTickReport(
 				+ " conditionalTotal=" + conditionalTotal
 				+ " shippingUnknownTotal=" + shippingUnknownTotal
 				+ " pending=" + pending
-				+ " rawTotal=" + rawTotal;
+				+ " rawTotal=" + rawTotal
+				+ " matched[confirmed=" + ingest.confirmed()
+				+ " candidate=" + ingest.candidate()
+				+ " unknown=" + ingest.unknown()
+				+ " rejected=" + ingest.rejected()
+				+ " skippedNoPrice=" + ingest.skippedNoPrice() + "]"
+				+ " firstAlertsSent=" + ingest.firstAlertsSent();
 	}
 }

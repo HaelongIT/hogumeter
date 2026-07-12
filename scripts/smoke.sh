@@ -302,6 +302,10 @@ tick=$(compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep 'dea
 [ -n "$tick" ] || fail "파이프라인 틱 카운터에 dealsCreated=1이 없다"
 echo "$tick" | grep -q 'merged=0' || fail "병합이 아닌데 merged가 0이 아니다: $tick"
 echo "$tick" | grep -q 'pending=0' || fail "원문을 다 처리했는데 pending이 남았다: $tick"
+# Q-57 ②③: 매칭 tier 카운터가 종단 로그에 도달한다. 이 틱엔 confirmed 원문 1건뿐이라 나머지는 0이다.
+# (스냅샷 차이로는 못 세는 값 — 유스케이스가 직접 세어 리포트로 넘긴다. firstAlertsSent 값은 단위·통합 테스트가 잠근다.)
+echo "$tick" | grep -q 'matched\[confirmed=1 candidate=0 unknown=0 rejected=0 skippedNoPrice=0\]' ||
+	fail "매칭 tier 카운터가 틱 로그에 없다 (Q-57 계약 드리프트): $tick"
 
 # OBS-01: core 로그도 구조화(JSON)여야 한다. collector는 이미 JSON Lines다 —
 # 두 컨테이너의 로그가 같은 모양이어야 한 곳에서 읽는다. 형식은 조용히 되돌아가므로 매번 본다.

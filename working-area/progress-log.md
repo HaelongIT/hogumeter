@@ -26,7 +26,15 @@
   ⚠️자율결정: `BenchmarkCalculator.qualifiesAsColdStartJackpot`(프로덕션 호출자 0, AlertEvaluator에 실제
   경로가 따로 있음)은 primitive 시그니처 그대로 방치 — 기존 죽은 중복이라 이번 변경 범위 밖(Karpathy #3).
 
-이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46①·Q-67① 전부 origin/main. Q-67②·Q-53 커밋 대기(푸시는 지시 시).
+- [Q-57②③ 해소] 매칭 tier 카운터·첫 알림 발송 수(OBS-02). `IngestDealsUseCase.ingestPending()` void→`IngestReport`
+  (confirmed/candidate/unknown/rejected/skippedNoPrice/firstAlertsSent — 합치지 않고 부류별). `PipelineScheduler`가
+  ingest를 `Supplier<IngestReport>`로 받아 `PipelineTickReport.ingest`로 실음 → 매 틱 로그 `matched[…] firstAlertsSent=…`.
+  ③은 `evaluate`가 이미 반환하던 `DispatchOutcome==SENT`로 집계. smoke가 `matched[confirmed=1 …]` 종단 잠금.
+  `runStepReturning` 제네릭화(<T>). core 전체 GREEN·배선 게이트 3종 exit 0. docs/91 Q-57 ②③ 해소.
+  ⚠️자율결정: 후속 알림 발송 수(FollowUpAlertUseCase가 int 반환)는 첫 알림과 부류가 달라 이번 리포트에 합치지
+  않음 — 별도 카운터로 남김(docs/91 Q-57 "남은 것"). BiConsumer→BiFunction 재churn 회피.
+
+이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46①·Q-67① 전부 origin/main. Q-67②·Q-53·Q-57②③ 커밋 대기(푸시는 지시 시).
 
 ---
 

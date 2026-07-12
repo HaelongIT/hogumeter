@@ -66,27 +66,44 @@ public class IngestDealsUseCase {
 	}
 
 	@Transactional
-	public void ingestPending() {
+	public IngestReport ingestPending() {
 		List<ProductMatchSpec> catalogSpecs = catalog.catalog();
 		AliasDictionary dictionary = catalog.aliasDictionary();
+		Tally tally = new Tally();
 		for (RawDealPost post : rawPosts.findUnprocessed()) {
-			ingestOne(post, catalogSpecs, dictionary);
+			ingestOne(post, catalogSpecs, dictionary, tally);
 		}
+		return tally.toReport();
 	}
 
-	private void ingestOne(RawDealPost post, List<ProductMatchSpec> catalogSpecs, AliasDictionary dictionary) {
+	private void ingestOne(RawDealPost post, List<ProductMatchSpec> catalogSpecs, AliasDictionary dictionary,
+			Tally tally) {
 		if (post.getHeadlinePrice() == null) {
+			tally.skippedNoPrice++;
 			return; // BM-02 AC-3: 가격 없음 → 스킵(deal_event 미생성)
 		}
 		MatchResult match = matcher.match(post.getTitle(), catalogSpecs, dictionary);
 		switch (match.tier()) {
-			case CONFIRMED -> confirmDeal(post, match.variantId());
-			case CANDIDATE, UNKNOWN -> enqueueForReview(post, match);
-			case REJECTED -> { /* 무관 — 스킵 */ }
+			case CONFIRMED -> {
+				tally.confirmed++;
+				if (confirmDeal(post, match.variantId()) == DispatchOutcome.SENT) {
+					tally.firstAlertsSent++;
+				}
+			}
+			case CANDIDATE -> {
+				tally.candidate++;
+				enqueueForReview(post, match);
+			}
+			case UNKNOWN -> {
+				tally.unknown++;
+				enqueueForReview(post, match);
+			}
+			case REJECTED -> tally.rejected++; // 무관 — 스킵
 		}
 	}
 
-	private void confirmDeal(RawDealPost post, long variantId) {
+	/** @return 이 딜에 대한 알림 판정 결과 — 첫 알림이 실제로 나갔는지(SENT) 세기 위함(Q-57 ③). */
+	private DispatchOutcome confirmDeal(RawDealPost post, long variantId) {
 		DealEvent candidate = candidateFrom(post, variantId);
 
 		for (DealEventEntity existing : dealEvents.findByVariantId(variantId)) {
@@ -96,8 +113,7 @@ public class IngestDealsUseCase {
 				existing.applyMerge(merged.priceFirst(), merged.priceMin(), merged.priceMax(), merged.priceLast(),
 						merged.crossVerified(), merged.status(), merged.firstSeen(), merged.lastSeen());
 				sources.save(new DealEventSourceEntity(existing.getId(), post.getId(), post.getSite()));
-				alertEvaluation.evaluate(variantId, existing.getId(), mapper.toDomain(existing)); // 흡수 후속 판정
-				return;
+				return alertEvaluation.evaluate(variantId, existing.getId(), mapper.toDomain(existing)); // 흡수 후속 판정
 			}
 		}
 
@@ -107,7 +123,7 @@ public class IngestDealsUseCase {
 				candidate.status(), candidate.firstSeen(), candidate.lastSeen()));
 		sources.save(new DealEventSourceEntity(created.getId(), post.getId(), post.getSite()));
 		classifyOutlier(created, variantId);
-		alertEvaluation.evaluate(variantId, created.getId(), mapper.toDomain(created));
+		return alertEvaluation.evaluate(variantId, created.getId(), mapper.toDomain(created));
 	}
 
 	/** BM-05 배선: 신규 딜을 variant 분포에 대해 판정(유입 1회·영속, C-4). LOWER는 reviewQueue(OUTLIER_LOWER). */
@@ -145,5 +161,19 @@ public class IngestDealsUseCase {
 				"rawDealPostId", post.getId(),
 				"productCandidates", List.copyOf(match.productCandidates())));
 		reviewQueue.save(new ReviewQueueItemEntity(item.type(), item.payload()));
+	}
+
+	/** 수집 한 회의 가변 집계기 — 루프가 끝나면 불변 {@link IngestReport}로 굳힌다. */
+	private static final class Tally {
+		int confirmed;
+		int candidate;
+		int unknown;
+		int rejected;
+		int skippedNoPrice;
+		int firstAlertsSent;
+
+		IngestReport toReport() {
+			return new IngestReport(confirmed, candidate, unknown, rejected, skippedNoPrice, firstAlertsSent);
+		}
 	}
 }

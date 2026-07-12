@@ -3,6 +3,7 @@ package dev.hogumeter.core.adapter.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import dev.hogumeter.core.application.IngestReport;
 import dev.hogumeter.core.domain.alert.FollowUpKind;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -28,7 +29,10 @@ class PipelineSchedulerTest {
 	private final AtomicReference<PipelineTickReport> reported = new AtomicReference<>();
 
 	private final Runnable expire = () -> calls.add("expire");
-	private final Runnable ingest = () -> calls.add("ingest");
+	private final Supplier<IngestReport> ingest = () -> {
+		calls.add("ingest");
+		return IngestReport.empty();
+	};
 	private final Runnable conditions = () -> calls.add("conditions");
 	private final Supplier<List<Long>> prices = () -> {
 		calls.add("prices");
@@ -54,7 +58,14 @@ class PipelineSchedulerTest {
 		};
 	}
 
-	private PipelineScheduler scheduler(Runnable ingest, Supplier<List<Long>> prices, Supplier<List<Long>> status) {
+	private static Supplier<IngestReport> boomIngest(String message) {
+		return () -> {
+			throw new IllegalStateException(message);
+		};
+	}
+
+	private PipelineScheduler scheduler(Supplier<IngestReport> ingest, Supplier<List<Long>> prices,
+			Supplier<List<Long>> status) {
 		return new PipelineScheduler(expire, ingest, conditions, prices, status, followUp, () -> EMPTY, reported::set);
 	}
 
@@ -69,7 +80,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("ingest가 터져도 뒤 단계는 돌고, tick은 예외를 밖으로 내지 않는다 (스케줄러가 죽지 않는다)")
 	void ingestFailureDoesNotStopTheRest() {
-		PipelineScheduler scheduler = scheduler(boom("DB 연결 끊김"), prices, status);
+		PipelineScheduler scheduler = scheduler(boomIngest("DB 연결 끊김"), prices, status);
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
 		assertThat(calls).containsExactly("expire", "conditions", "prices", "status");
@@ -96,7 +107,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("세 단계가 다 터져도 tick은 반환하고, 그때도 보고서를 낸다 — 무엇이 남았는지가 그때 더 중요하다")
 	void allFailuresStillReport() {
-		PipelineScheduler scheduler = scheduler(boom("a"), boomSupplier("b"), boomSupplier("c"));
+		PipelineScheduler scheduler = scheduler(boomIngest("a"), boomSupplier("b"), boomSupplier("c"));
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
 		assertThat(reported.get()).isNotNull();
@@ -121,8 +132,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("아무 일도 없어도 보고한다 — 조용한 스케줄러는 죽은 스케줄러와 구별되지 않는다")
 	void idleTickStillReports() {
-		scheduler(() -> {
-		}, () -> List.of(), () -> List.of()).tick();
+		scheduler(() -> IngestReport.empty(), () -> List.of(), () -> List.of()).tick();
 
 		assertThat(reported.get()).isNotNull();
 		assertThat(reported.get().dealsCreated()).isZero();

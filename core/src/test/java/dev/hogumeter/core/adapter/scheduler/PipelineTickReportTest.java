@@ -2,6 +2,7 @@ package dev.hogumeter.core.adapter.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.hogumeter.core.application.IngestReport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -18,10 +19,15 @@ class PipelineTickReportTest {
 		return new PipelineSnapshot(raw, sources, deals, queue, ended, unprocessed, reportPending, 0, 0);
 	}
 
+	/** 매칭 카운터를 안 보는 스냅샷 산술 테스트용 — 수집 리포트는 빈 값으로 둔다. */
+	private static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after) {
+		return PipelineTickReport.between(before, after, IngestReport.empty());
+	}
+
 	@Test
 	@DisplayName("새 딜 하나 — 원문 1건이 링크되고 딜 1건이 생긴다(병합 0)")
 	void newDeal() {
-		PipelineTickReport report = PipelineTickReport.between(
+		PipelineTickReport report = between(
 				snapshot(1, 0, 0, 0, 0, 1),
 				snapshot(1, 1, 1, 0, 0, 0));
 
@@ -34,7 +40,7 @@ class PipelineTickReportTest {
 	@Test
 	@DisplayName("병합 — 링크는 늘었는데 딜은 안 늘었다. 그 차이가 흡수된 원문 수다(BM-04)")
 	void mergedDeal() {
-		PipelineTickReport report = PipelineTickReport.between(
+		PipelineTickReport report = between(
 				snapshot(2, 1, 1, 0, 0, 1),
 				snapshot(2, 2, 1, 0, 0, 0));
 
@@ -46,7 +52,7 @@ class PipelineTickReportTest {
 	@Test
 	@DisplayName("매칭 실패는 큐로 간다 — 원문은 링크되지 않고 pending에 남는다")
 	void unmatchedGoesToQueue() {
-		PipelineTickReport report = PipelineTickReport.between(
+		PipelineTickReport report = between(
 				snapshot(1, 0, 0, 0, 0, 1),
 				snapshot(1, 0, 0, 1, 0, 1));
 
@@ -60,7 +66,7 @@ class PipelineTickReportTest {
 	@Test
 	@DisplayName("상태 재처리 — 종료된 딜이 늘어난다")
 	void endedDeals() {
-		PipelineTickReport report = PipelineTickReport.between(
+		PipelineTickReport report = between(
 				snapshot(1, 1, 1, 0, 0, 0),
 				snapshot(1, 1, 1, 0, 1, 0));
 
@@ -74,7 +80,7 @@ class PipelineTickReportTest {
 	@Test
 	@DisplayName("관찰 만료 — 성적 집계 대기가 늘어난 만큼이 이번 틱에 만료된 관찰이다")
 	void expiredObservations() {
-		PipelineTickReport report = PipelineTickReport.between(
+		PipelineTickReport report = between(
 				snapshot(0, 0, 0, 0, 0, 0, 1),
 				snapshot(0, 0, 0, 0, 0, 0, 3));
 
@@ -86,7 +92,7 @@ class PipelineTickReportTest {
 	void idleTickReportsZeros() {
 		PipelineSnapshot same = snapshot(5, 5, 3, 1, 1, 0, 2);
 
-		PipelineTickReport report = PipelineTickReport.between(same, same);
+		PipelineTickReport report = between(same, same);
 
 		assertThat(report.postsLinked()).isZero();
 		assertThat(report.dealsCreated()).isZero();
@@ -101,10 +107,27 @@ class PipelineTickReportTest {
 	@Test
 	@DisplayName("한 줄 요약은 ASCII만 — 콘솔 인코딩이 로그를 죽이지 않는다")
 	void summaryIsAsciiOnly() {
-		String summary = PipelineTickReport.between(snapshot(1, 0, 0, 0, 0, 1), snapshot(1, 1, 1, 0, 0, 0))
+		String summary = between(snapshot(1, 0, 0, 0, 0, 1), snapshot(1, 1, 1, 0, 0, 0))
 				.toString();
 
 		assertThat(summary).matches("\\p{ASCII}+");
 		assertThat(summary).contains("dealsCreated=1", "pending=0");
+	}
+
+	/**
+	 * OBS-02 매칭 카운터(Q-57 ②③): 스냅샷 차이로는 셀 수 없는 값이 수집 리포트로 실려 온다.
+	 * 부류가 다른 사실은 따로 센다 — candidate·unknown·rejected를 합치지 않는다.
+	 */
+	@Test
+	@DisplayName("매칭 tier 분포·첫 알림 발송 수가 요약에 실린다 — 스냅샷 차이로는 못 보는 것")
+	void reportsMatchingTierCountsAndFirstAlerts() {
+		IngestReport ingest = new IngestReport(3, 1, 2, 5, 4, 2);
+
+		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
+				ingest);
+
+		assertThat(report.ingest()).isEqualTo(ingest);
+		assertThat(report.toString()).contains(
+				"matched[confirmed=3 candidate=1 unknown=2 rejected=5 skippedNoPrice=4]", "firstAlertsSent=2");
 	}
 }

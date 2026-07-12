@@ -175,6 +175,24 @@ class IngestDealsUseCaseTest {
 				.containsExactly(tuple(deal.getId(), DealAlertEntity.FIRST));
 	}
 
+	@Test
+	void reportCountsMatchTiersAndFirstAlerts() {
+		// OBS-02(Q-57 ②③): 스냅샷 차이로는 못 세는 매칭 tier 분포·첫 알림 발송 수를 유스케이스가 직접 센다.
+		savePost("ppomppu", "아이폰 17 256기가 특가 89만", 890_000L, T); // CONFIRMED + 첫 알림(딜 1건 → SPARSE GOOD)
+		savePost("ppomppu", "애플 아이폰 신형 256기가", 800_000L, T);      // CANDIDATE("17" 없음 → 코어 토큰 부분일치)
+		savePost("ppomppu", "아이폰 17 256기가 팝니다 문의", null, T);     // 가격 없음 → skip
+		savePost("ppomppu", "무관한 텀블러 세트 판매", 20_000L, T);        // REJECTED(코어 토큰 무관)
+
+		IngestReport report = useCase.ingestPending();
+
+		assertThat(report.confirmed()).isEqualTo(1);
+		assertThat(report.candidate()).isEqualTo(1);
+		assertThat(report.unknown()).isZero();
+		assertThat(report.rejected()).isEqualTo(1);
+		assertThat(report.skippedNoPrice()).isEqualTo(1);
+		assertThat(report.firstAlertsSent()).isEqualTo(1);
+	}
+
 	@TestConfiguration
 	static class RecordingSenderConfig {
 		@Bean

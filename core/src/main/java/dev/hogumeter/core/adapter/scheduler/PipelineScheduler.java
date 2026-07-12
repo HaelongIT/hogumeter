@@ -8,6 +8,7 @@ import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
 import dev.hogumeter.core.application.ExpirePurchaseObservationsUseCase;
 import dev.hogumeter.core.application.FollowUpAlertUseCase;
 import dev.hogumeter.core.application.IngestDealsUseCase;
+import dev.hogumeter.core.application.IngestReport;
 import dev.hogumeter.core.application.PreserveAppliedConditionsUseCase;
 import dev.hogumeter.core.application.ReprocessDealPricesUseCase;
 import dev.hogumeter.core.application.ReprocessDealStatusUseCase;
@@ -62,7 +63,7 @@ public class PipelineScheduler {
 	private static final Logger log = LoggerFactory.getLogger(PipelineScheduler.class);
 
 	private final Runnable expireObservations;
-	private final Runnable ingest;
+	private final Supplier<IngestReport> ingest;
 	private final Runnable preserveConditions;
 	private final Supplier<List<Long>> reprocessPrices;
 	private final Supplier<List<Long>> reprocessStatus;
@@ -100,7 +101,7 @@ public class PipelineScheduler {
 	}
 
 	/** 테스트 seam — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
-	PipelineScheduler(Runnable expireObservations, Runnable ingest, Runnable preserveConditions,
+	PipelineScheduler(Runnable expireObservations, Supplier<IngestReport> ingest, Runnable preserveConditions,
 			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
 			BiConsumer<List<Long>, FollowUpKind> followUp, Supplier<PipelineSnapshot> probe,
 			Consumer<PipelineTickReport> report) {
@@ -119,10 +120,10 @@ public class PipelineScheduler {
 	public void tick() {
 		PipelineSnapshot before = snapshot();
 		runStep("expire-observations", expireObservations);
-		runStep("ingest", ingest);
+		IngestReport ingestReport = runStepReturning("ingest", ingest, IngestReport.empty());
 		runStep("preserve-conditions", preserveConditions);
-		List<Long> priceChanged = runStepReturning("reprocess-prices", reprocessPrices);
-		List<Long> ended = runStepReturning("reprocess-status", reprocessStatus);
+		List<Long> priceChanged = runStepReturning("reprocess-prices", reprocessPrices, List.of());
+		List<Long> ended = runStepReturning("reprocess-status", reprocessStatus, List.of());
 		// 후속 알림(AL-03) — 가격변화·종료한 딜 중 첫 알림이 나갔던 것에만. 종료가 마지막이라 닫히기 직전 값까지 반영.
 		runStep("follow-up-price", () -> followUp.accept(priceChanged, FollowUpKind.PRICE_CHANGED));
 		runStep("follow-up-ended", () -> followUp.accept(ended, FollowUpKind.ENDED));
@@ -131,7 +132,7 @@ public class PipelineScheduler {
 			return; // DB가 닿지 않는다. snapshot()이 이미 남겼고, 0으로 채운 리포트는 거짓말이다.
 		}
 		// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다.
-		report.accept(PipelineTickReport.between(before, after));
+		report.accept(PipelineTickReport.between(before, after, ingestReport));
 	}
 
 	/**
@@ -166,14 +167,18 @@ public class PipelineScheduler {
 		}
 	}
 
-	/** {@link #runStep}의 반환값 버전 — 전이 딜 id를 후속 단계로 넘긴다. 실패는 격리하고 빈 목록으로. */
-	private List<Long> runStepReturning(String name, Supplier<List<Long>> step) {
+	/**
+	 * {@link #runStep}의 반환값 버전 — 단계가 낸 값(전이 딜 id, 수집 리포트)을 뒤 단계·보고로 넘긴다.
+	 * 실패는 격리하고 {@code onFailure}(중립값: 빈 목록·빈 리포트)로 떨어진다 — 그래야 한 단계가 터져도
+	 * 나머지 틱과 보고가 산다.
+	 */
+	private <T> T runStepReturning(String name, Supplier<T> step, T onFailure) {
 		try {
 			return step.get();
 		}
 		catch (RuntimeException failure) {
 			log.error("pipeline step failed: {}", name, failure);
-			return List.of();
+			return onFailure;
 		}
 	}
 }

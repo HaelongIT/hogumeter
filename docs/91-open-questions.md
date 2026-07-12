@@ -298,7 +298,15 @@ _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildComm
 - **맥락**: OBS-01은 "구조화 로그(JSON)", OBS-02는 "핵심 카운터: 수집 글 수, 매칭 CONFIRMED/CANDIDATE/REJECTED 비율, 병합률, 알림 발송 수, 큐 적체, API 쿼터 사용량"을 요구한다. **어느 보드에도 없던 요구다**(2026-07-10 발견).
 - **한 것(2026-07-10)**: `PipelineScheduler`가 매 틱 `PipelineTickReport`를 남긴다 — `postsLinked·dealsCreated·merged·queued·ended·pending·rawTotal`. 병합률은 "링크는 늘었는데 딜은 안 늘었다"로 유도한다. 0을 생략하지 않는다. 스모크가 `dealsCreated=1 merged=0 pending=0`을 실제 로그에서 확인한다.
 - **~~① JSON이 아니다~~ 해소(2026-07-10)**: Spring Boot 4.1 내장 구조화 로그를 **환경변수로만** 켰다 — `LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`(compose `CORE_LOG_FORMAT`, 기본 `ecs`). `application.yml`도 `logback-spring.xml`도 만들지 않았다(core 파일 무수정). 실측 출력: `{"@timestamp":…,"log":{"level":"INFO","logger":"…PipelineScheduler"},"message":"pipeline tick postsLinked=1 …","ecs":{"version":"8.11"}}`. 스모크 5-1b가 매번 확인한다(형식은 조용히 되돌아간다). collector의 JSON Lines와 같은 창구에서 읽힌다.
-- **남은 것**: ② **매칭 tier 비율**(CONFIRMED/CANDIDATE/REJECTED)은 `IngestDealsUseCase`가 void라 밖에서 셀 수 없다 — 큐 증가분으로 CANDIDATE+UNKNOWN만 근사한다. ③ **알림 발송 수**는 `StubAlertSender` 안에 있다. ④ **API 쿼터**는 네이버 키 대기(Q-3). ②③은 core 기존 파일 수정이라 상대와 조율.
+- **한 것(2026-07-12, ②③ 해소)**: core 소유권 조율 후 `IngestDealsUseCase.ingestPending()`이 `void`→`IngestReport`
+  (confirmed·candidate·unknown·rejected·skippedNoPrice·firstAlertsSent — 부류가 다른 사실을 합치지 않는다).
+  `PipelineScheduler`가 ingest를 `Supplier<IngestReport>`로 받아 `PipelineTickReport.ingest`로 실어 매 틱 로그에
+  `matched[confirmed=.. candidate=.. unknown=.. rejected=.. skippedNoPrice=..] firstAlertsSent=..`를 남긴다.
+  ③ 첫 알림 발송 수는 `EvaluateAlertOnDealUseCase.evaluate`가 이미 반환하던 `DispatchOutcome==SENT`로 센다.
+  smoke가 종단으로 `matched[confirmed=1 …]`를 잠근다. 테스트: `PipelineTickReportTest`·`IngestDealsUseCaseTest.
+  reportCountsMatchTiersAndFirstAlerts`·`PipelineSchedulerTest`.
+- **남은 것**: ① OBS-01 구조화 로그(JSON) — 지금은 텍스트. ④ **API 쿼터**는 네이버 키 대기(Q-3). **후속 알림 발송 수**는
+  `FollowUpAlertUseCase.sendFollowUps`가 int로 반환하나 아직 틱 리포트에 집계 안 함(첫 알림과 부류가 달라 별도 카운터).
 - **잠정값**: 텍스트 로그 + 틱 단위 카운터. `docker logs`로 읽는다.
 - **재개 트리거**: ①은 로그 수집기(운영 배포)를 붙일 때 — core 전체 로그 형식을 바꾸는 일이라 상대와 조율. ②③은 use case 반환값 변경이 필요하니 **core 기존 파일 수정**이라 조율 대상. ④는 Q-3.
 
