@@ -144,9 +144,10 @@ else
 	fail=1
 fi
 
-# 면제 목록이 살아 있는지 — 실제 저장소에서 선언 2건이 실제로 세어져야 한다.
-if bash "$CHECK" | grep -q '미배선 선언 2'; then
-	printf '  PASS  exit=0  면제 2건(price_history · global_setting)이 실제로 집계된다\n'
+# 면제 목록이 살아 있는지 — 실제 저장소에서 선언이 실제로 세어져야 한다.
+# 개수는 allowlist가 늘고 줄며 바뀌므로(하드코딩하면 매번 깨진다) "1 이상 집계됨"만 본다.
+if bash "$CHECK" | grep -qE '미배선 선언 [1-9][0-9]*'; then
+	printf '  PASS  exit=0  면제가 실제로 집계된다(allowlist가 읽힌다)\n'
 else
 	printf '  FAIL  면제 집계가 동작하지 않는다 (allowlist가 읽히고 있나?)\n'
 	fail=1
