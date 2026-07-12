@@ -4,7 +4,7 @@ import type { BenchmarkView, CadenceView, ProductSummary, SignalView } from '../
 import { AlertPolicyPanel } from '../policy/AlertPolicyPanel'
 import { PurchasePanel } from '../purchase/PurchasePanel'
 import { Gauge } from './Gauge'
-import { benchmarkLine, cadenceLine, gapLine, lowestLine, signalBadge } from './present'
+import { benchmarkLine, cadenceLine, conditionsSuffix, gapLine, lowestLine, signalBadge } from './present'
 
 interface Loaded {
   signal: SignalView
@@ -165,7 +165,8 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
             </p>
             {loaded.benchmark.latestDeal && (
               <p aria-label="최근 딜" className="readout">
-                최근 딜 {loaded.benchmark.latestDeal.date} · {loaded.benchmark.latestDeal.site} ·{' '}
+                최근 딜 {loaded.benchmark.latestDeal.date} · {loaded.benchmark.latestDeal.site}
+                {conditionsSuffix(loaded.benchmark.latestDeal.conditions)} ·{' '}
                 <a href={loaded.benchmark.latestDeal.sourceUrl} target="_blank" rel="noreferrer">
                   원문
                 </a>
@@ -180,7 +181,8 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
               <ul>
                 {loaded.benchmark.cases.map((deal) => (
                   <li key={deal.sourceUrl}>
-                    {deal.date} · {deal.price.toLocaleString('en-US')}원 · {deal.site} ·{' '}
+                    {deal.date} · {deal.price.toLocaleString('en-US')}원 · {deal.site}
+                    {conditionsSuffix(deal.conditions)} ·{' '}
                     <a href={deal.sourceUrl} target="_blank" rel="noreferrer">
                       원문
                     </a>

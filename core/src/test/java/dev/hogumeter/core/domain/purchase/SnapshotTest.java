@@ -43,8 +43,8 @@ class SnapshotTest {
 	@Test
 	void sparseViewHasNoBenchmarkButKeepsLowestCaseAndNullGap() {
 		List<DealRef> cases = List.of(
-				new DealRef(870_000L, LocalDate.of(2026, 3, 1), "ppomppu", "https://p.test/1"),
-				new DealRef(820_000L, LocalDate.of(2026, 3, 2), "ruliweb", "https://r.test/2"));
+				new DealRef(870_000L, LocalDate.of(2026, 3, 1), "ppomppu", "https://p.test/1", List.of()),
+				new DealRef(820_000L, LocalDate.of(2026, 3, 2), "ruliweb", "https://r.test/2", List.of()));
 		BenchmarkView sparse = new BenchmarkView(Tier.SPARSE, null, null, null, null, 2, 1, null, 900_000L, null,
 				cases);
 

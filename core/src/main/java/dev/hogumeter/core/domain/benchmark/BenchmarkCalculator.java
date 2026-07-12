@@ -121,7 +121,8 @@ public class BenchmarkCalculator {
 	}
 
 	private static BenchmarkView.DealRef toRef(DealEvent d, ZoneId zone) {
-		return new BenchmarkView.DealRef(d.priceFirst(), toDate(d.firstSeen(), zone), d.site(), d.sourceUrl());
+		return new BenchmarkView.DealRef(d.priceFirst(), toDate(d.firstSeen(), zone), d.site(), d.sourceUrl(),
+				d.appliedConditions().stream().sorted().toList()); // 정렬로 결정적(표시용)
 	}
 
 	private static LocalDate toDate(Instant instant, ZoneId zone) {

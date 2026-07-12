@@ -35,7 +35,7 @@ class AlertEvaluatorTest {
 
 	private static BenchmarkView sparse(long current, long... casePrices) {
 		List<DealRef> cases = Arrays.stream(casePrices).boxed()
-				.map(p -> new DealRef(p, LocalDate.of(2026, 6, 1), "ppomppu", "u")).toList();
+				.map(p -> new DealRef(p, LocalDate.of(2026, 6, 1), "ppomppu", "u", List.of())).toList();
 		return new BenchmarkView(Tier.SPARSE, null, null, null, null, cases.size(), 0, null, current,
 				new Gap(null, null), cases);
 	}

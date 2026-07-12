@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BenchmarkView, CadenceView, SignalView } from '../api/types'
-import { benchmarkLine, cadenceLine, gapLine, lowestLine, sampleLabel, signalBadge } from './present'
+import { benchmarkLine, cadenceLine, conditionsSuffix, gapLine, lowestLine, sampleLabel, signalBadge } from './present'
 
 /** 포맷된 금액(1,234,000원)이 문자열에 있는가. "표본이 빈약할 땐 숫자를 내지 않는다"를 검사한다. */
 const PRICE_AMOUNT = /\d{1,3}(,\d{3})+\s*원/
@@ -10,7 +10,7 @@ const benchmark = (over: Partial<BenchmarkView> = {}): BenchmarkView => ({
   benchmarkPrice: 820_000,
   goodDealLine: 790_000,
   periodLowest: { price: 780_000, date: '2026-05-02' },
-  latestDeal: { price: 799_000, date: '2026-07-01', site: 'ppomppu', sourceUrl: 'https://x' },
+  latestDeal: { price: 799_000, date: '2026-07-01', site: 'ppomppu', sourceUrl: 'https://x', conditions: [] },
   n: 12,
   m: 3,
   expandedToMonths: null,
@@ -18,6 +18,17 @@ const benchmark = (over: Partial<BenchmarkView> = {}): BenchmarkView => ({
   gap: { vsBenchmark: { won: 70_000, pct: 8.5 }, vsLowest: { won: 110_000, pct: 14.1 } },
   cases: [],
   ...over,
+})
+
+describe('conditionsSuffix — 조건부 사례는 "정상 가격"으로 오인시키지 않는다 (Q-46①)', () => {
+  it('조건이 없으면 빈 문자열', () => {
+    expect(conditionsSuffix([])).toBe('')
+  })
+
+  it('조건이 있으면 · 조건부로 병기한다', () => {
+    expect(conditionsSuffix(['카할'])).toBe(' · 조건부: 카할')
+    expect(conditionsSuffix(['카할', '조건부무료배송'])).toBe(' · 조건부: 카할 · 조건부무료배송')
+  })
 })
 
 describe('sampleLabel — 기준가는 항상 표본을 동반한다 (절대 원칙 1)', () => {

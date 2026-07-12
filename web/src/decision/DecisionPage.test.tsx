@@ -28,7 +28,7 @@ const benchmark: BenchmarkView = {
   benchmarkPrice: 820_000,
   goodDealLine: 790_000,
   periodLowest: { price: 780_000, date: '2026-05-02' },
-  latestDeal: { price: 799_000, date: '2026-07-01', site: 'ppomppu', sourceUrl: 'https://ppomppu/1' },
+  latestDeal: { price: 799_000, date: '2026-07-01', site: 'ppomppu', sourceUrl: 'https://ppomppu/1', conditions: [] },
   n: 12,
   m: 3,
   expandedToMonths: null,
@@ -89,8 +89,8 @@ describe('DecisionPage', () => {
       m: 0,
       gap: { vsBenchmark: null, vsLowest: null },
       cases: [
-        { price: 810_000, date: '2026-06-01', site: 'ruliweb', sourceUrl: 'https://r/1' },
-        { price: 830_000, date: '2026-04-11', site: 'fmkorea', sourceUrl: 'https://f/2' },
+        { price: 810_000, date: '2026-06-01', site: 'ruliweb', sourceUrl: 'https://r/1', conditions: ['카할'] },
+        { price: 830_000, date: '2026-04-11', site: 'fmkorea', sourceUrl: 'https://f/2', conditions: [] },
       ],
       latestDeal: null,
     })
@@ -101,6 +101,8 @@ describe('DecisionPage', () => {
     expect(await screen.findByLabelText('기준가')).toHaveTextContent('산출하지 않습니다')
     expect(screen.getByRole('heading', { name: '사례 2건' })).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: '원문' })).toHaveLength(2)
+    // 조건부 사례는 "조건부: 카할"을 병기한다 — 정상 가격으로 오인 방지(Q-46①).
+    expect(screen.getByText(/조건부: 카할/)).toBeInTheDocument()
   })
 
   it('GRAY는 판단 보류이고 딱지를 함께 낸다', async () => {

@@ -108,6 +108,15 @@ const BADGES: Record<SignalColor, { mark: string; text: string }> = {
   GRAY: { mark: '⚪', text: '표본 부족 — 판단 보류' },
 }
 
+/**
+ * 사례·최근딜에 붙는 조건 태그(BM-02, Q-46 ①). 없으면 빈 문자열.
+ * `카할`이면 특정 카드 보유자만 그 가격이다 — "정상 가격"으로 오인하지 않게 병기한다(절대 원칙 2).
+ * 배송비미상은 표본에서 이미 빠지므로(②) 여기 오지 않는다.
+ */
+export function conditionsSuffix(conditions: string[]): string {
+  return conditions.length === 0 ? '' : ` · 조건부: ${conditions.join(' · ')}`
+}
+
 export function signalBadge(signal: SignalView): SignalBadge {
   const { mark, text } = BADGES[signal.color]
   // core가 딱지를 붙였으면 그대로 쓰고, 안 붙였는데 굿딜라인이 없으면 우리가 밝힌다.

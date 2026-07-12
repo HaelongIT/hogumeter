@@ -67,6 +67,8 @@ export interface DealRef {
   date: string
   site: string
   sourceUrl: string
+  /** BM-02 조건 태그(`카할` 등). 이 사례를 "정상 가격"으로 오인하지 않게 병기한다(Q-46 ①). 없으면 빈 배열. */
+  conditions: string[]
 }
 
 /** 현재가 − 참조가. 참조가가 없으면 leg 자체가 null. */

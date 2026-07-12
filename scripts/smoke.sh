@@ -284,6 +284,8 @@ echo "$bench" | grep -q '"n":1' || fail "표본 수가 1이 아니다: $bench"
 echo "$bench" | grep -q '"benchmarkPrice":null' || fail "SPARSE인데 기준가를 냈다: $bench"
 echo "$bench" | grep -q '"cases":\[{' || fail "SPARSE인데 사례가 비었다: $bench"
 echo "$bench" | grep -q '999000' || fail "적재한 가격이 사례에 없다: $bench"
+# Q-46①: 사례 DealRef가 조건 태그를 싣는다(빈 배열이라도 키는 있어야 — web이 deal.conditions를 읽는다).
+echo "$bench" | grep -q '"conditions":' || fail "DealRef.conditions가 응답에 없다 (Q-46① 계약 드리프트): $bench"
 
 # **계약 드리프트 종단 검증**: web의 BenchmarkView가 기대하는 필드가 응답에 **전부** 있는가.
 # core가 필드 이름을 바꾸면(goodDealLine → goodDealCutoff 등) 단위 테스트는 GREEN인데 화면은
