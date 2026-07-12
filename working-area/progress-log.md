@@ -34,7 +34,18 @@
   ⚠️자율결정: 후속 알림 발송 수(FollowUpAlertUseCase가 int 반환)는 첫 알림과 부류가 달라 이번 리포트에 합치지
   않음 — 별도 카운터로 남김(docs/91 Q-57 "남은 것"). BiConsumer→BiFunction 재churn 회피.
 
-이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46①·Q-67① 전부 origin/main. Q-67②·Q-53·Q-57②③ 커밋 대기(푸시는 지시 시).
+- [Q-27④ 해소] 미상 큐 매 틱 재적재(하루 1,440행) → 같은 근거를 **한 행에 접고** occurrences로 센다.
+  V5 마이그레이션(review_queue_item +occurrences +last_seen_at +dedup_key unique) + R5 롤백.
+  `ReviewQueueItemEntity` 3필드 매핑 + `recordRecurrence`, `ReviewQueueItemRepository.findByDedupKey`,
+  `IngestDealsUseCase.upsertReviewItem`(dedup_key=`u:`원문id/`o:`딜id). 읽기 모델은 이제 컬럼을 직접 읽음
+  (그룹핑 제거). 스모크 5-1e를 "결함 존재(rows>1)" → "해소(정확히 1행 + occurrences≥2)"로 뒤집음(작성자가
+  주석에 남긴 "고쳐지면 이 블록을 지워라" 마커를 따름). core 전체 GREEN·롤백 드릴 PASS·배선 게이트 3종 exit 0.
+  docs/91 Q-27④ 해소 → **Q-15 선결 ③ 충족**. docs/99 교훈(결함 존재 단언은 고치면 빨개진다 = 신호).
+  ⚠️자율결정: dedup_key unique-global이라 기각 후 재발생 시 기각 행 occurrences만 증가(재오픈 안 함) —
+  보수적 기본값, Q-15 승격·기각 착수 때 정합(docs/91에 기록).
+
+이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46①·Q-67① 전부 origin/main.
+Q-67②·Q-53·Q-57②③·Q-27④ 커밋 대기(푸시는 지시 시).
 
 ---
 

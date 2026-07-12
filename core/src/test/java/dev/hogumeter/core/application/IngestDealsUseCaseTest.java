@@ -15,6 +15,7 @@ import dev.hogumeter.core.adapter.persistence.ProductEntity;
 import dev.hogumeter.core.adapter.persistence.ProductRepository;
 import dev.hogumeter.core.adapter.persistence.RawDealPost;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
+import dev.hogumeter.core.adapter.persistence.ReviewQueueItemEntity;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
 import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
@@ -127,6 +128,20 @@ class IngestDealsUseCaseTest {
 
 		assertThat(dealEvents.findByVariantId(variantId)).isEmpty();
 		assertThat(reviewQueue.findByType(ReviewQueueType.UNCLASSIFIED)).hasSize(1);
+	}
+
+	@Test
+	void repeatedIngestOfSameUnclassifiedFoldsIntoOneRow() {
+		// Q-27④: 미상 원문은 딜로 링크되지 않아 findUnprocessed가 매 틱 다시 반환한다. 두 번 수집해도
+		// 새 행을 만들지 않고 occurrences만 는다(무한 증가 방지 + Q-15 승격이 한 행만 처리하면 끝나게).
+		savePost("ppomppu", "애플 아이폰 신형 256기가", 800_000L, T); // "17" 없음 → CANDIDATE
+
+		useCase.ingestPending();
+		useCase.ingestPending(); // 같은 미상 원문이 다시 스캔된다
+
+		List<ReviewQueueItemEntity> items = reviewQueue.findByType(ReviewQueueType.UNCLASSIFIED);
+		assertThat(items).hasSize(1);
+		assertThat(items.get(0).getOccurrences()).isEqualTo(2);
 	}
 
 	@Test

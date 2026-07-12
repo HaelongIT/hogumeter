@@ -42,10 +42,11 @@ class GetReviewQueueUseCaseTest {
 	}
 
 	private long enqueue(String type, String payload, String status, String createdAt) {
+		// 단일 재적재 행: last_seen_at = created_at(first=last). Q-27④ 후 읽기 모델이 컬럼을 직접 읽는다.
 		return jdbc.queryForObject("""
-				insert into review_queue_item (type, payload, status, created_at)
-				values (?, ?::jsonb, ?, ?::timestamptz) returning id
-				""", Long.class, type, payload, status, createdAt);
+				insert into review_queue_item (type, payload, status, created_at, last_seen_at)
+				values (?, ?::jsonb, ?, ?::timestamptz, ?::timestamptz) returning id
+				""", Long.class, type, payload, status, createdAt, createdAt);
 	}
 
 	private List<PendingItem> mine(long... ids) {
@@ -182,22 +183,26 @@ class GetReviewQueueUseCaseTest {
 	/**
 	 * <b>매칭 실패 원문은 매 틱마다 다시 큐에 쌓인다</b> — `findUnprocessed()`가 `deal_event_source`
 	 * 링크 유무로 미처리를 판정하는데, 매칭 실패 딜은 링크를 만들지 않기 때문이다(Q-27 ④).
-	 * 조용히 지우면 결함이 사라진 것처럼 보인다. 접어서 <b>세어 보여준다</b>.
+	 * 이제 쓰기 쪽이 같은 근거를 <b>한 행에 접고</b> 재적재를 {@code occurrences} 컬럼으로 센다
+	 * (그 접힘 자체는 {@code IngestDealsUseCaseTest}가 검증한다). 이 조회는 그 컬럼을 그대로 읽어야 한다 —
+	 * {@code count(*)}로 재구성하지 않는다(그러면 한 행이 왔을 때 occurrences가 늘 1이 된다).
 	 */
 	@Test
-	void repeatedEnqueuesOfTheSameEvidenceAreFoldedAndCounted() {
-		String payload = "{\"title\":\"매 틱 다시 쌓인다\",\"productCandidates\":[]}";
-		long first = enqueue("UNCLASSIFIED", payload, "PENDING", "2026-07-10T00:00:00Z");
-		long second = enqueue("UNCLASSIFIED", payload, "PENDING", "2026-07-10T00:01:00Z");
-		long third = enqueue("UNCLASSIFIED", payload, "PENDING", "2026-07-10T00:02:00Z");
+	void pendingItemReadsOccurrenceColumnAndTimestamps() {
+		long id = jdbc.queryForObject("""
+				insert into review_queue_item
+				       (type, payload, status, created_at, occurrences, last_seen_at, dedup_key)
+				values ('UNCLASSIFIED', ?::jsonb, 'PENDING', ?::timestamptz, 3, ?::timestamptz, 'u:rq-fold')
+				returning id
+				""", Long.class, "{\"title\":\"매 틱 다시 쌓인다\",\"productCandidates\":[]}",
+				"2026-07-10T00:00:00Z", "2026-07-10T00:02:00Z");
 
-		List<PendingItem> folded = mine(first, second, third);
+		List<PendingItem> items = mine(id);
 
-		assertThat(folded).hasSize(1);
-		assertThat(folded.get(0).id()).isEqualTo(first); // 접힌 행 중 가장 이른 것
-		assertThat(folded.get(0).occurrences()).isEqualTo(3);
-		assertThat(folded.get(0).firstSeenAt()).isEqualTo(Instant.parse("2026-07-10T00:00:00Z"));
-		assertThat(folded.get(0).lastSeenAt()).isEqualTo(Instant.parse("2026-07-10T00:02:00Z"));
+		assertThat(items).hasSize(1);
+		assertThat(items.get(0).occurrences()).isEqualTo(3); // 컬럼을 읽는다(재적재 3회)
+		assertThat(items.get(0).firstSeenAt()).isEqualTo(Instant.parse("2026-07-10T00:00:00Z")); // created_at
+		assertThat(items.get(0).lastSeenAt()).isEqualTo(Instant.parse("2026-07-10T00:02:00Z")); // last_seen_at
 	}
 
 	/**

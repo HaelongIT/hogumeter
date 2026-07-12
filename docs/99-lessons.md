@@ -811,3 +811,10 @@
 - **복구**: 다행히 같은 대화에서 재배선 전체를 Read로 확보해 둔 정본이 있어 `Write`로 복원, 전체 테스트 GREEN 재확인.
 - **교훈(규칙화)**: **커밋 안 된 코드에 뮤테이션 테스트를 할 땐 되돌리기를 `git checkout`으로 하지 않는다.** `cp file file.bak` → 뮤테이트 → 검증 → `mv file.bak file`로 그 변경만 되돌린다(또는 뮤테이션을 손으로 정확히 역치환). `git checkout -- file`·`git restore file`·`git checkout -- .`는 **커밋 안 된 작업을 파괴하는 명령**이다(CLAUDE.md "광범위한 되돌리기(`checkout -- .`)도 파괴다"의 단일 파일판 — 단일 파일도 똑같이 파괴다). 되돌리기 전 `git status`로 "이 파일이 이미 커밋됐나"를 먼저 묻는다.
 - **관련**: `PipelineScheduler.java` Q-67 재배선 · `PipelineSchedulerTest.routesReprocessedIdsToFollowUpByKind`(뮤테이션 대상 테스트).
+
+## 2026-07-12 — 결함의 "현재 존재"를 단언하는 스모크는 고치는 순간 빨개진다 (Q-27 ④)
+- **맥락**: 미상 큐 재적재(Q-27④) — CANDIDATE/UNKNOWN 원문은 딜로 링크 안 돼 `findUnprocessed`가 매 틱 다시 반환 → 매번 새 `review_queue_item` 행(하루 1,440행). 읽기 모델은 이미 `(type,payload)`로 접어 `count(*)`로 occurrences를 셌지만 저장은 무한 증가했고, Q-15(승격·기각)가 "하나 처리해도 N-1개 남는다"로 막혀 있었다.
+- **한 것**: 쓰기 쪽을 dedup — `dedup_key`(유형별) unique + `occurrences`·`last_seen_at` 컬럼(V5/R5). `upsertReviewItem`이 `findByDedupKey`로 있으면 `recordRecurrence`(카운트+시각), 없으면 새 행. 읽기 모델은 이제 그 컬럼을 직접 읽는다(그룹핑 제거).
+- **교훈(규칙화)**: **게이트·스모크가 결함의 "지금 존재함"을 단언하면, 그 결함을 고치는 순간 그 단언이 빨개진다 — 그건 회귀가 아니라 신호다.** 스모크 5-1e는 `rows > 1`(중복이 쌓인다)을 단언하며 주석에 "이 단정이 실패하면 Q-27④가 고쳐진 것 — 그때 이 블록을 지워라"를 달아 뒀다. 결함-존재 단언에는 **"고쳐지면 이렇게 바꿔라"를 함께 적는다.** 고칠 때 그 마커를 따라 단언을 뒤집는다(`rows > 1` → `rows == 1 && occurrences >= 2`).
+- **또 하나**: **읽기-시점 접기(fold at read)와 쓰기-시점 접기(dedup at write)는 다른 계약이다.** 읽기 모델을 write-dedup으로 옮기면, 읽기-접기를 검증하던 테스트(중복 행 3개 삽입 → occurrences=3)는 이제 **한 행 + occurrences 컬럼**을 검증하도록 갈라야 한다 — 접힘 자체는 쓰기 테스트로, 컬럼 읽기는 읽기 테스트로. 안 그러면 읽기 테스트가 "한 행 왔을 때 occurrences=1"을 놓친다.
+- **관련**: `V5__review_queue_dedup.sql`·`GetReviewQueueUseCase`·`IngestDealsUseCase.upsertReviewItem` · 스모크 5-1e · Q-15(선결 충족).

@@ -140,9 +140,9 @@ public class IngestDealsUseCase {
 		}
 		created.setOutlierFlag(flag);
 		if (flag == OutlierFlag.LOWER) {
-			reviewQueue.save(new ReviewQueueItemEntity(ReviewQueueType.OUTLIER_LOWER, Map.of(
+			upsertReviewItem(ReviewQueueType.OUTLIER_LOWER, Map.of(
 					"priceFirst", created.getPriceFirst(),
-					"dealEventId", created.getId())));
+					"dealEventId", created.getId()), "o:" + created.getId());
 		}
 	}
 
@@ -160,7 +160,19 @@ public class IngestDealsUseCase {
 				"title", post.getTitle(),
 				"rawDealPostId", post.getId(),
 				"productCandidates", List.copyOf(match.productCandidates())));
-		reviewQueue.save(new ReviewQueueItemEntity(item.type(), item.payload()));
+		// 미상 원문은 딜로 링크되지 않아 매 틱 다시 스캔된다(Q-27 ④) — 새 행 대신 같은 근거를 접어 센다.
+		upsertReviewItem(item.type(), item.payload(), "u:" + post.getId());
+	}
+
+	/**
+	 * 같은 근거(dedup_key)가 이미 큐에 있으면 새 행을 만들지 않고 재적재를 센다(Q-27 ④). 없으면 새로 넣는다.
+	 * 접어서 세는 이유: 조용히 지우면 결함이 사라진 것처럼 보인다 — occurrences가 크다는 것이 곧 "재처리
+	 * 멱등이 없다"는 증거다(읽기 모델·web이 그 수를 드러낸다).
+	 */
+	private void upsertReviewItem(ReviewQueueType type, Map<String, Object> payload, String dedupKey) {
+		reviewQueue.findByDedupKey(dedupKey).ifPresentOrElse(
+				ReviewQueueItemEntity::recordRecurrence,
+				() -> reviewQueue.save(new ReviewQueueItemEntity(type, payload, dedupKey)));
 	}
 
 	/** 수집 한 회의 가변 집계기 — 루프가 끝나면 불변 {@link IngestReport}로 굳힌다. */

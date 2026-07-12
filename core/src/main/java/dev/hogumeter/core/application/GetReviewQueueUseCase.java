@@ -28,7 +28,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p><b>왜 JPA가 아니라 SQL인가</b>: {@code ReviewQueueItemEntity}는 {@code status}·{@code created_at}·
  * {@code channel}·{@code resolved_at}을 매핑하지 않는다(생성 시점엔 전부 기본값이라 필요가 없었다).
- * 그 파일은 다른 개발자 소유라 고치지 않는다. 읽기 전용 SQL은 엔티티를 건드리지 않고 진실을 본다.
+ * 승격·기각 UI가 없어 아직 전부 기본값이다(Q-15). 읽기 전용 SQL은 엔티티를 건드리지 않고 진실을 본다.
  *
  * <p>1인용 규모라 페이지네이션 없음(과최적화 금지, PERF-04).
  */
@@ -36,16 +36,16 @@ import tools.jackson.databind.ObjectMapper;
 public class GetReviewQueueUseCase {
 
 	/**
-	 * <b>같은 근거는 접어서 세고, 접었다는 사실을 {@code occurrences}로 드러낸다.</b>
+	 * <b>같은 근거는 한 행이고, 재적재 횟수는 {@code occurrences}로 드러난다(Q-27 ④ 해소).</b>
 	 *
 	 * <p>{@code findUnprocessed()}는 {@code deal_event_source} 링크가 없는 원문을 미처리로 본다.
-	 * 그런데 매칭에 실패한 원문은 딜을 만들지 않으므로 링크도 생기지 않는다 — 즉 <b>매 틱마다 같은 항목이
-	 * 다시 큐에 쌓인다</b>(운영 60초 주기면 원문 하나당 하루 1,440행). docs/91 Q-27 ④에 "중복 여지"로
-	 * 적혀 있으나 실측된 적이 없었다. 고치려면 {@code IngestDealsUseCase}·{@code RawDealPostRepository}를
-	 * 손봐야 하는데 둘 다 다른 개발자 소유다.
+	 * 매칭에 실패한 원문은 딜을 만들지 않아 링크도 안 생기므로 <b>매 틱 다시 스캔된다</b>(60초 주기면 원문
+	 * 하나당 하루 1,440번). 예전엔 그때마다 새 행이 쌓여, 이 조회가 {@code (type,payload)}로 접어 {@code
+	 * count(*)}로 세야 했다. 이제 {@link IngestDealsUseCase}가 {@code dedup_key}로 <b>한 행에 접고</b>
+	 * 재적재를 {@code occurrences} 컬럼으로 센다 — 이 조회는 그 컬럼을 그대로 읽는다(그룹핑 불필요).
 	 *
-	 * <p>중복을 조용히 지우면 결함이 사라진 것처럼 보인다. 그래서 <b>세어서 보여준다</b> —
-	 * {@code occurrences}가 크다는 것은 그 자체로 "재처리 멱등이 없다"는 증거다.
+	 * <p>접어서 세는 이유는 그대로다: 조용히 지우면 결함이 사라진 것처럼 보인다. {@code occurrences}가
+	 * 크다는 것은 그 자체로 "재처리 멱등이 없다"는 증거다 — 그 원문이 계속 미상으로 다시 온다는 뜻이다.
 	 *
 	 * <p>원문 링크는 유형마다 다른 길로 닿는다 — UNCLASSIFIED는 {@code raw_deal_post}를 직접 가리키고,
 	 * OUTLIER_LOWER는 {@code deal_event}를 가리키는데 그 테이블엔 url 컬럼이 없어
@@ -53,36 +53,25 @@ public class GetReviewQueueUseCase {
 	 * 잇지 못하면 {@code null}이다 — 죽은 링크를 그리느니 링크가 없는 편이 낫다.
 	 */
 	private static final String PENDING = """
-			with grouped as (
-			     select min(q.id)         as id,
-			            q.type            as type,
-			            q.payload         as payload,
-			            count(*)          as occurrences,
-			            min(q.created_at) as first_seen_at,
-			            max(q.created_at) as last_seen_at
-			       from review_queue_item q
-			      where q.status = 'PENDING'
-			      group by q.type, q.payload
-			)
-			select g.id,
-			       g.type,
-			       g.occurrences,
-			       g.first_seen_at,
-			       g.last_seen_at,
-			       g.payload::text as payload,
+			select q.id,
+			       q.type,
+			       q.occurrences,
+			       q.created_at  as first_seen_at,
+			       q.last_seen_at,
+			       q.payload::text as payload,
 			       coalesce(post.url, outlier.url) as source_url,
 			       subject.name as subject,
 			       coalesce(conditions.tags, '') as conditions
-			  from grouped g
+			  from review_queue_item q
 			  left join raw_deal_post post
-			         on g.type = 'UNCLASSIFIED'
-			        and post.id = nullif(g.payload ->> 'rawDealPostId', '')::bigint
+			         on q.type = 'UNCLASSIFIED'
+			        and post.id = nullif(q.payload ->> 'rawDealPostId', '')::bigint
 			  left join lateral (
 			       select rp.url
 			         from deal_event_source des
 			         join raw_deal_post rp on rp.id = des.raw_deal_post_id
-			        where g.type = 'OUTLIER_LOWER'
-			          and des.deal_event_id = nullif(g.payload ->> 'dealEventId', '')::bigint
+			        where q.type = 'OUTLIER_LOWER'
+			          and des.deal_event_id = nullif(q.payload ->> 'dealEventId', '')::bigint
 			        order by des.id
 			        limit 1
 			  ) outlier on true
@@ -91,8 +80,8 @@ public class GetReviewQueueUseCase {
 			         from deal_event de
 			         join variant v on v.id = de.variant_id
 			         join product p on p.id = v.product_id
-			        where g.type = 'OUTLIER_LOWER'
-			          and de.id = nullif(g.payload ->> 'dealEventId', '')::bigint
+			        where q.type = 'OUTLIER_LOWER'
+			          and de.id = nullif(q.payload ->> 'dealEventId', '')::bigint
 			  ) subject on true
 			  left join lateral (
 			       -- **왜 싸 보이는가.** `카할`이면 특정 카드 보유자만, `배송비미상`이면 하한이다.
@@ -100,10 +89,11 @@ public class GetReviewQueueUseCase {
 			       select string_agg(tag, ',' order by tag collate "C") as tags
 			         from deal_event de
 			         cross join lateral unnest(de.applied_conditions) as tag
-			        where g.type = 'OUTLIER_LOWER'
-			          and de.id = nullif(g.payload ->> 'dealEventId', '')::bigint
+			        where q.type = 'OUTLIER_LOWER'
+			          and de.id = nullif(q.payload ->> 'dealEventId', '')::bigint
 			  ) conditions on true
-			 order by g.last_seen_at desc, g.id desc
+			 where q.status = 'PENDING'
+			 order by q.last_seen_at desc, q.id desc
 			""";
 
 	private final JdbcTemplate jdbc;

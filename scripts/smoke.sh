@@ -426,21 +426,29 @@ deals_after=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "
 	-c "select count(*) from deal_event" | tr -d '\r')
 [ "$deals_before" = "$deals_after" ] || fail "미상 원문이 deal_event를 만들었다 ($deals_before -> $deals_after)"
 
-# ⚠️ Q-27 ④ 실측: `findUnprocessed()`는 deal_event_source 링크가 없는 원문을 미처리로 본다.
-# 미상 원문은 링크를 만들지 않으므로 **매 틱 다시 큐에 쌓인다**(운영 60초면 하루 1,440행).
-# 이 단정이 실패하면 Q-27 ④가 고쳐진 것이다 — 그때 이 블록을 지워라.
-sleep 5
-rows=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
-	-c "select count(*) from review_queue_item where payload->>'title' = '${unknown_title}'" | tr -d '\r')
-[ "$rows" -gt 1 ] || fail "중복 재처리가 관측되지 않는다(${rows}건). Q-27 ④가 해소됐다면 이 블록을 지워라"
+# ✅ Q-27 ④ 해소 검증: `findUnprocessed()`는 deal_event_source 링크가 없는 원문을 미처리로 본다.
+# 미상 원문은 링크를 만들지 않아 **매 틱 다시 스캔된다**. 예전엔 그때마다 새 행이 쌓였다(하루 1,440행).
+# 이제 같은 근거(dedup_key)를 **한 행에 접고** 재적재를 occurrences로 센다 — DB엔 정확히 1행, occurrences만
+# 는다. 여러 틱을 기다려 재처리가 세지는지 본다(조용히 지우면 결함이 사라진 것처럼 보인다).
+rows=0
+occ=0
+for _ in $(seq 20); do
+	rows=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+		-c "select count(*) from review_queue_item where payload->>'title' = '${unknown_title}'" | tr -d '\r')
+	occ=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+		-c "select coalesce(max(occurrences),0) from review_queue_item where payload->>'title' = '${unknown_title}'" | tr -d '\r')
+	{ [ "$rows" = 1 ] && [ "${occ:-0}" -ge 2 ]; } && break
+	sleep 2
+done
+[ "$rows" = 1 ] || fail "미상 원문이 한 행으로 접히지 않았다 (${rows}행) — Q-27 ④ dedup 회귀"
+[ "${occ:-0}" -ge 2 ] || fail "재처리가 occurrences로 세지지 않는다 (occ=${occ}) — 매 틱 다시 스캔되면 늘어야 한다"
 
-# 조회는 같은 근거를 하나로 접어 준다. 접었다는 사실은 occurrences로 드러낸다 — 조용히 지우지 않는다.
-# `grep -c`는 **줄 수**를 세므로 한 줄 JSON에선 언제나 1이다. `grep -o | wc -l`로 **등장 횟수**를 센다.
+# 조회도 그 한 행을 occurrences로 드러낸다. `grep -c`는 **줄 수**라 한 줄 JSON에선 늘 1 — `grep -o | wc -l`로 등장 횟수를 센다.
 queue=$(curl -fsS "${WEB}/api/v1/review-queue")
 [ "$(echo "$queue" | grep -o "$unknown_title" | wc -l)" = 1 ] ||
-	fail "중복이 접히지 않았다 — 화면이 같은 항목을 여러 번 그린다 (DB ${rows}행)"
+	fail "화면이 같은 항목을 여러 번 그린다 (DB ${rows}행)"
 echo "$queue" | grep -qE '"occurrences":[2-9][0-9]*' ||
-	fail "중복 ${rows}건을 occurrences로 드러내지 않는다 (조용히 지우면 결함이 사라진 것처럼 보인다): $queue"
+	fail "재처리를 occurrences로 드러내지 않는다 (조용히 지우면 결함이 사라진 것처럼 보인다): $queue"
 
 echo "--- 5-1f) 이상치(BM-05): 분포 하단 딜이 큐에 뜨고 **대상을 지목한다** ---"
 # 🔥 경로는 종단으로 한 번도 실행된 적이 없었다. 분포가 5건 이상이어야 판정이 돈다

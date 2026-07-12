@@ -38,12 +38,29 @@ public class ReviewQueueItemEntity {
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
+	/** 이 근거가 큐에 들어간 횟수(Q-27 ④). 1보다 크면 재처리 멱등이 없다는 증거다. */
+	@Column(nullable = false)
+	private int occurrences = 1;
+
+	/** 마지막 재적재 시각(created_at = 최초). 그 구간이 결함의 나이다(web seenLine). */
+	@Column(name = "last_seen_at", nullable = false)
+	private Instant lastSeenAt;
+
+	/** 같은 근거를 한 행으로 접는 키(유형별). null이면 접지 않는다(옛 행 호환). */
+	@Column(name = "dedup_key")
+	private String dedupKey;
+
 	protected ReviewQueueItemEntity() {
 	}
 
 	public ReviewQueueItemEntity(ReviewQueueType type, Map<String, Object> payload) {
+		this(type, payload, null);
+	}
+
+	public ReviewQueueItemEntity(ReviewQueueType type, Map<String, Object> payload, String dedupKey) {
 		this.type = type;
 		this.payload = payload;
+		this.dedupKey = dedupKey;
 	}
 
 	@PrePersist
@@ -51,6 +68,15 @@ public class ReviewQueueItemEntity {
 		if (createdAt == null) {
 			createdAt = Instant.now();
 		}
+		if (lastSeenAt == null) {
+			lastSeenAt = createdAt;
+		}
+	}
+
+	/** 같은 근거가 또 들어왔다 — 새 행을 만드는 대신 세고 시각을 갱신한다(Q-27 ④). */
+	public void recordRecurrence() {
+		occurrences++;
+		lastSeenAt = Instant.now();
 	}
 
 	public Long getId() {
@@ -63,5 +89,17 @@ public class ReviewQueueItemEntity {
 
 	public Map<String, Object> getPayload() {
 		return payload;
+	}
+
+	public int getOccurrences() {
+		return occurrences;
+	}
+
+	public Instant getLastSeenAt() {
+		return lastSeenAt;
+	}
+
+	public String getDedupKey() {
+		return dedupKey;
 	}
 }
