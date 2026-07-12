@@ -1,3 +1,18 @@
+## 2026-07-12 — 무중단 백로그 진행 (Q-46①·게이트 CI 수정 2건·Q-67 착수)
+
+사용자 "푸시하고 남은거 쭉 진행 무중단". 푸시 후 계속:
+- [Q-46①] 조건 태그를 기준가 응답·사례가 말한다(카할 등 오인 방지). core BenchmarkView.DealRef.conditions +
+  toRef, web present.conditionsSuffix + DecisionPage, smoke 종단. core GREEN·web 149·build 통과. (8be5f4f)
+- [CI 수정 ×2] 게이트 자기 테스트가 allowlist 면제 개수를 하드코딩해 두 번 CI RED(사용자 두 번 지적).
+  table-wiring(9e11324) → 거울상 놓쳐 domain-consumers·repository-readers 또 RED → 정규식으로(8b90f46).
+  8개 자기 테스트 전수 ALL PASS 확인. docs/99 교훈 기록. **거울상 전수 확인을 다음부턴 먼저 한다.**
+- [Q-67 착수] AL-03 후속 알림 — V4 마이그레이션(deal_alert) + R4 + DealAlertEntity 작성(진행 중).
+  다음: DealAlertRepository + 첫 알림 기록(EvaluateAlertOnDealUseCase) → 후속 전이 감지·발송.
+
+이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46① 전부 origin/main. CI 초록.
+
+---
+
 ## 2026-07-11 — 완결성 감사 + 실행 시작 (사용자: "할 수 있는 거 다 했나?" → "큰 기능까지 전부")
 
 **감사(2 Explore + dead-code 게이트)**: 답=아니다. 두 가지.

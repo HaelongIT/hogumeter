@@ -796,3 +796,10 @@
 - **원인**: 재현해 보니 **`AlertEvaluator`는 `deal.status()`를 한 번도 참조하지 않았다**(전수 grep 0). "자연히 걸러낸다"는 전제가 코드에 없었다. 억제는 오직 가격 트리거로만 결정됐다.
 - **교훈(규칙화)**: **우리가 `docs/91`·`98`·`99`에 적어둔 권고·실측도 가설이다 — 막기(또는 고치기) 전에 재현한다**(CLAUDE.md에 이미 있으나 이번에 정확히 그 함정을 밟았다). 그리고 **"X면 억제된다"를 믿기 전에 그 상태 X를 실제로 소비하는 부품을 grep으로 전수 확인**한다. 억제를 한 지점(생성)에만 걸고 소비처(판정)가 그 상태를 무시하면, 두 부품이 각자 GREEN인 채로 결함이 산다 — candidateFrom(생성)과 AlertEvaluator(판정) 중 하나만 고치면 안 닫힌다. 값 계약(status)은 **생산자·소비자를 한 경로로 관통하는 테스트**(스파이 sender로 send 0회)로 잠근다.
 - **관련 테스트**: `IngestDealsUseCaseTest.initiallySoldOutPostIsBornEndedAndNotAlerted`(관통) · `AlertEvaluatorTest.endedDealNeverAlerts`(도메인) · `DealStatusTest`(매핑 정본). 종료 문자열 집합은 `DealStatus.ENDED_RAW_STATUSES` 한 곳(Reprocess도 참조 — 사본 제거).
+
+## 2026-07-12 — 게이트 자기 테스트가 allowlist 개수를 하드코딩하면 allowlist가 늘 때 CI가 빨개진다
+- **맥락**: USED 미배선 클래스·리더·테이블을 Q-72로 allowlist에 선언(옳음). 그러자 세 게이트의 자기 테스트(`check-*.test.sh`)가 "미배선/미사용 선언 N"을 **특정 개수**로 grep하다 깨졌다(6→10, 2→4).
+- **증상**: 게이트 본체(`check-*.sh`)는 통과인데 자기 테스트가 SOME FAILED. CI가 두 번 연속 빨강(사용자가 두 번 지적).
+- **원인**: 자기 테스트의 "allowlist가 읽히나" 케이스가 집계 개수를 하드코딩했다. 의도는 "0이 아닌가"인데.
+- **교훈(규칙화)**: **"집계가 동작하나"는 특정 개수가 아니라 "1 이상"으로 본다**(`grep -qE '선언 [1-9][0-9]*'`) — 개수 단언은 allowlist가 바뀔 때마다 깨진다. 그리고 **결함을 찾으면 거울상을 전수로 본다** — `table-wiring`만 고치고 `domain-consumers`·`repository-readers`를 놓쳐 CI가 또 빨개졌다(CLAUDE.md "거울상을 찾는다" 위반). 같은 부류 8개(`check-*.test.sh`)를 전부 돌려 확인하고서야 끝났다. `network-optin`은 처음부터 정규식이라 안전했다 — 불일치가 곧 신호였다.
+- **관련**: `scripts/check-{table-wiring,domain-consumers,repository-readers}.test.sh`.
