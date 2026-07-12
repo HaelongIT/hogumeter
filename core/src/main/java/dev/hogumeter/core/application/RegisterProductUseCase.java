@@ -30,6 +30,8 @@ public class RegisterProductUseCase {
 
 	@Transactional
 	public long register(RegisterProductCommand cmd) {
+		validate(cmd); // Q-49: 클라이언트 우회(curl) 방어 — 저장 전에 막아 500 대신 400을 낸다.
+
 		ProductEntity product = products.save(
 				new ProductEntity(cmd.name(), cmd.category(), cmd.demandAxisMode()));
 		long productId = product.getId();
@@ -44,5 +46,15 @@ public class RegisterProductUseCase {
 			aliases.save(new AliasEntity(productId, alias));
 		}
 		return productId;
+	}
+
+	/** 서버측 최소 불변(Q-49). 이름은 비어선 안 되고(NOT NULL·의미), variant가 없으면 값을 매길 대상이 없다. */
+	private static void validate(RegisterProductCommand cmd) {
+		if (cmd.name() == null || cmd.name().isBlank()) {
+			throw new InvalidRegistrationException("제품명을 입력하세요");
+		}
+		if (cmd.variants() == null || cmd.variants().isEmpty()) {
+			throw new InvalidRegistrationException("variant가 없습니다 — 가격축 값을 하나 이상 입력하세요");
+		}
 	}
 }

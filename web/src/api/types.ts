@@ -191,7 +191,7 @@ export interface ReviewQueueItem {
 
 /** 에러 형태는 하나다(`{code, message}`). 코드 카탈로그는 `docs/benchmark/07`. */
 export interface ApiError {
-  code: 'BM_VARIANT_NOT_FOUND' | 'BM_INVALID_PERIOD' | 'REG_INVALID_ALERT_POLICY' | (string & {})
+  code: 'BM_VARIANT_NOT_FOUND' | 'BM_INVALID_PERIOD' | 'REG_INVALID_ALERT_POLICY' | 'REG_INVALID_PRODUCT' | (string & {})
   message: string
 }
 

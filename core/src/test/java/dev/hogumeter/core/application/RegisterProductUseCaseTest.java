@@ -1,6 +1,7 @@
 package dev.hogumeter.core.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.hogumeter.core.TestcontainersConfiguration;
 import dev.hogumeter.core.adapter.persistence.AliasEntity;
@@ -69,5 +70,23 @@ class RegisterProductUseCaseTest {
 
 		assertThat(aliasRepo.findByProductId(productId)).extracting(AliasEntity::getAlias)
 				.containsExactlyInAnyOrder("아이폰17", "iPhone17");
+	}
+
+	// Q-49: 서버측 검증 — curl로 빈 이름을 치면 500(DB NOT NULL) 대신 막고 아무것도 저장하지 않는다.
+	@Test
+	void blankNameIsRejectedAndNothingSaved() {
+		RegisterProductCommand cmd = new RegisterProductCommand("   ", "폰", DemandAxisMode.GROUPED,
+				List.of(), List.of(new RegisterProductCommand.Variant("256GB", Map.of("용량", "256GB"))), List.of());
+
+		assertThatThrownBy(() -> useCase.register(cmd)).isInstanceOf(InvalidRegistrationException.class);
+		assertThat(productRepo.findAll()).isEmpty();
+	}
+
+	@Test
+	void emptyVariantsIsRejected() {
+		RegisterProductCommand cmd = new RegisterProductCommand("아이폰 17", "폰", DemandAxisMode.GROUPED,
+				List.of(), List.of(), List.of());
+
+		assertThatThrownBy(() -> useCase.register(cmd)).isInstanceOf(InvalidRegistrationException.class);
 	}
 }

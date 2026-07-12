@@ -1,5 +1,6 @@
 package dev.hogumeter.core.adapter.web;
 
+import dev.hogumeter.core.application.InvalidRegistrationException;
 import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
 import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,12 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ApiError invalidPeriod(InvalidBenchmarkPeriodException e) {
 		return new ApiError(InvalidBenchmarkPeriodException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(InvalidRegistrationException.class)
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	public ApiError invalidRegistration(InvalidRegistrationException e) {
+		return new ApiError(InvalidRegistrationException.CODE, e.getMessage());
 	}
 
 	public record ApiError(String code, String message) {
