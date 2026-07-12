@@ -11,6 +11,7 @@ import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.PriceEvidence;
 import dev.hogumeter.core.domain.deal.PriceRefresh;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -49,18 +50,25 @@ public class ReprocessDealPricesUseCase {
 		this.mapper = mapper;
 	}
 
+	/** @return 이번에 가격이 실제로 바뀐 딜 id — 후속 알림(AL-03 PRICE_CHANGED)의 대상이다(Q-67). */
 	@Transactional
-	public void reprocessPriceChanges() {
+	public List<Long> reprocessPriceChanges() {
+		List<Long> changed = new ArrayList<>();
 		for (DealEventEntity deal : dealEvents.findByStatusIn(REFRESHABLE)) {
-			refresh(deal);
+			if (refresh(deal)) {
+				changed.add(deal.getId());
+			}
 		}
+		return changed;
 	}
 
-	private void refresh(DealEventEntity deal) {
+	/** @return 가격이 바뀌어 반영했으면 true, 변화 없으면 false(미기록). */
+	private boolean refresh(DealEventEntity deal) {
 		List<PriceEvidence> evidence = evidenceFor(deal);
 		DealEvent current = mapper.toDomain(deal);
 
-		PriceRefresh.from(current, evidence).ifPresent(refresh -> deal.applyMerge(
+		Optional<PriceRefresh> result = PriceRefresh.from(current, evidence);
+		result.ifPresent(refresh -> deal.applyMerge(
 				deal.getPriceFirst(), // 발생 가격은 불변 — 기준가 분포가 그 위에 서 있다
 				refresh.priceMin(),
 				refresh.priceMax(),
@@ -69,6 +77,7 @@ public class ReprocessDealPricesUseCase {
 				deal.getStatus(), // 종료 판정은 ReprocessDealStatusUseCase의 몫
 				deal.getFirstSeen(),
 				refresh.lastSeen()));
+		return result.isPresent();
 	}
 
 	private List<PriceEvidence> evidenceFor(DealEventEntity deal) {

@@ -41,7 +41,7 @@ public class AlertDispatcher {
 			return DispatchOutcome.NO_ALERT;
 		}
 		if (gate.decide(decision, policy, clock) == GateDecision.SEND_NOW) {
-			sender.send(new AlertMessage(deal, view, decision));
+			sender.send(new AlertMessage(deal, view, decision, null)); // 첫 알림 — followUpKind=null
 			return DispatchOutcome.SENT;
 		}
 		return DispatchOutcome.HELD;

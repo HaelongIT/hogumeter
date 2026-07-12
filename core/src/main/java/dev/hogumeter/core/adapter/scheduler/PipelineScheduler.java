@@ -6,14 +6,17 @@ import dev.hogumeter.core.adapter.persistence.PurchaseRepository;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
 import dev.hogumeter.core.application.ExpirePurchaseObservationsUseCase;
+import dev.hogumeter.core.application.FollowUpAlertUseCase;
 import dev.hogumeter.core.application.IngestDealsUseCase;
 import dev.hogumeter.core.application.PreserveAppliedConditionsUseCase;
 import dev.hogumeter.core.application.ReprocessDealPricesUseCase;
 import dev.hogumeter.core.application.ReprocessDealStatusUseCase;
+import dev.hogumeter.core.domain.alert.FollowUpKind;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.DealTags;
 import dev.hogumeter.core.domain.purchase.PurchaseState;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -31,7 +34,7 @@ import org.springframework.stereotype.Component;
  * {@link IngestDealsUseCase#ingestPending()}을 부르는 사람이 없으면 {@code deal_event}가 생기지 않고,
  * 기준가 표본은 영원히 0이며 알림도 오지 않는다(2026-07-10까지 실제로 그랬다 — docs/91 Q-27 ⑤).
  *
- * <p>순서는 <b>관찰만료 → ingest → 조건태그 → 가격 → 종료</b>다.
+ * <p>순서는 <b>관찰만료 → ingest → 조건태그 → 가격 → 종료 → 후속알림</b>이다.
  * <ol>
  * <li>관찰만료: 관찰 기간이 끝난 구매를 REPORT_PENDING으로(PUR-01). <b>ingest보다 먼저</b> 온다 —
  * ingest는 새 딜마다 알림을 태우는데 PUR-03의 "산 뒤 알림"은 OBSERVING 관찰에만 발화한다.
@@ -42,6 +45,8 @@ import org.springframework.stereotype.Component;
  * <li>가격: 이미 링크된 원문의 새 가격을 딜에 반영한다(BM-01 AC-2, Q-27 ①).</li>
  * <li>종료: 링크된 원문이 전부 종료됐으면 딜을 ENDED로. <b>가격보다 뒤에 온다</b> — 종료된 딜의
  * 가격은 더 이상 갱신되지 않으므로, 종료 직전의 마지막 가격까지 반영하고 닫는다.</li>
+ * <li>후속알림: 이번 틱에 가격변화·종료한 딜 중 <b>첫 알림이 나갔던 것</b>에만 후속을 보낸다(AL-03, Q-67).
+ * 가격·종료 재처리가 낸 전이 id를 그대로 종류별로 흘려보낸다 — 종료가 마지막이라 닫히기 직전 값까지 반영된다.</li>
  * </ol>
  *
  * <p>기동 직후에는 돌지 않는다({@code initialDelay = interval}). {@code fixedDelay}는 기본적으로
@@ -59,19 +64,20 @@ public class PipelineScheduler {
 	private final Runnable expireObservations;
 	private final Runnable ingest;
 	private final Runnable preserveConditions;
-	private final Runnable reprocessPrices;
-	private final Runnable reprocessStatus;
+	private final Supplier<List<Long>> reprocessPrices;
+	private final Supplier<List<Long>> reprocessStatus;
+	private final BiConsumer<List<Long>, FollowUpKind> followUp;
 	private final Supplier<PipelineSnapshot> probe;
 	private final Consumer<PipelineTickReport> report;
 
 	@Autowired
 	PipelineScheduler(ExpirePurchaseObservationsUseCase expireObservations, IngestDealsUseCase ingest,
 			PreserveAppliedConditionsUseCase conditions, ReprocessDealPricesUseCase prices,
-			ReprocessDealStatusUseCase status, RawDealPostRepository rawPosts,
+			ReprocessDealStatusUseCase status, FollowUpAlertUseCase followUp, RawDealPostRepository rawPosts,
 			DealEventRepository dealEvents, DealEventSourceRepository sources,
 			ReviewQueueItemRepository reviewQueue, PurchaseRepository purchases, JdbcTemplate jdbc) {
 		this(expireObservations::expireDueObservations, ingest::ingestPending, conditions::preserveTags,
-				prices::reprocessPriceChanges, status::reprocessEndedDeals,
+				prices::reprocessPriceChanges, status::reprocessEndedDeals, followUp::sendFollowUps,
 				() -> new PipelineSnapshot(
 						rawPosts.count(),
 						sources.count(),
@@ -95,13 +101,15 @@ public class PipelineScheduler {
 
 	/** 테스트 seam — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
 	PipelineScheduler(Runnable expireObservations, Runnable ingest, Runnable preserveConditions,
-			Runnable reprocessPrices, Runnable reprocessStatus, Supplier<PipelineSnapshot> probe,
+			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
+			BiConsumer<List<Long>, FollowUpKind> followUp, Supplier<PipelineSnapshot> probe,
 			Consumer<PipelineTickReport> report) {
 		this.expireObservations = expireObservations;
 		this.ingest = ingest;
 		this.preserveConditions = preserveConditions;
 		this.reprocessPrices = reprocessPrices;
 		this.reprocessStatus = reprocessStatus;
+		this.followUp = followUp;
 		this.probe = probe;
 		this.report = report;
 	}
@@ -113,8 +121,11 @@ public class PipelineScheduler {
 		runStep("expire-observations", expireObservations);
 		runStep("ingest", ingest);
 		runStep("preserve-conditions", preserveConditions);
-		runStep("reprocess-prices", reprocessPrices);
-		runStep("reprocess-status", reprocessStatus);
+		List<Long> priceChanged = runStepReturning("reprocess-prices", reprocessPrices);
+		List<Long> ended = runStepReturning("reprocess-status", reprocessStatus);
+		// 후속 알림(AL-03) — 가격변화·종료한 딜 중 첫 알림이 나갔던 것에만. 종료가 마지막이라 닫히기 직전 값까지 반영.
+		runStep("follow-up-price", () -> followUp.accept(priceChanged, FollowUpKind.PRICE_CHANGED));
+		runStep("follow-up-ended", () -> followUp.accept(ended, FollowUpKind.ENDED));
 		PipelineSnapshot after = snapshot();
 		if (before == null || after == null) {
 			return; // DB가 닿지 않는다. snapshot()이 이미 남겼고, 0으로 채운 리포트는 거짓말이다.
@@ -152,6 +163,17 @@ public class PipelineScheduler {
 		}
 		catch (RuntimeException failure) {
 			log.error("pipeline step failed: {}", name, failure);
+		}
+	}
+
+	/** {@link #runStep}의 반환값 버전 — 전이 딜 id를 후속 단계로 넘긴다. 실패는 격리하고 빈 목록으로. */
+	private List<Long> runStepReturning(String name, Supplier<List<Long>> step) {
+		try {
+			return step.get();
+		}
+		catch (RuntimeException failure) {
+			log.error("pipeline step failed: {}", name, failure);
+			return List.of();
 		}
 	}
 }

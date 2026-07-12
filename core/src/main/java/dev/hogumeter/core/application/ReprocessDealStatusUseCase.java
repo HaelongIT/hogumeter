@@ -8,6 +8,7 @@ import dev.hogumeter.core.adapter.persistence.RawDealPost;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,23 +39,29 @@ public class ReprocessDealStatusUseCase {
 		this.rawPosts = rawPosts;
 	}
 
+	/** @return 이번에 ENDED로 전이한 딜 id — 후속 알림(AL-03 ENDED)의 대상이다(Q-67). */
 	@Transactional
-	public void reprocessEndedDeals() {
+	public List<Long> reprocessEndedDeals() {
+		List<Long> endedNow = new ArrayList<>();
 		for (DealEventEntity deal : dealEvents.findByStatusIn(ENDABLE)) {
-			endIfAllSourcesEnded(deal);
+			if (endIfAllSourcesEnded(deal)) {
+				endedNow.add(deal.getId());
+			}
 		}
+		return endedNow;
 	}
 
-	private void endIfAllSourcesEnded(DealEventEntity deal) {
+	/** @return 이 딜을 ENDED로 전이시켰으면 true, 아니면 false(전이 없음). */
+	private boolean endIfAllSourcesEnded(DealEventEntity deal) {
 		List<Long> rawIds = sources.findByDealEventId(deal.getId()).stream()
 				.map(DealEventSourceEntity::getRawDealPostId)
 				.toList();
 		if (rawIds.isEmpty()) {
-			return; // 근거 원문 없음 — 판단 불가
+			return false; // 근거 원문 없음 — 판단 불가
 		}
 		List<RawDealPost> posts = rawPosts.findAllById(rawIds);
 		if (posts.isEmpty() || !posts.stream().allMatch(p -> DealStatus.ENDED_RAW_STATUSES.contains(p.getStatus()))) {
-			return; // 아직 살아있는 소스 있음 → 종료 아님
+			return false; // 아직 살아있는 소스 있음 → 종료 아님
 		}
 		Instant newestEvidence = posts.stream()
 				.map(RawDealPost::getCapturedAt)
@@ -62,5 +69,6 @@ public class ReprocessDealStatusUseCase {
 				.orElse(deal.getLastSeen());
 		Instant lastSeen = newestEvidence.isAfter(deal.getLastSeen()) ? newestEvidence : deal.getLastSeen();
 		deal.applyStatusChange(DealStatus.ENDED, lastSeen);
+		return true;
 	}
 }

@@ -17,6 +17,11 @@ public class StubAlertSender implements AlertSender {
 
 	@Override
 	public void send(AlertMessage message) {
+		if (message.followUpKind() != null) {
+			// 후속 알림(AL-03) — view·decision이 없다(전이가 근거다). 종류와 현재가만 남긴다.
+			log.info("[STUB follow-up] kind={} price={}", message.followUpKind(), message.deal().priceLast());
+			return;
+		}
 		log.info("[STUB alert] intensity={} price={} labels={}",
 				message.decision().intensity(), message.deal().priceFirst(), message.decision().labels());
 	}

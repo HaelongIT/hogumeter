@@ -6,10 +6,19 @@
 - [CI 수정 ×2] 게이트 자기 테스트가 allowlist 면제 개수를 하드코딩해 두 번 CI RED(사용자 두 번 지적).
   table-wiring(9e11324) → 거울상 놓쳐 domain-consumers·repository-readers 또 RED → 정규식으로(8b90f46).
   8개 자기 테스트 전수 ALL PASS 확인. docs/99 교훈 기록. **거울상 전수 확인을 다음부턴 먼저 한다.**
-- [Q-67 착수] AL-03 후속 알림 — V4 마이그레이션(deal_alert) + R4 + DealAlertEntity 작성(진행 중).
-  다음: DealAlertRepository + 첫 알림 기록(EvaluateAlertOnDealUseCase) → 후속 전이 감지·발송.
+- [Q-67 ①/2 완료·커밋] AL-03 알림 이력 저장소 + 첫 알림 기록(deal_alert). (94c6481)
+- [Q-67 ②/2 완료] 후속 알림 발송 배선. Reprocess가격/상태 UseCase가 전이 딜 id를 List<Long>로 반환 →
+  PipelineScheduler가 그 id를 종류별(PRICE_CHANGED·ENDED)로 FollowUpAlertUseCase에 흘려보냄 → 첫 알림이
+  나갔던 딜(FollowUpEvaluator)에만, 종류별 1회(멱등) 발송. AlertMessage +followUpKind(null=첫알림),
+  StubAlertSender 후속 분기(NPE 방지), FollowUpEvaluator를 domain-consumers-allowlist에서 제거(소비됨).
+  경로 관통 테스트(reprocess id → followUp 종류)를 **뮤테이션으로 증명**(종류 뒤바꿈 → RED 확인).
+  core 전체 GREEN, 배선 게이트 3종 exit 0.
+  ⚠️자율결정: 후속 발송은 out-port 스텁(실전송 Q-20 뒤) — 정지조건 회피하며 배선만 완결.
+  ⚠️사고·복구: 뮤테이션 되돌리기를 `git checkout -- PipelineScheduler.java`로 쳐서 **커밋 안 된 재배선이
+  통째로 유실**됨(git status clean). 대화 내 Read 정본으로 Write 복원, 재테스트 GREEN. docs/99 교훈 기록
+  (커밋 전 코드엔 checkout으로 되돌리지 않는다 — cp 백업/역치환).
 
-이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46① 전부 origin/main. CI 초록.
+이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46①·Q-67① 전부 origin/main. Q-67② 커밋 대기(푸시는 지시 시).
 
 ---
 

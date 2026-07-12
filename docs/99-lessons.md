@@ -803,3 +803,11 @@
 - **원인**: 자기 테스트의 "allowlist가 읽히나" 케이스가 집계 개수를 하드코딩했다. 의도는 "0이 아닌가"인데.
 - **교훈(규칙화)**: **"집계가 동작하나"는 특정 개수가 아니라 "1 이상"으로 본다**(`grep -qE '선언 [1-9][0-9]*'`) — 개수 단언은 allowlist가 바뀔 때마다 깨진다. 그리고 **결함을 찾으면 거울상을 전수로 본다** — `table-wiring`만 고치고 `domain-consumers`·`repository-readers`를 놓쳐 CI가 또 빨개졌다(CLAUDE.md "거울상을 찾는다" 위반). 같은 부류 8개(`check-*.test.sh`)를 전부 돌려 확인하고서야 끝났다. `network-optin`은 처음부터 정규식이라 안전했다 — 불일치가 곧 신호였다.
 - **관련**: `scripts/check-{table-wiring,domain-consumers,repository-readers}.test.sh`.
+
+## 2026-07-12 — 뮤테이션을 되돌리려 `git checkout -- file`을 쳤더니 커밋 안 된 재배선까지 날아갔다
+- **맥락**: Q-67 후속 알림 배선(PipelineScheduler 재배선)을 **커밋 전** 상태에서, 경로 관통 테스트가 배선을 실제로 지키는지 뮤테이션으로 증명했다. `sed`로 종류를 뒤바꿔 RED 확인(성공) → 되돌리려 `git checkout -- PipelineScheduler.java`.
+- **증상**: 되돌린 직후 `grep`이 재배선 흔적을 0건 반환. 파일이 `Runnable reprocessPrices`(옛 시그니처)로 돌아가 있었다 — 이번 세션의 재배선 전체 유실. `git status`는 clean(HEAD와 일치).
+- **원인**: `git checkout -- <file>`은 워킹트리 파일을 **HEAD/인덱스로 되돌린다**. 뮤테이션(sed 한 줄)만이 아니라 **그 파일의 커밋 안 된 변경 전부**를 지운다. 이 파일의 재배선은 아직 커밋 전이었으므로 통째로 사라졌다.
+- **복구**: 다행히 같은 대화에서 재배선 전체를 Read로 확보해 둔 정본이 있어 `Write`로 복원, 전체 테스트 GREEN 재확인.
+- **교훈(규칙화)**: **커밋 안 된 코드에 뮤테이션 테스트를 할 땐 되돌리기를 `git checkout`으로 하지 않는다.** `cp file file.bak` → 뮤테이트 → 검증 → `mv file.bak file`로 그 변경만 되돌린다(또는 뮤테이션을 손으로 정확히 역치환). `git checkout -- file`·`git restore file`·`git checkout -- .`는 **커밋 안 된 작업을 파괴하는 명령**이다(CLAUDE.md "광범위한 되돌리기(`checkout -- .`)도 파괴다"의 단일 파일판 — 단일 파일도 똑같이 파괴다). 되돌리기 전 `git status`로 "이 파일이 이미 커밋됐나"를 먼저 묻는다.
+- **관련**: `PipelineScheduler.java` Q-67 재배선 · `PipelineSchedulerTest.routesReprocessedIdsToFollowUpByKind`(뮤테이션 대상 테스트).

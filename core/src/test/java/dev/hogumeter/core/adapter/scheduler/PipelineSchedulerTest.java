@@ -3,9 +3,14 @@ package dev.hogumeter.core.adapter.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import dev.hogumeter.core.domain.alert.FollowUpKind;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -25,8 +30,17 @@ class PipelineSchedulerTest {
 	private final Runnable expire = () -> calls.add("expire");
 	private final Runnable ingest = () -> calls.add("ingest");
 	private final Runnable conditions = () -> calls.add("conditions");
-	private final Runnable prices = () -> calls.add("prices");
-	private final Runnable status = () -> calls.add("status");
+	private final Supplier<List<Long>> prices = () -> {
+		calls.add("prices");
+		return List.of();
+	};
+	private final Supplier<List<Long>> status = () -> {
+		calls.add("status");
+		return List.of();
+	};
+	// 후속 알림은 no-op — 순서·격리 단언에 영향을 주지 않는다(배선 검증은 FollowUpAlertUseCase 쪽).
+	private final BiConsumer<List<Long>, FollowUpKind> followUp = (ids, kind) -> {
+	};
 
 	private static Runnable boom(String message) {
 		return () -> {
@@ -34,8 +48,14 @@ class PipelineSchedulerTest {
 		};
 	}
 
-	private PipelineScheduler scheduler(Runnable ingest, Runnable prices, Runnable status) {
-		return new PipelineScheduler(expire, ingest, conditions, prices, status, () -> EMPTY, reported::set);
+	private static Supplier<List<Long>> boomSupplier(String message) {
+		return () -> {
+			throw new IllegalStateException(message);
+		};
+	}
+
+	private PipelineScheduler scheduler(Runnable ingest, Supplier<List<Long>> prices, Supplier<List<Long>> status) {
+		return new PipelineScheduler(expire, ingest, conditions, prices, status, followUp, () -> EMPTY, reported::set);
 	}
 
 	@Test
@@ -58,7 +78,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("가격 단계가 터져도 종료 판정은 돈다 — 단계는 서로 독립이다")
 	void priceFailureDoesNotStopStatus() {
-		PipelineScheduler scheduler = scheduler(ingest, boom("낙관적 락 충돌"), status);
+		PipelineScheduler scheduler = scheduler(ingest, boomSupplier("낙관적 락 충돌"), status);
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
 		assertThat(calls).containsExactly("expire", "ingest", "conditions", "status");
@@ -67,7 +87,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("종료 단계가 터져도 tick은 정상 반환한다 — 다음 주기가 다시 시도한다")
 	void statusFailureIsIsolated() {
-		PipelineScheduler scheduler = scheduler(ingest, prices, boom("종료 실패"));
+		PipelineScheduler scheduler = scheduler(ingest, prices, boomSupplier("종료 실패"));
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
 		assertThat(calls).containsExactly("expire", "ingest", "conditions", "prices");
@@ -76,7 +96,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("세 단계가 다 터져도 tick은 반환하고, 그때도 보고서를 낸다 — 무엇이 남았는지가 그때 더 중요하다")
 	void allFailuresStillReport() {
-		PipelineScheduler scheduler = scheduler(boom("a"), boom("b"), boom("c"));
+		PipelineScheduler scheduler = scheduler(boom("a"), boomSupplier("b"), boomSupplier("c"));
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
 		assertThat(reported.get()).isNotNull();
@@ -88,7 +108,7 @@ class PipelineSchedulerTest {
 		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
 				new PipelineSnapshot(1, 0, 0, 0, 0, 1, 0, 0, 0),
 				new PipelineSnapshot(1, 1, 1, 0, 0, 0, 0, 0, 0)));
-		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, conditions, prices, status,
+		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, conditions, prices, status, followUp,
 				() -> snapshots.remove(0), reported::set);
 
 		scheduler.tick();
@@ -102,9 +122,7 @@ class PipelineSchedulerTest {
 	@DisplayName("아무 일도 없어도 보고한다 — 조용한 스케줄러는 죽은 스케줄러와 구별되지 않는다")
 	void idleTickStillReports() {
 		scheduler(() -> {
-		}, () -> {
-		}, () -> {
-		}).tick();
+		}, () -> List.of(), () -> List.of()).tick();
 
 		assertThat(reported.get()).isNotNull();
 		assertThat(reported.get().dealsCreated()).isZero();
@@ -117,7 +135,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("스냅샷 조회 실패(DB 단절)는 틱을 죽이지 않는다 — 단계는 그래도 시도된다")
 	void probeFailureDoesNotSkipTheSteps() {
-		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, conditions, prices, status, () -> {
+		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, conditions, prices, status, followUp, () -> {
 			throw new IllegalStateException("connection refused");
 		}, reported::set);
 
@@ -129,7 +147,7 @@ class PipelineSchedulerTest {
 	/** 스냅샷을 못 읽었으면 보고하지 않는다. 0으로 채운 리포트는 "아무 일도 없었다"는 거짓말이다. */
 	@Test
 	void probeFailureReportsNothingRatherThanZeroes() {
-		new PipelineScheduler(expire, ingest, conditions, prices, status, () -> {
+		new PipelineScheduler(expire, ingest, conditions, prices, status, followUp, () -> {
 			throw new IllegalStateException("connection refused");
 		}, reported::set).tick();
 
@@ -151,7 +169,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("관찰 만료가 터져도 파이프라인은 돈다 — 딜 수집이 구매 기록에 인질로 잡히지 않는다")
 	void expireFailureDoesNotStopThePipeline() {
-		PipelineScheduler scheduler = new PipelineScheduler(boom("만료 실패"), ingest, conditions, prices, status,
+		PipelineScheduler scheduler = new PipelineScheduler(boom("만료 실패"), ingest, conditions, prices, status, followUp,
 				() -> EMPTY, reported::set);
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
@@ -164,7 +182,7 @@ class PipelineSchedulerTest {
 		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
 				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 1, 0, 0),
 				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 3, 0, 0)));
-		new PipelineScheduler(expire, ingest, conditions, prices, status, () -> snapshots.remove(0), reported::set).tick();
+		new PipelineScheduler(expire, ingest, conditions, prices, status, followUp, () -> snapshots.remove(0), reported::set).tick();
 
 		assertThat(reported.get().purchasesExpired()).isEqualTo(2);
 	}
@@ -184,7 +202,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("조건 태그 단계가 터져도 가격·종료는 돈다 — 태그는 표시용이고 파이프라인의 인질이 아니다")
 	void conditionsFailureDoesNotStopThePipeline() {
-		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, boom("배열 변환 실패"), prices, status,
+		PipelineScheduler scheduler = new PipelineScheduler(expire, ingest, boom("배열 변환 실패"), prices, status, followUp,
 				() -> EMPTY, reported::set);
 
 		assertThatCode(scheduler::tick).doesNotThrowAnyException();
@@ -201,7 +219,7 @@ class PipelineSchedulerTest {
 		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
 				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 5, 1),
 				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 9, 4)));
-		new PipelineScheduler(expire, ingest, conditions, prices, status, () -> snapshots.remove(0), reported::set)
+		new PipelineScheduler(expire, ingest, conditions, prices, status, followUp, () -> snapshots.remove(0), reported::set)
 				.tick();
 
 		assertThat(reported.get().conditionalTotal()).isEqualTo(9);
@@ -218,10 +236,30 @@ class PipelineSchedulerTest {
 		List<PipelineSnapshot> snapshots = new ArrayList<>(List.of(
 				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 2, 0),
 				new PipelineSnapshot(0, 0, 0, 0, 0, 0, 0, 5, 0)));
-		new PipelineScheduler(expire, ingest, conditions, prices, status, () -> snapshots.remove(0), reported::set)
+		new PipelineScheduler(expire, ingest, conditions, prices, status, followUp, () -> snapshots.remove(0), reported::set)
 				.tick();
 
 		assertThat(reported.get().conditionsTagged()).isEqualTo(3);
 		assertThat(reported.get().conditionalTotal()).isEqualTo(5);
+	}
+
+	/**
+	 * Q-67 배선: 재처리가 낸 전이 id가 후속 알림으로 <b>종류를 지켜</b> 흐른다. 부품별 GREEN은 이 경로를
+	 * 보장하지 않는다 — 가격변화 id는 PRICE_CHANGED로, 종료 id는 ENDED로 가야 한다(뒤바뀌면 "끝났다"를
+	 * 가격변화로 알린다). 이 좁은 테스트가 그 관을 관통한다.
+	 */
+	@Test
+	@DisplayName("가격변화 딜 id는 PRICE_CHANGED로, 종료 딜 id는 ENDED로 후속 알림에 흘러간다")
+	void routesReprocessedIdsToFollowUpByKind() {
+		Map<FollowUpKind, List<Long>> received = new EnumMap<>(FollowUpKind.class);
+		Supplier<List<Long>> pricesReturning = () -> List.of(11L, 22L);
+		Supplier<List<Long>> statusReturning = () -> List.of(33L);
+		BiConsumer<List<Long>, FollowUpKind> capture = (ids, kind) -> received.put(kind, ids);
+
+		new PipelineScheduler(expire, ingest, conditions, pricesReturning, statusReturning, capture,
+				() -> EMPTY, reported::set).tick();
+
+		assertThat(received.get(FollowUpKind.PRICE_CHANGED)).containsExactly(11L, 22L);
+		assertThat(received.get(FollowUpKind.ENDED)).containsExactly(33L);
 	}
 }
