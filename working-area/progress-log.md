@@ -66,7 +66,23 @@
 - Q-48①②: 위 참조(소비처 없어 죽은 컬럼/투기).
 
 이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46①·Q-67① 전부 origin/main.
-Q-67②·Q-53·Q-57②③·Q-27④·Q-15(쓰기)·Q-48③ 커밋 대기(푸시는 지시 시).
+Q-67②·Q-53·Q-57②③·Q-27④·Q-15(쓰기)·Q-48③ **로컬 커밋(미푸시, 푸시는 지시 시)**.
+
+**②일감 소진 확인(ⓐⓑⓒⓓ)** — 막히지 않은 core 증분을 이번 배치에서 소진:
+- ⓐ docs/30 M1 미완: Q-66(web 등록 UI 대기), Q-28(제외키워드 **생산자 0** — global_setting 쓰기 경로
+  미존재 + alert_policy.exclude_keywords는 web 정책 패널이 유일 생산자, 둘 다 web 지휘 대기), Q-48①②
+  (소비처 없어 죽은 컬럼/투기) — 전부 **web 지휘 또는 소비처 부재로 막힘**(재현·검증함).
+- ⓑ docs/91 재개 트리거 참인 열린 항목: 이번 세션에 Q-53·Q-27③④·Q-15·Q-57②③·Q-67·Q-46①②·Q-49 해소.
+  남은 열린 항목의 트리거는 전부 거짓(키·토큰·라이브·web 지휘·결정) — 재현해 확인.
+- ⓒ 소비처0/생산자0 감사: 게이트 3종 PASS. 이번 세션에 죽은 것 부활 — FollowUpEvaluator(Q-67)·
+  promoteFromOutlier/reject(Q-15)·review_queue_item.status/resolved_at/channel(Q-15). 남은 죽은 코드
+  (product_axis·demand_axis_filter·exclude_keywords·k_display·ExcludeKeywordPolicy)는 전부 Q-66/Q-28/Q-48(막힘).
+- ⓓ 새 계약 CI 등재+뮤테이션: 신규 테스트는 `test` 잡, V5는 rollback-drill(CI), smoke가 Q-57/Q-27④ 종단
+  잠금, Q-67 라우팅 뮤테이션 증명. 새 게이트 스크립트 없음(check-ci-coverage 미해당).
+
+TURN-END: ② 일감 소진 — 막히지 않은 core 증분 6개 완료·커밋(GREEN). 남은 M1(Q-66·Q-28·Q-48①②)은
+전부 web UI 지휘 또는 소비처 부재로 막힘. web는 사용자 지휘 대기(memory: web-ui-wait-for-instruction).
+푸시는 지시 대기(6개 로컬 커밋).
 
 ---
 
