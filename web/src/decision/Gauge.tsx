@@ -6,7 +6,7 @@ import type { BenchmarkView } from '../api/types'
  * 상대 위치만 그린다. 숫자를 포맷하지 않는다(문구는 present.ts). `aria-hidden` — 스크린리더에게는
  * 판독 문장이 정본이고, 게이지는 그 시각적 보강일 뿐이라 더 말하지 않는다.
  *
- * 게이트 = `present.ts`의 gap 거절 조건과 동일: SUFFICIENT & 기준가 있음 & 현재가>0.
+ * 게이트 = `present.ts`의 gap 거절 조건과 동일: SUFFICIENT & 기준가 있음 & 현재가 확립(null 아님, Q-53).
  * 아니면 바늘을 지어내지 않고 "계기 미확립"이라 말한다(GRAY≠RED와 동형).
  *
  * 바늘 캡은 중립(steel)이다 — 바늘은 "현재가가 어디 있나"(사실)이고, 판정색(신호)은 위 판정 카드가
@@ -15,14 +15,14 @@ import type { BenchmarkView } from '../api/types'
 export function Gauge({ view }: { view: BenchmarkView }) {
   const benchmark = view.benchmarkPrice
   const current = view.currentPrice
-  const calibrated = view.tier === 'SUFFICIENT' && benchmark !== null && current > 0
+  const calibrated = view.tier === 'SUFFICIENT' && benchmark !== null && current !== null && current > 0
 
   const good = view.goodDealLine
   const lowest = view.periodLowest?.price ?? null
 
   // 도메인: 정의된 값들의 범위에 8% 패딩. 값이 다 같으면(평평) 값의 10%를 폭으로.
   const values = calibrated
-    ? [current, benchmark as number, ...(good !== null ? [good] : []), ...(lowest !== null ? [lowest] : [])]
+    ? [current as number, benchmark as number, ...(good !== null ? [good] : []), ...(lowest !== null ? [lowest] : [])]
     : []
   let lo = values.length ? Math.min(...values) : 0
   let hi = values.length ? Math.max(...values) : 1
@@ -33,7 +33,7 @@ export function Gauge({ view }: { view: BenchmarkView }) {
   const span = hi - lo || 1
   const pos = (v: number) => Math.max(0, Math.min(100, ((v - lo) / span) * 100))
 
-  const currentPos = calibrated ? pos(current) : 0
+  const currentPos = calibrated ? pos(current as number) : 0
 
   // 로드 리빌: 바늘 스윕(좌→현재가)과 존 페이드를 한 플래그로 합주. reduced-motion이면 CSS가 전이를 꺼 즉시.
   const [mounted, setMounted] = useState(false)
@@ -69,7 +69,7 @@ export function Gauge({ view }: { view: BenchmarkView }) {
     ...(lowest !== null ? [{ value: lowest, label: '최저' }] : []),
     ...(good !== null ? [{ value: good, label: '굿딜' }] : []),
     { value: bench, label: '기준가' },
-    { value: current, label: '현재가', now: true },
+    { value: current as number, label: '현재가', now: true },
   ]
     .map((tick) => ({ ...tick, p: pos(tick.value), stagger: false }))
     .sort((a, b) => a.p - b.p)

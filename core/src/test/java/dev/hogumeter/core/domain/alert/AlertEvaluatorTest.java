@@ -135,6 +135,18 @@ class AlertEvaluatorTest {
 	}
 
 	@Test
+	void noneTierColdStartDoesNotFireWhenCurrentPriceUnavailable() {
+		// Q-53: 현재가 미확립(null)이면 잭팟은 현재가 대비 판정이라 근거가 없다. 아무리 싼 딜이라도 발화 금지 —
+		// 예전엔 현재가 0에 대해 threshold=0을 계산해 조용히 놓쳤다(0 비교라 로그도 근거도 없이).
+		BenchmarkView view = new BenchmarkView(Tier.NONE, null, null, null, null, 0, 0, null, null,
+				new Gap(null, null), List.of());
+
+		AlertDecision r = evaluator.evaluate(deal(1L), view, policy(null), params);
+
+		assertThat(r.shouldAlert()).isFalse();
+	}
+
+	@Test
 	void verificationStatusLabelReflectsSourceSites() {
 		DealEvent single = aDealEvent().withPriceFirst(840_000L).singleSite().build();
 		DealEvent cross = aDealEvent().withPriceFirst(840_000L).crossVerified().build();

@@ -3,16 +3,19 @@
  *
  * 규칙 셋:
  *  1. 표본이 빈약하면(SPARSE/NONE) 통계 용어도 금액도 내지 않는다.
- *  2. 현재가 미확립(0)이면 갭을 그리지 않는다 — core가 계산해 보내더라도.
+ *  2. 현재가 미확립(null)이면 갭을 그리지 않는다 — core가 갭을 아예 계산하지 않는다.
  *  3. 주기는 발생·간격·경과일만 말한다. "다음 딜 예상"은 만들지 않는다.
  */
 import type { BenchmarkView, CadenceView, SignalColor, SignalView } from '../api/types'
 
 /**
- * 현재가 미확립 표식. `StubCurrentPriceProvider`가 0을 반환한다(docs/91 Q-53).
- * 실 네이버 어댑터가 붙으면 이 상수 하나와 `gapLine`만 고치면 된다.
+ * 현재가 미확립 판정. core가 네이버 키 미발급 시 `currentPrice: null`을 보낸다(docs/91 Q-53).
+ * 해석은 이 한 곳에만 둔다 — 예전엔 sentinel 0이라 `=== 0`이었으나, 이제 null이 타입상 명시라
+ * 각 소비처가 `=== null`로 내로잉한다. 실 네이버 어댑터가 붙어도 이 규칙은 그대로 유효하다.
  */
-export const CURRENT_PRICE_UNAVAILABLE = 0
+export function currentPriceUnavailable(view: BenchmarkView): boolean {
+  return view.currentPrice === null
+}
 
 const won = (amount: number) => `${amount.toLocaleString('en-US')}원`
 
@@ -42,7 +45,7 @@ export function benchmarkLine(view: BenchmarkView): string {
  * 기간 최저가와 그 날짜. **"기준가보다 비싸다"만으로는 기다릴지 말지 못 정한다** —
  * 이 기간에 얼마까지 내려간 적이 있는지, 그게 언제였는지가 "지금 살까"의 근거다.
  *
- * `periodLowest`는 관측된 사실(실제 딜)이라 표본이 적어도 그대로 말한다. 다만 **현재가 미확립(0)이면
+ * `periodLowest`는 관측된 사실(실제 딜)이라 표본이 적어도 그대로 말한다. 다만 **현재가 미확립(null)이면
  * 갭을 그리지 않는다**(`gapLine`과 같은 규칙, Q-53).
  *
  * @returns 관측된 최저가가 없으면 `null` — "0원"이나 "최저 없음"을 지어내지 않는다.
@@ -55,7 +58,7 @@ export function lowestLine(view: BenchmarkView): string | null {
   const observed = `기간 최저 ${won(lowest.price)} (${lowest.date})`
 
   const leg = view.gap.vsLowest
-  if (view.currentPrice === CURRENT_PRICE_UNAVAILABLE || leg === null) {
+  if (view.currentPrice === null || leg === null) {
     return observed
   }
   if (leg.won === 0) {
@@ -66,8 +69,8 @@ export function lowestLine(view: BenchmarkView): string | null {
 }
 
 export function gapLine(view: BenchmarkView): string {
-  if (view.currentPrice === CURRENT_PRICE_UNAVAILABLE) {
-    // core는 0을 기준으로 갭을 계산해 보낸다(−100%). 그걸 그리면 "공짜"라고 말하는 셈이다.
+  if (view.currentPrice === null) {
+    // core는 미확립을 null로 보내고 갭도 계산하지 않는다(Q-53). 예전엔 0 기준 −100%가 와서 "공짜"로 보였다.
     return '현재가 미확립 — 네이버 쇼핑 API 키가 없어 갭을 계산하지 않습니다 (docs/91 Q-3)'
   }
   const leg = view.gap.vsBenchmark

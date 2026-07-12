@@ -85,9 +85,10 @@ export interface Gap {
 /**
  * GET /api/v1/variants/{variantId}/benchmark?periodMonths=&includeOutliers=
  *
- * ⚠️ `currentPrice`는 **0일 수 있다** — core의 `StubCurrentPriceProvider`가 네이버 키
- * 미발급 상태에서 0을 반환한다(docs/91 Q-3·Q-53). 0은 가격이 아니라 **미확립 표식**이고,
- * 그때 `gap`은 `0 − 기준가` = 큰 음수가 된다. 그대로 그리면 "100% 싸다"는 거짓말이다.
+ * ⚠️ `currentPrice`는 **null일 수 있다** — core의 `StubCurrentPriceProvider`가 네이버 키
+ * 미발급 상태에서 null(미확립)을 반환한다(docs/91 Q-3·Q-53). 그때 `gap`의 두 leg도 null이다
+ * (core가 갭을 계산하지 않는다). 예전엔 0을 sentinel로 써서 `gap = 0 − 기준가` = −100%가 왔고,
+ * 그대로 그리면 "100% 싸다"는 거짓말이었다. 이제 미확립은 null이라 타입이 그 사실을 감추지 못한다.
  * 해석은 `decision/present.ts`의 `gapLine` 한 곳에만 둔다(refactor seam).
  */
 export interface BenchmarkView {
@@ -99,7 +100,7 @@ export interface BenchmarkView {
   n: number
   m: number
   expandedToMonths: number | null
-  currentPrice: number
+  currentPrice: number | null
   gap: Gap
   cases: DealRef[]
 }

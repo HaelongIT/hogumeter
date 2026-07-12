@@ -87,11 +87,11 @@ describe('gapLine — 현재가 0은 "공짜"가 아니라 "미확립"이다', (
     expect(gapLine(view)).toBe('현재가 800,000원 — 기준가보다 20,000원 쌈 (-2.4%)')
   })
 
-  it('currentPrice=0이면 갭을 계산해 주더라도 그리지 않는다 (StubCurrentPriceProvider)', () => {
-    // core가 보내는 실제 모양: 현재가 0 → gap = 0 - 820,000 = -820,000원(-100.0%).
-    // 이걸 그대로 그리면 "100% 싸다"는 거짓말이 된다.
+  it('currentPrice=null이면 갭 값이 실려 와도 그리지 않는다 (미확립 우선, Q-53)', () => {
+    // core는 미확립이면 currentPrice=null·gap의 두 leg도 null로 보낸다. 여기선 방어적으로
+    // 갭 값을 실어 두어도 현재가 null이 우선함을 못박는다 — 혹시라도 "100% 싸다"로 새지 않는다.
     const view = benchmark({
-      currentPrice: 0,
+      currentPrice: null,
       gap: { vsBenchmark: { won: -820_000, pct: -100.0 }, vsLowest: { won: -780_000, pct: -100.0 } },
     })
     const line = gapLine(view)
@@ -204,9 +204,9 @@ describe('lowestLine — 기간 최저가', () => {
     expect(line).toContain('+14.1%')
   })
 
-  /** 현재가 미확립(0)이면 갭을 그리지 않는다 — 최저가 자체는 관측된 사실이라 그대로 말한다. */
+  /** 현재가 미확립(null)이면 갭을 그리지 않는다 — 최저가 자체는 관측된 사실이라 그대로 말한다. */
   it('현재가 미확립이면 최저가만 말하고 갭은 그리지 않는다', () => {
-    const line = lowestLine(withLowest({ currentPrice: 0, gap: { vsBenchmark: null, vsLowest: null } }))
+    const line = lowestLine(withLowest({ currentPrice: null, gap: { vsBenchmark: null, vsLowest: null } }))
 
     expect(line).toContain('기간 최저 780,000원')
     expect(line).not.toContain('비쌈')

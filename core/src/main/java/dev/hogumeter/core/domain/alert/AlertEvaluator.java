@@ -82,7 +82,10 @@ public class AlertEvaluator {
 				.orElse(null);
 	}
 
-	private static boolean qualifiesColdStart(long price, long currentPrice, BenchmarkParams params) {
+	private static boolean qualifiesColdStart(long price, Long currentPrice, BenchmarkParams params) {
+		if (currentPrice == null) {
+			return false; // 현재가 미확립(Q-53) — 잭팟은 현재가 대비 판정이라 근거 없이 발화하지 않는다
+		}
 		BigDecimal threshold = BigDecimal.valueOf(currentPrice)
 				.multiply(BigDecimal.ONE.subtract(params.coldStartJackpotRatio()));
 		return BigDecimal.valueOf(price).compareTo(threshold) <= 0;

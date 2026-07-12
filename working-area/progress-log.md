@@ -18,7 +18,15 @@
   통째로 유실**됨(git status clean). 대화 내 Read 정본으로 Write 복원, 재테스트 GREEN. docs/99 교훈 기록
   (커밋 전 코드엔 checkout으로 되돌리지 않는다 — cp 백업/역치환).
 
-이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46①·Q-67① 전부 origin/main. Q-67② 커밋 대기(푸시는 지시 시).
+- [Q-53 해소] `currentPrice=0` sentinel → **미확립=null**로 근원 정정(데이터 진실 급소, "지금 100% 싸다" 거짓
+  신호 제거). core: `CurrentPriceProvider`→`Long`, Stub→null, `BenchmarkView.currentPrice`→`Long`,
+  `BenchmarkCalculator.leg`가 null이면 갭 null, `AlertEvaluator.qualifiesColdStart` null 가드(조용한 놓침
+  정직화). web: sentinel 0 → null 내로잉(`present.currentPriceUnavailable`·`Gauge` 게이트·`types.ts`).
+  core 전체 GREEN·web 149·build 통과. docs/91 Q-53 [해소], web-react 규칙·README 갱신. (커밋 대기)
+  ⚠️자율결정: `BenchmarkCalculator.qualifiesAsColdStartJackpot`(프로덕션 호출자 0, AlertEvaluator에 실제
+  경로가 따로 있음)은 primitive 시그니처 그대로 방치 — 기존 죽은 중복이라 이번 변경 범위 밖(Karpathy #3).
+
+이미 푸시: floor·Q-46②·Q-49·소통언어·CI수정2·Q-46①·Q-67① 전부 origin/main. Q-67②·Q-53 커밋 대기(푸시는 지시 시).
 
 ---
 

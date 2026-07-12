@@ -64,10 +64,10 @@ describe('DecisionPage', () => {
     expect(screen.getByRole('link', { name: '원문' })).toHaveAttribute('href', 'https://ppomppu/1')
   })
 
-  it('현재가 미확립(0)이면 갭 자리에 거짓말 대신 이유를 쓴다', async () => {
+  it('현재가 미확립(null)이면 갭 자리에 거짓말 대신 이유를 쓴다', async () => {
     vi.spyOn(api, 'getBenchmark').mockResolvedValue({
       ...benchmark,
-      currentPrice: 0,
+      currentPrice: null,
       gap: { vsBenchmark: { won: -820_000, pct: -100 }, vsLowest: { won: -780_000, pct: -100 } },
     })
     render(<DecisionPage />)

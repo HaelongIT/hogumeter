@@ -12,6 +12,8 @@ import java.util.List;
  * @param n 전체 유효 딜(교차+단일+백필, 이상치 제외) — 판정 단위
  * @param m 교차검증 딜 수 — 신뢰 표시 전용("n건(교차 m건)")
  * @param expandedToMonths 자동확장 발동 시 실효 개월, 아니면 null
+ * @param currentPrice 현재가 — <b>미확립이면 null</b>(네이버 키 미발급, Q-53). 0을 sentinel로 쓰지
+ *     않는다 — 0이면 갭이 −100%가 되어 "지금 100% 싸다"는 거짓말이 된다. null이면 gap의 두 leg도 null.
  * @param cases SPARSE일 때 사례 나열(가격·날짜·출처), 그 외 빈 리스트
  */
 public record BenchmarkView(
@@ -23,7 +25,7 @@ public record BenchmarkView(
 		int n,
 		int m,
 		Integer expandedToMonths,
-		long currentPrice,
+		Long currentPrice,
 		Gap gap,
 		List<DealRef> cases) {
 

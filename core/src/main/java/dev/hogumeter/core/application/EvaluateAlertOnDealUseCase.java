@@ -63,7 +63,7 @@ public class EvaluateAlertOnDealUseCase {
 		List<DealEvent> deals = dealEvents.findByVariantId(variantId).stream()
 				.map(mapper::toDomain)
 				.toList();
-		long current = currentPrice.currentPriceFor(variantId);
+		Long current = currentPrice.currentPriceFor(variantId); // 미확립이면 null(Q-53)
 		BenchmarkView view = calculator.compute(deals, current, periodMonths, params, clock);
 
 		List<Purchase> activePurchases = purchases.findByVariantId(variantId).stream()

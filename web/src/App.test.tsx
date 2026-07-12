@@ -34,7 +34,7 @@ describe('App — 등록에서 판단으로 이어진다', () => {
     vi.spyOn(api, 'getSignal').mockResolvedValue({ color: 'GRAY', goodDealLineEstablished: false, notes: [] })
     vi.spyOn(api, 'getBenchmark').mockResolvedValue({
       tier: 'NONE', benchmarkPrice: null, goodDealLine: null, periodLowest: null, latestDeal: null,
-      n: 0, m: 0, expandedToMonths: null, currentPrice: 0,
+      n: 0, m: 0, expandedToMonths: null, currentPrice: null,
       gap: { vsBenchmark: null, vsLowest: null }, cases: [],
     })
     vi.spyOn(api, 'getCadence').mockResolvedValue({

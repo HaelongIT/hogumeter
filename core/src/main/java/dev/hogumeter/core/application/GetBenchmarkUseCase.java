@@ -43,7 +43,7 @@ public class GetBenchmarkUseCase {
 		List<DealEvent> deals = dealEvents.findByVariantId(variantId).stream()
 				.map(mapper::toDomain)
 				.toList();
-		long current = currentPrice.currentPriceFor(variantId);
+		Long current = currentPrice.currentPriceFor(variantId); // 미확립이면 null(Q-53)
 		return calculator.compute(deals, current, periodMonths, BenchmarkParams.defaults(), clock);
 	}
 }

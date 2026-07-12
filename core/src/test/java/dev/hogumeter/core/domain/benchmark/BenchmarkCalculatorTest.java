@@ -270,6 +270,26 @@ class BenchmarkCalculatorTest {
 		assertThat(view.gap().vsLowest().pct()).isEqualByComparingTo(new BigDecimal("20.7"));
 	}
 
+	// ---- Q-53: 현재가 미확립(null)이면 갭을 지어내지 않는다 ----
+	@Test
+	void currentPriceUnavailableYieldsNullGapNotMinusHundredPercent() {
+		// 갭이 실제로 계산되던 SUFFICIENT 표본. 현재가만 미확립(null)이면 두 leg는 null이어야 한다 —
+		// 0을 넣었다면 vsBenchmark = 0−890,000 = −100%("지금 100% 싸다")라는 거짓 신호가 됐다.
+		List<DealEvent> deals = List.of(
+				cross(820_000L, "2026-06-10"), cross(850_000L, "2026-06-12"),
+				cross(890_000L, "2026-06-14"), cross(920_000L, "2026-06-16"),
+				cross(950_000L, "2026-06-18"));
+
+		BenchmarkView view = calculator.compute(deals, null, PERIOD, BenchmarkParamsFixtures.defaultParams(), CLOCK);
+
+		assertThat(view.currentPrice()).isNull();
+		assertThat(view.gap().vsBenchmark()).isNull();
+		assertThat(view.gap().vsLowest()).isNull();
+		// 현재가와 무관한 통계는 그대로 산출된다 — 갭만 미확립이다.
+		assertThat(view.benchmarkPrice()).isEqualTo(890_000L);
+		assertThat(view.periodLowest().price()).isEqualTo(820_000L);
+	}
+
 	// ---- AC-4 대박딜 폴백 경계(30%) ----
 	@ParameterizedTest
 	@CsvSource({

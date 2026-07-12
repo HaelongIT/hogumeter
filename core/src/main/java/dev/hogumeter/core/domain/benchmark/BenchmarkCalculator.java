@@ -24,7 +24,7 @@ public class BenchmarkCalculator {
 	private static final BigDecimal HUNDRED = new BigDecimal("100");
 	private static final BigDecimal ONE = BigDecimal.ONE;
 
-	public BenchmarkView compute(List<DealEvent> candidates, long currentPrice,
+	public BenchmarkView compute(List<DealEvent> candidates, Long currentPrice,
 			int periodMonths, BenchmarkParams params, Clock clock) {
 		if (periodMonths <= 0) {
 			throw new InvalidBenchmarkPeriodException(periodMonths);
@@ -129,9 +129,9 @@ public class BenchmarkCalculator {
 		return LocalDate.ofInstant(instant, zone);
 	}
 
-	private static BenchmarkView.Gap.Leg leg(long currentPrice, Long reference) {
-		if (reference == null) {
-			return null;
+	private static BenchmarkView.Gap.Leg leg(Long currentPrice, Long reference) {
+		if (currentPrice == null || reference == null) {
+			return null; // 현재가 미확립(Q-53) 또는 참조가 부재 — 갭을 지어내지 않는다
 		}
 		long won = currentPrice - reference;
 		BigDecimal pct = BigDecimal.valueOf(won).multiply(HUNDRED)
