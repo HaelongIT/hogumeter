@@ -2,6 +2,8 @@ package dev.hogumeter.core.application;
 
 import dev.hogumeter.core.adapter.persistence.AlertPolicyEntity;
 import dev.hogumeter.core.adapter.persistence.AlertPolicyRepository;
+import dev.hogumeter.core.adapter.persistence.DealAlertEntity;
+import dev.hogumeter.core.adapter.persistence.DealAlertRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventMapper;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.adapter.persistence.PurchaseRepository;
@@ -33,23 +35,25 @@ public class EvaluateAlertOnDealUseCase {
 	private final PurchaseRepository purchases;
 	private final CurrentPriceProvider currentPrice;
 	private final AlertDispatcher dispatcher;
+	private final DealAlertRepository alerts;
 	private final Clock clock;
 	private final BenchmarkCalculator calculator = new BenchmarkCalculator();
 	private final BenchmarkParams params = BenchmarkParams.defaults();
 
 	public EvaluateAlertOnDealUseCase(DealEventRepository dealEvents, DealEventMapper mapper,
 			AlertPolicyRepository policies, PurchaseRepository purchases, CurrentPriceProvider currentPrice,
-			AlertDispatcher dispatcher, Clock clock) {
+			AlertDispatcher dispatcher, DealAlertRepository alerts, Clock clock) {
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.policies = policies;
 		this.purchases = purchases;
 		this.currentPrice = currentPrice;
 		this.dispatcher = dispatcher;
+		this.alerts = alerts;
 		this.clock = clock;
 	}
 
-	public DispatchOutcome evaluate(long variantId, DealEvent deal) {
+	public DispatchOutcome evaluate(long variantId, long dealEventId, DealEvent deal) {
 		Optional<AlertPolicyEntity> policy = policies.findByVariantId(variantId);
 		int periodMonths = policy.map(AlertPolicyEntity::getPeriodMonths).orElse(DEFAULT_PERIOD_MONTHS);
 		AlertPolicy alertPolicy = policy
@@ -67,6 +71,11 @@ public class EvaluateAlertOnDealUseCase {
 				.toList();
 		boolean paidPriceFires = PurchaseTriggers.paidPriceTriggerFires(deal.priceFirst(), activePurchases);
 
-		return dispatcher.dispatch(deal, view, alertPolicy, params, clock, paidPriceFires);
+		DispatchOutcome outcome = dispatcher.dispatch(deal, view, alertPolicy, params, clock, paidPriceFires);
+		// AL-03: 첫 알림이 실제로 나갔으면 이력에 FIRST를 남긴다 — 후속은 이 FIRST가 있는 딜에만 보낸다(Q-67). 멱등.
+		if (outcome == DispatchOutcome.SENT && !alerts.existsByDealEventIdAndKind(dealEventId, DealAlertEntity.FIRST)) {
+			alerts.save(new DealAlertEntity(dealEventId, DealAlertEntity.FIRST));
+		}
+		return outcome;
 	}
 }

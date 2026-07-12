@@ -96,7 +96,7 @@ public class IngestDealsUseCase {
 				existing.applyMerge(merged.priceFirst(), merged.priceMin(), merged.priceMax(), merged.priceLast(),
 						merged.crossVerified(), merged.status(), merged.firstSeen(), merged.lastSeen());
 				sources.save(new DealEventSourceEntity(existing.getId(), post.getId(), post.getSite()));
-				alertEvaluation.evaluate(variantId, mapper.toDomain(existing)); // 흡수 후속 판정(AL이 첫알림 억제)
+				alertEvaluation.evaluate(variantId, existing.getId(), mapper.toDomain(existing)); // 흡수 후속 판정
 				return;
 			}
 		}
@@ -107,7 +107,7 @@ public class IngestDealsUseCase {
 				candidate.status(), candidate.firstSeen(), candidate.lastSeen()));
 		sources.save(new DealEventSourceEntity(created.getId(), post.getId(), post.getSite()));
 		classifyOutlier(created, variantId);
-		alertEvaluation.evaluate(variantId, mapper.toDomain(created));
+		alertEvaluation.evaluate(variantId, created.getId(), mapper.toDomain(created));
 	}
 
 	/** BM-05 배선: 신규 딜을 variant 분포에 대해 판정(유입 1회·영속, C-4). LOWER는 reviewQueue(OUTLIER_LOWER). */

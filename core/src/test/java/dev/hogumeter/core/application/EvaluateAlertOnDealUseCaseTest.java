@@ -87,7 +87,8 @@ class EvaluateAlertOnDealUseCaseTest {
 	void goodDealBelowBenchmarkIsSent() {
 		policies.save(new AlertPolicyEntity(variantId, 900_000L, 6, null, null));
 
-		DispatchOutcome outcome = useCase.evaluate(variantId, aDealEvent().withPriceFirst(840_000L).build());
+		long dealId = dealEvents.findByVariantId(variantId).get(0).getId();
+		DispatchOutcome outcome = useCase.evaluate(variantId, dealId, aDealEvent().withPriceFirst(840_000L).build());
 
 		assertThat(outcome).isEqualTo(DispatchOutcome.SENT); // 840k ≤ P25(850k)=특가
 	}
@@ -96,7 +97,8 @@ class EvaluateAlertOnDealUseCaseTest {
 	void dealAboveBenchmarkWithoutTargetIsNotSent() {
 		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null));
 
-		DispatchOutcome outcome = useCase.evaluate(variantId, aDealEvent().withPriceFirst(950_000L).build());
+		long dealId = dealEvents.findByVariantId(variantId).get(0).getId();
+		DispatchOutcome outcome = useCase.evaluate(variantId, dealId, aDealEvent().withPriceFirst(950_000L).build());
 
 		assertThat(outcome).isEqualTo(DispatchOutcome.NO_ALERT); // 950k > 기준가 890k, 목표가 없음
 	}
@@ -110,7 +112,8 @@ class EvaluateAlertOnDealUseCaseTest {
 				Snapshot.unobserved("P=6mo,K=5")));
 
 		// 895k: 기준가 890k보다 높아 평소엔 무알림이나, 내 구매가 900k 하회 → PUR-03 산 뒤 알림
-		DispatchOutcome outcome = useCase.evaluate(variantId, aDealEvent().withPriceFirst(895_000L).build());
+		long dealId = dealEvents.findByVariantId(variantId).get(0).getId();
+		DispatchOutcome outcome = useCase.evaluate(variantId, dealId, aDealEvent().withPriceFirst(895_000L).build());
 
 		assertThat(outcome).isEqualTo(DispatchOutcome.SENT);
 	}
@@ -120,7 +123,8 @@ class EvaluateAlertOnDealUseCaseTest {
 		// 조용시간 전 구간(0~23이 아니라 wrap로 상시) — 🔥 관통 확인
 		policies.save(new AlertPolicyEntity(variantId, null, 6, 0, 23));
 
-		DispatchOutcome outcome = useCase.evaluate(variantId,
+		long dealId = dealEvents.findByVariantId(variantId).get(0).getId();
+		DispatchOutcome outcome = useCase.evaluate(variantId, dealId,
 				aDealEvent().withPriceFirst(700_000L).outlier(OutlierFlag.LOWER).build());
 
 		assertThat(outcome).isEqualTo(DispatchOutcome.SENT);

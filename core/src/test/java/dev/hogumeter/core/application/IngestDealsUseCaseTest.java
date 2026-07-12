@@ -1,10 +1,13 @@
 package dev.hogumeter.core.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import dev.hogumeter.core.TestcontainersConfiguration;
 import dev.hogumeter.core.adapter.persistence.AliasEntity;
 import dev.hogumeter.core.adapter.persistence.AliasRepository;
+import dev.hogumeter.core.adapter.persistence.DealAlertEntity;
+import dev.hogumeter.core.adapter.persistence.DealAlertRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventSourceRepository;
@@ -62,6 +65,8 @@ class IngestDealsUseCaseTest {
 	ReviewQueueItemRepository reviewQueue;
 	@Autowired
 	RecordingAlertSender recordingAlertSender;
+	@Autowired
+	DealAlertRepository dealAlerts;
 
 	private long variantId;
 	private int postSeq;
@@ -154,6 +159,20 @@ class IngestDealsUseCaseTest {
 		assertThat(deals).hasSize(1);
 		assertThat(deals.get(0).getStatus()).isEqualTo(DealStatus.ENDED);
 		assertThat(recordingAlertSender.sent).isEmpty();
+	}
+
+	@Test
+	void firstAlertIsRecordedInHistoryWhenSent() {
+		// 딜 1건 → SPARSE, 보유 최저가 잣대로 GOOD 알림이 실제로 나간다 → 이력에 FIRST(후속 알림의 전제, Q-67).
+		savePost("ppomppu", "아이폰 17 256기가 특가 89만", 890_000L, T);
+
+		useCase.ingestPending();
+
+		DealEventEntity deal = dealEvents.findByVariantId(variantId).get(0);
+		assertThat(recordingAlertSender.sent).hasSize(1);
+		assertThat(dealAlerts.findAll())
+				.extracting(DealAlertEntity::getDealEventId, DealAlertEntity::getKind)
+				.containsExactly(tuple(deal.getId(), DealAlertEntity.FIRST));
 	}
 
 	@TestConfiguration
