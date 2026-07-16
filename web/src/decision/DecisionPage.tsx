@@ -4,7 +4,15 @@ import type { BenchmarkView, CadenceView, ProductSummary, SignalView } from '../
 import { AlertPolicyPanel } from '../policy/AlertPolicyPanel'
 import { PurchasePanel } from '../purchase/PurchasePanel'
 import { Gauge } from './Gauge'
-import { benchmarkLine, cadenceLine, conditionsSuffix, gapLine, lowestLine, signalBadge } from './present'
+import {
+  benchmarkLine,
+  cadenceLine,
+  conditionsSuffix,
+  gapLine,
+  lowestLine,
+  signalBadge,
+  verdictSubline,
+} from './present'
 
 interface Loaded {
   signal: SignalView
@@ -123,12 +131,15 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
 
       {loaded && badge && (
         <section aria-label="판단 요약" className="summary">
-          <p aria-label="신호등" className="verdict" data-signal={loaded.signal.color}>
-            <span className="mark" aria-label={`신호 ${loaded.signal.color}`}>
-              {badge.mark}
-            </span>{' '}
-            {badge.text}
-          </p>
+          {/* 판정 히어로 — 이 화면의 답이다. 램프가 신호색을 들고(장식 아님), 헤드라인이 답을 말한다.
+              스크린리더에겐 문구가 곧 신호라 램프는 aria-hidden — 색을 따로 읽어 줄 필요가 없다. */}
+          <div aria-label="신호등" className="verdict" data-signal={loaded.signal.color}>
+            <span className="lamp" aria-hidden="true" />
+            <div className="answer">
+              <p className="headline">{badge.text}</p>
+              <p className="subline">{verdictSubline(loaded.benchmark)}</p>
+            </div>
+          </div>
           {/* 기간을 바꿔도 신호등은 안 바뀐다. 그 사실을 숨기면 사용자는 바뀐 줄 안다(과대약속 금지). */}
           {periodMonths !== SIGNAL_PERIOD_MONTHS && (
             <p role="note" aria-label="신호등 기간 안내">
@@ -143,6 +154,9 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
               ))}
             </ul>
           )}
+
+          {/* 여기부터 답이 아니라 근거다 — 히어로가 커진 만큼 그 경계를 표식으로 못박는다. */}
+          <p className="evidence-label">근거 · 계기</p>
 
           {/* 계기(the meter) — 실측 위치만 그린다. 표본/현재가 없으면 스스로 "미확립"이라 말한다. */}
           <Gauge view={loaded.benchmark} />

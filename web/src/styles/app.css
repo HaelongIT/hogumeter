@@ -320,21 +320,24 @@
   min-width: 116px;
 }
 
-/* 판정 카드 — 신호색은 여기(판정)에만 등장한다. */
+/*
+ * 판정 히어로 — **답이 주인공이다.** 이 화면에서 사람이 알고 싶은 건 "지금 사도 되나"의 답 하나이고,
+ * 계기·수치는 그 근거다. 그래서 판정은 한 줄이 아니라 히어로로 온다.
+ *
+ * 신호색은 여전히 판정에만 등장하고, 그중에서도 **램프 하나**가 든다 — 좌측 레일·틴트를 걷은 이유다.
+ * 램프가 발광하는데 배경까지 물들이면 강조가 세 곳으로 흩어진다(보드는 한 곳에서만 지른다).
+ */
 .verdict {
   --v: var(--sig-gray);
   --v-soft: var(--sig-gray-soft);
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 18px;
   margin: 0;
-  padding: 15px 17px;
-  font-size: 1.0625rem;
-  font-weight: 600;
+  padding: 22px 20px;
   color: var(--ink);
-  background: var(--v-soft);
+  background: var(--panel);
   border: 1px solid var(--hairline);
-  border-left: 3px solid var(--v);
   border-radius: var(--radius);
 }
 
@@ -355,9 +358,67 @@
   --v-soft: var(--sig-gray-soft);
 }
 
-.verdict .mark {
-  font-size: 1.2rem;
-  line-height: 1;
+/*
+ * 백라이트 램프 — 이 화면에서 신호색을 드는 **유일한** 요소다. 이모지 대신 그려서 토큰 팔레트를 정확히 쓴다
+ * (이모지 초록은 --sig-green이 아니다). 세기는 tokens.css의 --lamp-glow-* 셋이 정한다(기본 = 중).
+ */
+.verdict .lamp {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 38% 34%, color-mix(in srgb, var(--v) 78%, white), var(--v) 72%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--v) 45%, transparent),
+    0 0 var(--lamp-glow-blur) var(--lamp-glow-spread) color-mix(in srgb, var(--v) var(--lamp-glow-alpha), transparent),
+    inset 0 -3px 7px rgba(0, 0, 0, 0.28);
+}
+
+/* GRAY는 표본 부족이지 경고가 아니다 — 회색 램프는 발광하지 않는다(꺼진 계기). */
+.verdict[data-signal='GRAY'] .lamp {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--v) 40%, transparent),
+    inset 0 -3px 7px rgba(0, 0, 0, 0.22);
+}
+
+.verdict .answer {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+/*
+ * 헤드라인은 **중립 잉크**다. 다크에서 잉크는 대비 ~15:1, 신호 초록은 ~7:1·빨강은 ~5:1 — 색을 넣으면
+ * 오히려 절반으로 떨어진다. "더 강하게"의 지렛대는 색이 아니라 크기·굵기이고, 그건 여기서 이미 벌었다.
+ * 디스플레이 페이스(Space Grotesk)를 워드마크 밖에서 쓰는 유일한 자리 — 답에 인격을 준다.
+ */
+.verdict .headline {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.6rem, 4.4vw, 2.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  color: var(--ink);
+}
+
+.verdict .subline {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  color: var(--ink-dim);
+}
+
+/* 여기부터는 답이 아니라 근거다 — 위계를 문장이 아니라 표식으로 말한다. */
+.evidence-label {
+  margin: 4px 0 -4px;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
 }
 
 /* 딱지 칩 */
@@ -607,6 +668,34 @@
   font-size: 0.6875rem;
   letter-spacing: 0.01em;
   color: var(--ink-faint);
+}
+
+/* 승격·기각(Q-15) — 되돌릴 수 없는 판단이라 눈에 띄되 소리치지 않는다. 기각은 영구 제외라 테두리로만 경고한다. */
+.review-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.review-actions button {
+  align-self: auto;
+  padding: 6px 13px;
+  font-size: 0.8125rem;
+}
+
+.review-actions button[data-action='reject']:hover:not(:disabled) {
+  border-color: var(--sig-red);
+  background: var(--sig-red-soft);
+}
+
+.review-actions button[data-action='promote']:hover:not(:disabled) {
+  border-color: var(--sig-green);
+  background: var(--sig-green-soft);
+}
+
+.review-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* 가격·id는 mono 등숫자로 — 가격이 주인공. */

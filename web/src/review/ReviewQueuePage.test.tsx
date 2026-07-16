@@ -1,8 +1,23 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiFailure, api } from '../api/client'
 import type { ReviewQueueItem } from '../api/types'
 import { ReviewQueuePage } from './ReviewQueuePage'
+
+/** 이상치는 딜(dealEventId)이 있어 승격·기각 둘 다 된다. 조건 태그는 "왜 싸 보이나"를 말한다. */
+const outlier: ReviewQueueItem = {
+  id: 9,
+  type: 'OUTLIER_LOWER',
+  occurrences: 1,
+  firstSeenAt: '2026-07-10T00:00:00Z',
+  lastSeenAt: '2026-07-10T00:00:00Z',
+  sourceUrl: 'https://ppomppu/9',
+  subject: '아이폰 17 — 256GB',
+  candidateProducts: [],
+  conditions: ['카할'],
+  payload: { dealEventId: 42, priceFirst: 100_000 },
+}
 
 const unclassified: ReviewQueueItem = {
   id: 3,
@@ -43,15 +58,53 @@ describe('ReviewQueuePage', () => {
     expect(screen.getByText(/원문 링크 없음/)).toBeInTheDocument()
   })
 
-  /** 과대약속 금지 — 아직 못 하는 일을 버튼으로 그리지 않는다(승격·기각 REST 부재, Q-15). */
-  it('승격·기각 버튼을 그리지 않고, 못 한다는 사실을 말한다', async () => {
-    vi.spyOn(api, 'listReviewQueue').mockResolvedValue([unclassified])
+  /**
+   * Q-15 승격·기각. 미상 항목은 딜이 없어 **승격할 대상 자체가 없다**(core도 400으로 막는다) —
+   * 못 하는 일은 버튼으로 그리지 않는다(과대약속 금지). 이상치는 딜이 있어 둘 다 된다.
+   */
+  it('이상치는 승격·기각 둘 다, 미상은 기각만 그린다', async () => {
+    vi.spyOn(api, 'listReviewQueue').mockResolvedValue([outlier, unclassified])
 
     render(<ReviewQueuePage />)
-    await screen.findByText(/어느 제품인지 확정하지 못했습니다/)
+    await screen.findByRole('button', { name: '승격' })
 
-    expect(screen.queryByRole('button', { name: /승격|기각/ })).toBeNull()
-    expect(screen.getByRole('note')).toHaveTextContent(/승격.*기각.*아직/)
+    expect(screen.getAllByRole('button', { name: '승격' })).toHaveLength(1) // 이상치에만
+    expect(screen.getAllByRole('button', { name: '기각' })).toHaveLength(2) // 둘 다 기각은 된다
+  })
+
+  it('승격하면 그 항목이 큐에서 내려간다 — 처리됐다는 걸 눈으로 확인시킨다', async () => {
+    const list = vi.spyOn(api, 'listReviewQueue')
+    list.mockResolvedValueOnce([outlier]).mockResolvedValueOnce([])
+    const promote = vi.spyOn(api, 'promoteReviewItem').mockResolvedValue()
+
+    render(<ReviewQueuePage />)
+    await userEvent.click(await screen.findByRole('button', { name: '승격' }))
+
+    expect(promote).toHaveBeenCalledWith(9)
+    expect(await screen.findByText(/대기 중인 항목이 없습니다/)).toBeInTheDocument()
+  })
+
+  it('기각도 같은 길로 간다', async () => {
+    const list = vi.spyOn(api, 'listReviewQueue')
+    list.mockResolvedValueOnce([unclassified]).mockResolvedValueOnce([])
+    const reject = vi.spyOn(api, 'rejectReviewItem').mockResolvedValue()
+
+    render(<ReviewQueuePage />)
+    await userEvent.click(await screen.findByRole('button', { name: '기각' }))
+
+    expect(reject).toHaveBeenCalledWith(3)
+    expect(await screen.findByText(/대기 중인 항목이 없습니다/)).toBeInTheDocument()
+  })
+
+  /** 이미 처리된 항목을 또 누르면 core가 404를 준다 — 삼키지 않고 code를 그대로 보여준다. */
+  it('처리 실패는 code를 그대로 보여준다', async () => {
+    vi.spyOn(api, 'listReviewQueue').mockResolvedValue([unclassified])
+    vi.spyOn(api, 'rejectReviewItem').mockRejectedValue(new ApiFailure(404, 'REVIEW_ITEM_NOT_FOUND'))
+
+    render(<ReviewQueuePage />)
+    await userEvent.click(await screen.findByRole('button', { name: '기각' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('REVIEW_ITEM_NOT_FOUND')
   })
 
   /**

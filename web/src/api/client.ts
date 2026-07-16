@@ -41,6 +41,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
+/**
+ * 본문 없는 명령(200 + 빈 본문). `request`는 항상 json을 파싱하므로 빈 본문에서 터진다.
+ * 실패 해석은 `request`와 같다 — core의 `{code, message}`를 살리고, 아니면 `HTTP_{status}`로.
+ */
+async function command(path: string, init?: RequestInit): Promise<void> {
+  const response = await fetch(path, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
+  })
+
+  if (!response.ok) {
+    const error = (await response.json().catch(() => null)) as ApiError | null
+    throw new ApiFailure(response.status, error?.code ?? `HTTP_${response.status}`)
+  }
+}
+
 export const api = {
   listProducts: () => request<ProductSummary[]>('/api/v1/products'),
 
@@ -79,6 +95,12 @@ export const api = {
       body: JSON.stringify(command),
     }),
 
-  // 미상 큐(읽기 전용). 승격·기각 REST는 아직 없다 — docs/91 Q-15.
+  // 미상 큐 — 조회 + 승격·기각(Q-15). 처리하면 그 항목은 PENDING에서 내려가 목록에서 사라진다.
   listReviewQueue: () => request<ReviewQueueItem[]>('/api/v1/review-queue'),
+
+  /** 승격 — 이상치 오탐을 정상으로(표본 복귀). 미상 항목은 core가 400으로 막는다(variant 지정 필요). */
+  promoteReviewItem: (id: number) => command(`/api/v1/review-queue/${id}/promote`, { method: 'POST' }),
+
+  /** 기각 — 사기·낚시로 영구 제외(재수집돼도 표본 복귀 없음). 미상 항목은 큐에서 내리기만 한다. */
+  rejectReviewItem: (id: number) => command(`/api/v1/review-queue/${id}/reject`, { method: 'POST' }),
 }

@@ -54,7 +54,11 @@ describe('DecisionPage', () => {
     await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
     await pick()
 
-    expect(await screen.findByLabelText('신호등')).toHaveTextContent('지금 잡을 딜 있음')
+    // 판정 히어로: 답(헤드라인) + 그 아래 결정적 한 줄. 서브라인이 빠지면 답만 있고 근거가 사라진다.
+    const verdict = await screen.findByLabelText('신호등')
+    expect(verdict).toHaveTextContent('지금 잡을 딜 있음')
+    expect(verdict).toHaveTextContent('기준가보다 8.5% 비쌈 · 현재가 890,000원')
+
     expect(screen.getByLabelText('기준가')).toHaveTextContent('핫딜 기준가 820,000원')
     expect(screen.getByLabelText('기준가')).toHaveTextContent('12건(교차 3건)')
     expect(screen.getByLabelText('갭')).toHaveTextContent('70,000원 비쌈')

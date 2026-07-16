@@ -194,7 +194,15 @@ export interface ReviewQueueItem {
 
 /** 에러 형태는 하나다(`{code, message}`). 코드 카탈로그는 `docs/benchmark/07`. */
 export interface ApiError {
-  code: 'BM_VARIANT_NOT_FOUND' | 'BM_INVALID_PERIOD' | 'REG_INVALID_ALERT_POLICY' | 'REG_INVALID_PRODUCT' | (string & {})
+  code:
+    | 'BM_VARIANT_NOT_FOUND'
+    | 'BM_INVALID_PERIOD'
+    | 'REG_INVALID_ALERT_POLICY'
+    | 'REG_INVALID_PRODUCT'
+    // Q-15 승격·기각. NOT_FOUND는 "없는 id"와 "이미 처리됨"을 함께 뜻한다(둘 다 지금 큐에 없다).
+    | 'REVIEW_ITEM_NOT_FOUND'
+    | 'REVIEW_PROMOTE_UNSUPPORTED'
+    | (string & {})
   message: string
 }
 
