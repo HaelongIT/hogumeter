@@ -4,7 +4,16 @@ import type { AlertPolicyView } from '../api/types'
 import { InvalidForm } from '../registration/buildCommand'
 import { buildPolicyCommand, type PolicyForm } from './buildPolicyCommand'
 
-const EMPTY: PolicyForm = { targetPrice: '', periodMonths: '', quietHoursStart: '', quietHoursEnd: '' }
+const EMPTY: PolicyForm = {
+  targetPrice: '',
+  periodMonths: '',
+  quietHoursStart: '',
+  quietHoursEnd: '',
+  kDisplay: '',
+}
+
+/** K 후보(확정본: 3~10). 낮추면 적은 표본으로도 기준가를 말하고, 높이면 더 모일 때까지 사례만 낸다. */
+const K_CHOICES = [3, 4, 5, 6, 7, 8, 9, 10] as const
 
 /** 기간 P 후보. 판단 화면의 "표시 기간"과 **다른 손잡이**다 — 이건 알림 판정에 쓰인다. */
 const PERIODS = [3, 6, 12] as const
@@ -24,14 +33,17 @@ function toForm(policy: AlertPolicyView): PolicyForm {
     periodMonths: policy.periodMonths === undefined ? '' : String(policy.periodMonths),
     quietHoursStart: policy.quietHoursStart === undefined ? '' : String(policy.quietHoursStart),
     quietHoursEnd: policy.quietHoursEnd === undefined ? '' : String(policy.quietHoursEnd),
+    // K는 미설정이라도 core가 기본값을 숫자로 준다(정본이 core 상수 하나) — 빈 칸이 될 일이 없다.
+    kDisplay: policy.kDisplay === undefined ? '' : String(policy.kDisplay),
   }
 }
 
 /**
  * REG-03 알림 정책 설정. 확정본 §7의 web 최소 슬라이스가 요구하는 "목표가 설정"이 여기다.
  *
- * <p>다루는 것은 넷뿐이다 — K_display·제외 키워드·⚠️라벨 토글은 core 엔티티가 아직 매핑하지 않는다
- * (docs/91 Q-48). 없는 손잡이를 그려 두면 저장되는 줄 안다.
+ * <p>다루는 것은 다섯 — 목표가·기간 P·방해금지 2개 + <b>K_display</b>(Q-48 ① 해소). 제외 키워드·
+ * ⚠️라벨 토글은 core 엔티티가 아직 매핑하지 않는다(Q-28·Q-66 — 소비 기능과 함께). 없는 손잡이를
+ * 그려 두면 저장되는 줄 안다.
  */
 export function AlertPolicyPanel({ variantId }: { variantId: number }) {
   const [form, setForm] = useState<PolicyForm>(EMPTY)
@@ -118,6 +130,26 @@ export function AlertPolicyPanel({ variantId }: { variantId: number }) {
             ))}
           </select>
         </label>
+
+        {/*
+          K_display — 표시를 바꾸는 설정이라 사용자 손잡이다(확정본 §217, 원칙 4). 산식은 시스템이 고정한다.
+          이 값이 곧 "몇 건부터 기준가라고 말할 것인가"다 — 낮추면 빨리 말하고 틀릴 위험이 늘고,
+          높이면 더 모일 때까지 사례만 낸다. 그 맞바꿈을 문장으로 밝힌다(과대약속 금지).
+        */}
+        <label>
+          기준가 표시 임계 K (몇 건부터 기준가라고 말할지)
+          <select value={form.kDisplay} onChange={set('kDisplay')}>
+            {K_CHOICES.map((k) => (
+              <option key={k} value={k}>
+                {k}건 이상
+              </option>
+            ))}
+          </select>
+        </label>
+        <p role="note" aria-label="K 안내">
+          낮추면 표본이 적어도 기준가를 말합니다(빨리 알지만 틀릴 위험이 큽니다). 높이면 더 모일 때까지 기준가
+          대신 사례를 냅니다. 이 값은 <strong>표시 기준만</strong> 바꿉니다 — 산식과 수집은 그대로입니다.
+        </p>
 
         {/* 🔥 대박딜은 방해금지를 관통한다(확정본 §102). 그 사실을 숨기면 "다 막았다"고 믿는다. */}
         <fieldset>

@@ -42,11 +42,11 @@ public class AlertPolicySettingsUseCase {
 	/**
 	 * 있으면 갱신, 없으면 생성.
 	 *
-	 * <p>delete + insert가 아니라 <b>UPDATE</b>인 이유: {@code AlertPolicyEntity}는 {@code k_display}·
-	 * {@code exclude_keywords}·{@code demand_axis_filter}를 매핑하지 않는다. 새로 insert하면 그 컬럼들이
-	 * DB 기본값으로 조용히 되돌아간다 — 지금은 아무도 안 쓰니 아무도 모르고, 누군가 매핑을 붙이는 날
-	 * 데이터가 사라진다. 벌크 UPDATE는 <b>우리가 아는 컬럼만</b> 건드린다. (엔티티에 setter가 없어
-	 * 더티 체킹으로는 갱신할 수 없다 — 그 파일은 다른 개발자 소유다.)
+	 * <p>delete + insert가 아니라 <b>UPDATE</b>인 이유: {@code AlertPolicyEntity}는 아직 {@code
+	 * exclude_keywords}·{@code demand_axis_filter}를 매핑하지 않는다(Q-28·Q-66 — 소비 기능과 함께 매핑한다).
+	 * 새로 insert하면 그 컬럼들이 DB 기본값으로 조용히 되돌아간다 — 지금은 아무도 안 쓰니 아무도 모르고,
+	 * 누군가 매핑을 붙이는 날 데이터가 사라진다. 벌크 UPDATE는 <b>우리가 아는 컬럼만</b> 건드린다.
+	 * (엔티티에 setter가 없어 더티 체킹으로는 갱신할 수 없다.)
 	 */
 	@Transactional
 	public AlertPolicySettings update(long variantId, AlertPolicySettings settings) {
@@ -54,7 +54,7 @@ public class AlertPolicySettingsUseCase {
 		Optional<AlertPolicyEntity> existing = policies.findByVariantId(variantId);
 		if (existing.isEmpty()) {
 			policies.save(new AlertPolicyEntity(variantId, settings.targetPrice(), settings.periodMonths(),
-					settings.quietHoursStart(), settings.quietHoursEnd()));
+					settings.quietHoursStart(), settings.quietHoursEnd(), settings.kDisplay()));
 			return settings;
 		}
 		entityManager.createQuery("""
@@ -62,13 +62,15 @@ public class AlertPolicySettingsUseCase {
 				   set policy.targetPrice = :targetPrice,
 				       policy.periodMonths = :periodMonths,
 				       policy.quietHoursStart = :quietHoursStart,
-				       policy.quietHoursEnd = :quietHoursEnd
+				       policy.quietHoursEnd = :quietHoursEnd,
+				       policy.kDisplay = :kDisplay
 				 where policy.variantId = :variantId
 				""")
 			.setParameter("targetPrice", settings.targetPrice())
 			.setParameter("periodMonths", settings.periodMonths())
 			.setParameter("quietHoursStart", settings.quietHoursStart())
 			.setParameter("quietHoursEnd", settings.quietHoursEnd())
+			.setParameter("kDisplay", settings.kDisplay())
 			.setParameter("variantId", variantId)
 			.executeUpdate();
 		// 벌크 UPDATE는 영속성 컨텍스트를 우회한다 — 방금 고친 행을 다시 읽으면 캐시된 옛 값이 나온다.
@@ -85,6 +87,6 @@ public class AlertPolicySettingsUseCase {
 
 	private static AlertPolicySettings toSettings(AlertPolicyEntity entity) {
 		return new AlertPolicySettings(entity.getTargetPrice(), entity.getPeriodMonths(),
-				entity.getQuietHoursStart(), entity.getQuietHoursEnd());
+				entity.getQuietHoursStart(), entity.getQuietHoursEnd(), entity.getKDisplay());
 	}
 }

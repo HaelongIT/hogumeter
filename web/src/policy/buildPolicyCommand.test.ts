@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { InvalidForm } from '../registration/buildCommand'
 import { buildPolicyCommand, type PolicyForm } from './buildPolicyCommand'
 
-const EMPTY: PolicyForm = { targetPrice: '', periodMonths: '6', quietHoursStart: '', quietHoursEnd: '' }
+const EMPTY: PolicyForm = { targetPrice: '', periodMonths: '6', quietHoursStart: '', quietHoursEnd: '', kDisplay: '5' }
 
 describe('buildPolicyCommand', () => {
   it('빈 목표가는 0이 아니라 부재다', () => {
@@ -12,6 +12,7 @@ describe('buildPolicyCommand', () => {
       periodMonths: 6,
       quietHoursStart: null,
       quietHoursEnd: null,
+      kDisplay: 5,
     })
   })
 

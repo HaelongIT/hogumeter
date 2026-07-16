@@ -38,7 +38,6 @@ public class EvaluateAlertOnDealUseCase {
 	private final DealAlertRepository alerts;
 	private final Clock clock;
 	private final BenchmarkCalculator calculator = new BenchmarkCalculator();
-	private final BenchmarkParams params = BenchmarkParams.defaults();
 
 	public EvaluateAlertOnDealUseCase(DealEventRepository dealEvents, DealEventMapper mapper,
 			AlertPolicyRepository policies, PurchaseRepository purchases, CurrentPriceProvider currentPrice,
@@ -56,6 +55,8 @@ public class EvaluateAlertOnDealUseCase {
 	public DispatchOutcome evaluate(long variantId, long dealEventId, DealEvent deal) {
 		Optional<AlertPolicyEntity> policy = policies.findByVariantId(variantId);
 		int periodMonths = policy.map(AlertPolicyEntity::getPeriodMonths).orElse(DEFAULT_PERIOD_MONTHS);
+		// 이미 읽은 정책으로 파라미터를 만든다(중복 조회 회피). 해석은 VariantBenchmarkParams 한 곳에만 있다.
+		BenchmarkParams params = VariantBenchmarkParams.from(policy);
 		AlertPolicy alertPolicy = policy
 				.map(p -> new AlertPolicy(p.getTargetPrice(), p.getQuietHoursStart(), p.getQuietHoursEnd()))
 				.orElseGet(() -> new AlertPolicy(null, null, null));

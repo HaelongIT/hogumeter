@@ -17,7 +17,7 @@ class AlertPolicySettingsTest {
 
 	@Test
 	void targetPriceIsOptional() {
-		AlertPolicySettings settings = new AlertPolicySettings(null, 6, null, null);
+		AlertPolicySettings settings = new AlertPolicySettings(null, 6, null, null, 5);
 
 		assertThat(settings.targetPrice()).isNull();
 	}
@@ -26,7 +26,7 @@ class AlertPolicySettingsTest {
 	@ParameterizedTest
 	@ValueSource(longs = { 0L, -1L })
 	void targetPriceMustBePositiveWhenPresent(long targetPrice) {
-		assertThatThrownBy(() -> new AlertPolicySettings(targetPrice, 6, null, null))
+		assertThatThrownBy(() -> new AlertPolicySettings(targetPrice, 6, null, null, 5))
 			.isInstanceOf(InvalidAlertPolicyException.class);
 	}
 
@@ -34,37 +34,37 @@ class AlertPolicySettingsTest {
 	@ParameterizedTest
 	@ValueSource(ints = { 0, -3 })
 	void periodMonthsMustBePositive(int periodMonths) {
-		assertThatThrownBy(() -> new AlertPolicySettings(null, periodMonths, null, null))
+		assertThatThrownBy(() -> new AlertPolicySettings(null, periodMonths, null, null, 5))
 			.isInstanceOf(InvalidBenchmarkPeriodException.class);
 	}
 
 	@ParameterizedTest
 	@ValueSource(ints = { -1, 24 })
 	void quietHoursMustBeAnHourOfDay(int hour) {
-		assertThatThrownBy(() -> new AlertPolicySettings(null, 6, hour, 8))
+		assertThatThrownBy(() -> new AlertPolicySettings(null, 6, hour, 8, 5))
 			.isInstanceOf(InvalidAlertPolicyException.class);
-		assertThatThrownBy(() -> new AlertPolicySettings(null, 6, 8, hour))
+		assertThatThrownBy(() -> new AlertPolicySettings(null, 6, 8, hour, 5))
 			.isInstanceOf(InvalidAlertPolicyException.class);
 	}
 
 	/** 한쪽만 설정하면 {@link QuietHours}는 조용히 "방해금지 없음"으로 읽는다 — 설정한 줄 알고 있는데. */
 	@Test
 	void quietHoursAreSetTogetherOrNotAtAll() {
-		assertThatThrownBy(() -> new AlertPolicySettings(null, 6, 23, null))
+		assertThatThrownBy(() -> new AlertPolicySettings(null, 6, 23, null, 5))
 			.isInstanceOf(InvalidAlertPolicyException.class);
-		assertThatThrownBy(() -> new AlertPolicySettings(null, 6, null, 8))
+		assertThatThrownBy(() -> new AlertPolicySettings(null, 6, null, 8, 5))
 			.isInstanceOf(InvalidAlertPolicyException.class);
 	}
 
 	/** start == end는 {@link QuietHours}가 "방해금지 없음"으로 정의한 값이다. 오류가 아니다. */
 	@Test
 	void equalQuietHoursMeanNoQuietWindowAndThatIsLegal() {
-		assertThatCode(() -> new AlertPolicySettings(null, 6, 9, 9)).doesNotThrowAnyException();
+		assertThatCode(() -> new AlertPolicySettings(null, 6, 9, 9, 5)).doesNotThrowAnyException();
 	}
 
 	@Test
 	void midnightWrapIsLegal() {
-		AlertPolicySettings settings = new AlertPolicySettings(900_000L, 6, 23, 8);
+		AlertPolicySettings settings = new AlertPolicySettings(900_000L, 6, 23, 8, 5);
 
 		assertThat(QuietHours.isQuiet(2, settings.quietHoursStart(), settings.quietHoursEnd())).isTrue();
 		assertThat(QuietHours.isQuiet(12, settings.quietHoursStart(), settings.quietHoursEnd())).isFalse();

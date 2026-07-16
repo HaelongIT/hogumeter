@@ -47,4 +47,14 @@ public record BenchmarkParams(
 				5,
 				12);
 	}
+
+	/**
+	 * K만 사용자 값으로 갈아끼운다(확정본 §217 — K_display는 사용자 손잡이, 기본 5). 나머지는 시스템 고정이라
+	 * 손대지 않는다(원칙 4: 표시를 바꾸는 설정은 사용자에게, 데이터 진실을 바꾸는 규칙은 시스템 고정).
+	 * {@code kFill}은 여기서 파생되므로 함께 따라온다 — 불변식 K_FILL &gt; K_DISPLAY가 저절로 보존된다.
+	 */
+	public BenchmarkParams withKDisplay(int kDisplay) {
+		return new BenchmarkParams(mergePriceToleranceRatio, mergePriceToleranceFloorWon, mergeWindowHours,
+				outlierIqrMultiplier, coldStartJackpotRatio, kDisplay, expandLimitMonths);
+	}
 }

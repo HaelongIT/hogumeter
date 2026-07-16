@@ -221,12 +221,23 @@ export interface AlertPolicyView {
   periodMonths?: number
   quietHoursStart?: number
   quietHoursEnd?: number
+  /**
+   * 기준가 라벨 임계 K(3~10). **미설정이라도 숫자로 온다** — 기본값의 정본이 core의 상수 하나라
+   * 사본이 생기지 않기 때문이다(기간 P는 아직 그 정본이 없어 미설정이면 부재, docs/91 Q-48 ②).
+   */
+  kDisplay?: number
 }
 
-/** PUT 본문. 부재는 **null**로 명시한다 — 키를 빼면 core가 "기간 P 누락"으로 400을 낸다. */
+/**
+ * PUT 본문. 부재는 **null**로 명시한다 — 키를 빼면 core가 "기간 P 누락"으로 400을 낸다.
+ *
+ * ⚠️ PUT은 **전체 교체**다. `kDisplay`를 빼면 core가 기본값(5)으로 되돌린다 — 화면이 K를 안 보내면
+ * 저장할 때마다 사용자가 고른 K가 조용히 리셋된다. 그래서 항상 보낸다.
+ */
 export interface UpdateAlertPolicyCommand {
   targetPrice: number | null
   periodMonths: number
   quietHoursStart: number | null
   quietHoursEnd: number | null
+  kDisplay: number
 }

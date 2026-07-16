@@ -6,6 +6,8 @@ export interface PolicyForm {
   periodMonths: string
   quietHoursStart: string
   quietHoursEnd: string
+  /** 기준가 라벨 임계 K(3~10). 항상 보낸다 — PUT은 전체 교체라 빼면 core가 기본값으로 되돌린다. */
+  kDisplay: string
 }
 
 const digits = /^\d+$/
@@ -35,11 +37,17 @@ export function buildPolicyCommand(form: PolicyForm): UpdateAlertPolicyCommand {
     throw new InvalidForm('방해금지 시간은 시작과 끝을 함께 입력하거나 둘 다 비우세요')
   }
 
+  const k = form.kDisplay.trim()
+  if (!digits.test(k) || Number(k) < 3 || Number(k) > 10) {
+    throw new InvalidForm('기준가 표시 임계 K는 3~10 사이의 정수여야 합니다')
+  }
+
   return {
     targetPrice: target === '' ? null : Number(target),
     periodMonths: Number(period),
     quietHoursStart: start === '' ? null : hourOfDay(start, '방해금지 시작'),
     quietHoursEnd: end === '' ? null : hourOfDay(end, '방해금지 끝'),
+    kDisplay: Number(k),
   }
 }
 

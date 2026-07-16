@@ -46,27 +46,34 @@ public class AlertPolicyController {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AlertPolicyView(boolean configured, Long targetPrice, Integer periodMonths,
-			Integer quietHoursStart, Integer quietHoursEnd) {
+			Integer quietHoursStart, Integer quietHoursEnd, Integer kDisplay) {
 
 		static AlertPolicyView of(AlertPolicySettings settings) {
 			return new AlertPolicyView(true, settings.targetPrice(), settings.periodMonths(),
-					settings.quietHoursStart(), settings.quietHoursEnd());
+					settings.quietHoursStart(), settings.quietHoursEnd(), settings.kDisplay());
 		}
 
+		/**
+		 * 미설정이라도 {@code kDisplay}는 <b>숫자로 말한다</b> — 기본값의 정본이
+		 * {@code AlertPolicySettings.DEFAULT_K_DISPLAY} 한 곳이라 여기서 읽어도 사본이 생기지 않는다.
+		 * (기간 P는 아직 그 정본이 없어 null이다 — Q-48 ②.)
+		 */
 		static AlertPolicyView unconfigured() {
-			return new AlertPolicyView(false, null, null, null, null);
+			return new AlertPolicyView(false, null, null, null, null, AlertPolicySettings.DEFAULT_K_DISPLAY);
 		}
 	}
 
 	/** 래퍼 record — JSON의 누락 필드가 {@code int} 언박싱 NPE(500)가 되지 않게 전부 박싱 타입으로 받는다. */
 	public record UpdateRequest(Long targetPrice, Integer periodMonths, Integer quietHoursStart,
-			Integer quietHoursEnd) {
+			Integer quietHoursEnd, Integer kDisplay) {
 
 		AlertPolicySettings toSettings() {
 			if (periodMonths == null) {
 				throw new InvalidAlertPolicyException("periodMonths is required");
 			}
-			return new AlertPolicySettings(targetPrice, periodMonths, quietHoursStart, quietHoursEnd);
+			// K는 선택이다 — 안 보내면 기본값. 범위(3~10) 검증은 AlertPolicySettings가 한다.
+			return new AlertPolicySettings(targetPrice, periodMonths, quietHoursStart, quietHoursEnd,
+					kDisplay == null ? AlertPolicySettings.DEFAULT_K_DISPLAY : kDisplay);
 		}
 	}
 }

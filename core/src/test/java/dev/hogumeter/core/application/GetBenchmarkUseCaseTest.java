@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.hogumeter.core.TestcontainersConfiguration;
+import dev.hogumeter.core.adapter.persistence.AlertPolicyEntity;
+import dev.hogumeter.core.adapter.persistence.AlertPolicyRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventMapper;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
@@ -54,6 +56,10 @@ class GetBenchmarkUseCaseTest {
 	RawDealPostRepository rawPosts;
 	@Autowired
 	DealEventMapper mapper;
+	@Autowired
+	VariantBenchmarkParams params;
+	@Autowired
+	AlertPolicyRepository policies;
 
 	private GetBenchmarkUseCase useCase;
 	private long variantId;
@@ -65,7 +71,7 @@ class GetBenchmarkUseCaseTest {
 		VariantEntity variant = variants.save(new VariantEntity(product.getId(), "256GB", Map.of("용량", "256GB")));
 		variantId = variant.getId();
 
-		useCase = new GetBenchmarkUseCase(variants, dealEvents, mapper, vId -> 990_000L, CLOCK);
+		useCase = new GetBenchmarkUseCase(variants, dealEvents, mapper, vId -> 990_000L, params, CLOCK);
 	}
 
 	private void insertCrossVerifiedDeal(long price, String dateIso) {
@@ -97,6 +103,27 @@ class GetBenchmarkUseCaseTest {
 		assertThat(view.n()).isEqualTo(5);
 		assertThat(view.m()).isEqualTo(5); // 전부 교차검증(2사이트 소스)
 		assertThat(view.gap().vsBenchmark().won()).isEqualTo(100_000L); // 990k − 890k
+	}
+
+	/**
+	 * Q-48 ①: <b>K는 사용자 손잡이다</b>(확정본 §217). 같은 표본(5건)이라도 사용자가 K를 10으로 올리면
+	 * "아직 기준가를 말할 만큼은 아니다"가 되어 통계 대신 사례를 낸다. 이 배선이 없으면 전역 기본 5로만
+	 * 판정해 손잡이가 저장만 되고 죽는다 — `alert_policy.k_display`는 V1부터 그렇게 죽어 있었다.
+	 */
+	@Test
+	void userKDisplayMovesTheTier() {
+		insertCrossVerifiedDeal(820_000, "2026-06-10");
+		insertCrossVerifiedDeal(850_000, "2026-06-12");
+		insertCrossVerifiedDeal(890_000, "2026-06-14");
+		insertCrossVerifiedDeal(920_000, "2026-06-16");
+		insertCrossVerifiedDeal(950_000, "2026-06-18");
+		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 10)); // 기본 5 → 10
+
+		BenchmarkView view = useCase.getBenchmark(variantId, 6, false);
+
+		assertThat(view.tier()).as("n=5 < K=10이라 기준가를 말할 때가 아니다").isEqualTo(Tier.SPARSE);
+		assertThat(view.benchmarkPrice()).isNull(); // 표본이 빈약하면 통계를 내지 않는다(절대 원칙 1)
+		assertThat(view.cases()).hasSize(5); // 대신 사례를 그대로 — 판단은 사람이 한다
 	}
 
 	@Test

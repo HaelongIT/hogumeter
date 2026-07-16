@@ -61,7 +61,7 @@ class AlertPolicySettingsUseCaseTest {
 	void updateCreatesThePolicyAndGetReadsItBack() {
 		long variantId = variantId();
 
-		settings.update(variantId, new AlertPolicySettings(900_000L, 3, 23, 8));
+		settings.update(variantId, new AlertPolicySettings(900_000L, 3, 23, 8, 5));
 
 		AlertPolicySettings stored = settings.get(variantId).orElseThrow();
 		assertThat(stored.targetPrice()).isEqualTo(900_000L);
@@ -75,8 +75,8 @@ class AlertPolicySettingsUseCaseTest {
 	void updatingTwiceReplacesTheRowRatherThanAddingOne() {
 		long variantId = variantId();
 
-		settings.update(variantId, new AlertPolicySettings(900_000L, 3, null, null));
-		settings.update(variantId, new AlertPolicySettings(800_000L, 6, null, null));
+		settings.update(variantId, new AlertPolicySettings(900_000L, 3, null, null, 5));
+		settings.update(variantId, new AlertPolicySettings(800_000L, 6, null, null, 5));
 
 		assertThat(settings.get(variantId).orElseThrow().targetPrice()).isEqualTo(800_000L);
 		assertThat(policies.findAll().stream().filter(p -> p.getVariantId() == variantId)).hasSize(1);
@@ -85,39 +85,46 @@ class AlertPolicySettingsUseCaseTest {
 	@Test
 	void clearingTheTargetPriceIsPersistedAsAbsence() {
 		long variantId = variantId();
-		settings.update(variantId, new AlertPolicySettings(900_000L, 6, null, null));
+		settings.update(variantId, new AlertPolicySettings(900_000L, 6, null, null, 5));
 
-		settings.update(variantId, new AlertPolicySettings(null, 6, null, null));
+		settings.update(variantId, new AlertPolicySettings(null, 6, null, null, 5));
 
 		assertThat(settings.get(variantId).orElseThrow().targetPrice()).isNull();
 	}
 
 	/**
-	 * <b>가장 중요한 단언.</b> {@code AlertPolicyEntity}는 `k_display`·`exclude_keywords`를 매핑하지
-	 * 않는다(상대 소유 파일). 갱신을 delete+insert로 구현하면 그 컬럼들이 DB 기본값으로 조용히 되돌아간다 —
-	 * 지금은 아무도 쓰지 않으니 아무도 모르고, 누군가 매핑을 붙이는 날 데이터가 사라진다.
+	 * <b>가장 중요한 단언.</b> {@code AlertPolicyEntity}는 아직 `exclude_keywords`·`demand_axis_filter`를
+	 * 매핑하지 않는다(소비처가 없어서 — Q-28·Q-66). 갱신을 delete+insert로 구현하면 그 컬럼들이 DB 기본값으로
+	 * 조용히 되돌아간다 — 지금은 아무도 쓰지 않으니 아무도 모르고, 누군가 매핑을 붙이는 날 데이터가 사라진다.
+	 *
+	 * <p>`k_display`는 <b>이제 매핑된다</b>(Q-48 ① — 사용자 손잡이로 살아났다). 그래서 여기서 보존 대상이
+	 * 아니라 <b>갱신 대상</b>이다 — 아래가 그걸 함께 단언한다.
 	 */
 	@Test
 	void updatePreservesColumnsTheEntityDoesNotMap() {
 		long variantId = variantId();
-		jdbc.update("insert into alert_policy (variant_id, period_months, k_display, exclude_keywords) "
-				+ "values (?, 6, 9, '{리퍼,벌크}')", variantId);
+		jdbc.update("insert into alert_policy (variant_id, period_months, k_display, exclude_keywords, "
+				+ "demand_axis_filter) values (?, 6, 9, '{리퍼,벌크}', '{\"색상\":\"블랙\"}'::jsonb)", variantId);
 
-		settings.update(variantId, new AlertPolicySettings(900_000L, 3, null, null));
+		settings.update(variantId, new AlertPolicySettings(900_000L, 3, null, null, 7));
 
-		Integer kDisplay = jdbc.queryForObject(
-				"select k_display from alert_policy where variant_id = ?", Integer.class, variantId);
 		String keywords = jdbc.queryForObject(
 				"select array_to_string(exclude_keywords, ',') from alert_policy where variant_id = ?",
 				String.class, variantId);
-		assertThat(kDisplay).isEqualTo(9);
-		assertThat(keywords).isEqualTo("리퍼,벌크");
+		String demandFilter = jdbc.queryForObject(
+				"select demand_axis_filter::text from alert_policy where variant_id = ?", String.class, variantId);
+		Integer kDisplay = jdbc.queryForObject(
+				"select k_display from alert_policy where variant_id = ?", Integer.class, variantId);
+
+		assertThat(keywords).as("미매핑 컬럼은 갱신이 건드리지 않는다").isEqualTo("리퍼,벌크");
+		assertThat(demandFilter).as("미매핑 컬럼은 갱신이 건드리지 않는다").contains("블랙");
+		assertThat(kDisplay).as("k_display는 이제 매핑돼 사용자 값으로 갱신된다").isEqualTo(7);
 	}
 
 	/** FK 위반으로 500을 내지 않는다. "없는 variant"는 클라이언트 오류(404)다. */
 	@Test
 	void updatingAnUnknownVariantIsNotFoundRatherThanAServerError() {
-		assertThatThrownBy(() -> settings.update(999_999L, new AlertPolicySettings(null, 6, null, null)))
+		assertThatThrownBy(() -> settings.update(999_999L, new AlertPolicySettings(null, 6, null, null, 5)))
 			.isInstanceOf(VariantNotFoundException.class);
 	}
 

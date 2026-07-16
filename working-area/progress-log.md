@@ -42,6 +42,19 @@
   버킷 → 기준가 제외 + 승격 큐"로 답을 줌. 즉 Matcher 확장 + deal_event 스키마 + 큐 배선(다세션, 결정 아님).
   ③(SPLIT 필수 검증)은 `RecordPurchaseUseCase` — 이제 우리 소유라 가능.
 
+- [Q-48① k_display 해소] **V1부터 죽어 있던 사용자 손잡이를 살렸다.** 세 미매핑 컬럼 중 **K만** 매핑 —
+  소비처(기준가 tier)와 생산자(정책 패널)가 **동시에** 생겼기 때문(나머지 둘은 소비 기능이 아직 없어 그대로
+  두는 게 원칙에 맞다 — 매핑만 하면 죽은 컬럼). core: 엔티티 매핑 + `AlertPolicySettings.kDisplay`(3~10 검증,
+  기본값 정본 `DEFAULT_K_DISPLAY`) + 벌크 UPDATE 포함 + 신규 `VariantBenchmarkParams`(**해석 정본 한 곳** —
+  이미 정책을 읽은 알림 경로는 `from(policy)`로 중복 조회 회피). `GetBenchmark`·`GetSignal`이 variant별 K로 판정.
+  web: 패널에 K 선택 + 맞바꿈 안내(낮추면 빨리 말하고 틀릴 위험↑).
+  ⚠️발견·차단: PUT은 **전체 교체**라 화면이 K를 안 보내면 **저장할 때마다 K가 5로 조용히 리셋**된다 —
+  그래서 web을 같은 증분에 묶고 `PolicyForm.kDisplay`를 항상 보내게 함. 테스트가 그걸 못박음.
+  검증: core 전체 GREEN · web **162 GREEN**(161→162) · build · **스모크 PASS**(미설정 기본 5 · 왕복 8 ·
+  범위 밖 400 — 새 단언을 실행해 확인). docs/91 Q-48 ① 해소.
+  ⚠️테스트 의미 변화: `updatePreservesColumnsTheEntityDoesNotMap`이 k_display를 "보존 대상"으로 단언했는데,
+  이제 K는 **갱신 대상**이라 남은 미매핑 둘(exclude_keywords·demand_axis_filter)로 그 단언을 옮김.
+
 ---
 
 ## 2026-07-12 — 무중단 백로그 진행 (Q-46①·게이트 CI 수정 2건·Q-67 착수)

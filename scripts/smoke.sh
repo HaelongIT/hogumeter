@@ -358,16 +358,27 @@ alert_vid=$(echo "$alert_variants" | sed 's/[^0-9]*\([0-9]*\).*/\1/')
 [ -n "$alert_vid" ] || fail "알림용 variant를 찾지 못했다: $alert_variants"
 
 # 미설정은 404가 아니라 configured:false다 — "정책 없음"과 "variant 없음"은 다른 사건이다.
-curl -fsS "${WEB}/api/v1/variants/${alert_vid}/alert-policy" | grep -q '"configured":false' ||
-	fail "미설정 정책이 configured:false를 내지 않는다"
+unset_policy=$(curl -fsS "${WEB}/api/v1/variants/${alert_vid}/alert-policy")
+echo "$unset_policy" | grep -q '"configured":false' || fail "미설정 정책이 configured:false를 내지 않는다"
+# Q-48 ①: K는 미설정이라도 **숫자로** 온다 — 기본값의 정본이 core 상수 하나라 사본이 안 생긴다.
+# (기간 P는 그 정본이 없어 여전히 부재다 — Q-48 ②.)
+echo "$unset_policy" | grep -q '"kDisplay":5' ||
+	fail "미설정 정책이 기본 K를 숫자로 내지 않는다 (Q-48 ①): $unset_policy"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "${WEB}/api/v1/variants/999999/alert-policy")" = 404 ] ||
 	fail "없는 variant의 정책 조회가 404가 아니다"
 
 policy=$(mktemp)
-echo '{"targetPrice":1000000,"periodMonths":6}' >"$policy"
+echo '{"targetPrice":1000000,"periodMonths":6,"kDisplay":8}' >"$policy"
 curl -fsS -X PUT "${WEB}/api/v1/variants/${alert_vid}/alert-policy" \
 	-H 'Content-Type: application/json' -d @"$policy" | grep -q '"targetPrice":1000000' ||
 	fail "정책 PUT이 저장값을 되돌려주지 않는다"
+# 사용자 손잡이는 **왕복해야** 손잡이다 — 저장한 K가 그대로 돌아오지 않으면 조용히 기본값이 된다.
+curl -fsS "${WEB}/api/v1/variants/${alert_vid}/alert-policy" | grep -q '"kDisplay":8' ||
+	fail "저장한 K가 왕복하지 않는다 (Q-48 ①)"
+# 범위 밖(3~10)은 DB CHECK로 500이 아니라 도메인 코드 400이어야 한다.
+echo '{"targetPrice":1000000,"periodMonths":6,"kDisplay":99}' >"$policy"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${WEB}/api/v1/variants/${alert_vid}/alert-policy" \
+	-H 'Content-Type: application/json' -d @"$policy")" = 400 ] || fail "범위 밖 K가 400이 아니다"
 # 잘못된 입력이 500이 아니라 400 + 도메인 코드로 거절되는지 (curl로 직접 치는 경우, Q-49의 교훈)
 echo '{"targetPrice":0,"periodMonths":6}' >"$policy"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${WEB}/api/v1/variants/${alert_vid}/alert-policy" \

@@ -85,7 +85,7 @@ class EvaluateAlertOnDealUseCaseTest {
 
 	@Test
 	void goodDealBelowBenchmarkIsSent() {
-		policies.save(new AlertPolicyEntity(variantId, 900_000L, 6, null, null));
+		policies.save(new AlertPolicyEntity(variantId, 900_000L, 6, null, null, 5));
 
 		long dealId = dealEvents.findByVariantId(variantId).get(0).getId();
 		DispatchOutcome outcome = useCase.evaluate(variantId, dealId, aDealEvent().withPriceFirst(840_000L).build());
@@ -95,7 +95,7 @@ class EvaluateAlertOnDealUseCaseTest {
 
 	@Test
 	void dealAboveBenchmarkWithoutTargetIsNotSent() {
-		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null));
+		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 5));
 
 		long dealId = dealEvents.findByVariantId(variantId).get(0).getId();
 		DispatchOutcome outcome = useCase.evaluate(variantId, dealId, aDealEvent().withPriceFirst(950_000L).build());
@@ -105,7 +105,7 @@ class EvaluateAlertOnDealUseCaseTest {
 
 	@Test
 	void dealBelowActivePurchasePaidPriceFiresPostBuyAlert() {
-		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null)); // 목표가 없음
+		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 5)); // 목표가 없음
 		// 활성(OBSERVING) 관찰: 900k에 구매
 		purchases.save(new PurchaseEntity(
 				Purchase.observing(variantId, "256GB", 900_000L, Instant.parse("2026-06-01T00:00:00Z"), 90),
@@ -121,7 +121,7 @@ class EvaluateAlertOnDealUseCaseTest {
 	@Test
 	void jackpotIsSentEvenInQuietHours() {
 		// 조용시간 전 구간(0~23이 아니라 wrap로 상시) — 🔥 관통 확인
-		policies.save(new AlertPolicyEntity(variantId, null, 6, 0, 23));
+		policies.save(new AlertPolicyEntity(variantId, null, 6, 0, 23, 5));
 
 		long dealId = dealEvents.findByVariantId(variantId).get(0).getId();
 		DispatchOutcome outcome = useCase.evaluate(variantId, dealId,
