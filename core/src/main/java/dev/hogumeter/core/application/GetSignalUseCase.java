@@ -32,25 +32,37 @@ public class GetSignalUseCase {
 	private final DealEventMapper mapper;
 	private final CurrentPriceProvider currentPrice;
 	private final VariantBenchmarkParams params;
+	private final VariantDemandScope demandScope;
 	private final Clock clock;
 	private final BenchmarkCalculator benchmark = new BenchmarkCalculator();
 	private final SignalCalculator signal = new SignalCalculator();
 
 	public GetSignalUseCase(VariantRepository variants, DealEventRepository dealEvents, DealEventMapper mapper,
-			CurrentPriceProvider currentPrice, VariantBenchmarkParams params, Clock clock) {
+			CurrentPriceProvider currentPrice, VariantBenchmarkParams params, VariantDemandScope demandScope,
+			Clock clock) {
 		this.variants = variants;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.currentPrice = currentPrice;
 		this.params = params;
+		this.demandScope = demandScope;
 		this.clock = clock;
 	}
 
 	public SignalView getSignal(long variantId) {
+		return getSignal(variantId, null);
+	}
+
+	/**
+	 * @param demandAxisValue 분리 제품에서 볼 수요축 값(Q-66 ①). <b>기준가와 같은 표본을 봐야 한다</b> —
+	 *     한쪽만 색을 가르면 같은 화면이 서로 다른 사실을 말한다("기준가는 블랙인데 신호등은 전체").
+	 */
+	public SignalView getSignal(long variantId, String demandAxisValue) {
 		if (!variants.existsById(variantId)) {
 			throw new VariantNotFoundException(variantId);
 		}
 		List<DealEvent> deals = dealEvents.findByVariantId(variantId).stream().map(mapper::toDomain).toList();
+		deals = demandScope.scope(variantId, deals, demandAxisValue);
 		// 신호등의 tier도 K를 탄다 — 판단 화면과 같은 K를 써야 "기준가는 있는데 신호는 회색"이 안 생긴다.
 		BenchmarkView view = benchmark.compute(deals, currentPrice.currentPriceFor(variantId),
 				PERIOD_MONTHS, params.of(variantId), clock);

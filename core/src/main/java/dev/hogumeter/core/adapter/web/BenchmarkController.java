@@ -17,10 +17,15 @@ public class BenchmarkController {
 		this.getBenchmark = getBenchmark;
 	}
 
+	/**
+	 * @param demandAxisValue 분리(SPLIT) 제품에서 볼 수요축 값(Q-66 ①). 묶음이면 없어도 되고 보내도 무시한다.
+	 *     분리인데 없으면 400 — 전체 딜로 답하면 그게 묶음의 거짓말이다.
+	 */
 	@GetMapping("/api/v1/variants/{variantId}/benchmark")
 	public BenchmarkView benchmark(@PathVariable long variantId,
 			@RequestParam int periodMonths,
-			@RequestParam(defaultValue = "false") boolean includeOutliers) {
-		return getBenchmark.getBenchmark(variantId, periodMonths, includeOutliers);
+			@RequestParam(defaultValue = "false") boolean includeOutliers,
+			@RequestParam(required = false) String demandAxisValue) {
+		return getBenchmark.getBenchmark(variantId, periodMonths, includeOutliers, demandAxisValue);
 	}
 }

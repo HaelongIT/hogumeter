@@ -169,12 +169,14 @@ export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variant
           </select>
         </label>
         {/*
-          `SPLIT`은 `product.demand_axis_mode`에 저장되지만 **어떤 프로덕션 코드도 그 값을 보고
-          분기하지 않는다**(2026-07-11 실측). 표본 분리도, variant 분리도, `demandAxisValue` 필수
-          검증("SPLIT 필수"라는 javadoc)도 없다. 기다리면 된다고 믿게 두는 것이 과대약속이다.
-          구현되면 이 문단만 지운다(seam). docs/91 Q-66.
+          Q-66 ① 해소(2026-07-16): 분리가 실제로 표본을 나눈다. 예전엔 SPLIT이 저장만 되고 아무 코드도
+          그 값을 보지 않아 "아직 안 나눕니다"라고 밝혀야 했다 — 이제 그 문장이 거짓이라 지웠다(seam).
+          대신 분리를 고르면 무슨 일이 생기는지 말한다: 값별로 기준가가 갈리고, 판단 화면에서 값을 골라야 한다.
         */}
-        <p>분리(SPLIT)는 아직 표본을 나누지 않습니다 — 값은 저장되지만 동작은 묶음과 같습니다.</p>
+        <p>
+          분리(SPLIT)를 고르면 <strong>수요축 값별로 기준가를 따로</strong> 냅니다 — 판단 화면에서 어느 값을 볼지
+          고르게 되고, 글에서 값을 판별하지 못한 딜은 기준가에서 빠집니다(사람이 미상 큐에서 분류).
+        </p>
 
         {preview.length > 0 && (
           <section aria-label="생성될 variant" className="preview">

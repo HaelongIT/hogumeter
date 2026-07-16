@@ -71,7 +71,7 @@ class FollowUpAlertUseCaseTest {
 
 	@BeforeEach
 	void setUp() {
-		ProductEntity product = products.save(new ProductEntity("아이폰 17", "스마트폰", DemandAxisMode.SPLIT));
+		ProductEntity product = products.save(new ProductEntity("아이폰 17", "스마트폰", DemandAxisMode.GROUPED));
 		VariantEntity variant = variants.save(new VariantEntity(product.getId(), "256GB", Map.of("용량", "256GB")));
 		aliases.save(new AliasEntity(product.getId(), "아이폰17"));
 		variantId = variant.getId();

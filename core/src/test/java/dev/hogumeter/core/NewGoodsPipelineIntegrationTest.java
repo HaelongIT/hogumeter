@@ -75,7 +75,7 @@ class NewGoodsPipelineIntegrationTest {
 	@Test
 	void registerToIngestToBenchmarkToAlert() {
 		// 1) 등록 — 아이폰 17 / 256GB variant / 별칭
-		long productId = register.register(new RegisterProductCommand("아이폰 17", "스마트폰", DemandAxisMode.SPLIT,
+		long productId = register.register(new RegisterProductCommand("아이폰 17", "스마트폰", DemandAxisMode.GROUPED,
 				List.of(new RegisterProductCommand.Axis(AxisType.PRICE, "용량", List.of("256GB"))),
 				List.of(new RegisterProductCommand.Variant("256GB", Map.of("용량", "256GB"))),
 				List.of("아이폰17")));

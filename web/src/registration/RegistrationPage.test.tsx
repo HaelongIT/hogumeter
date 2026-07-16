@@ -198,12 +198,17 @@ describe('RegistrationPage — 등록 다음에 무엇을 할지 알려준다', 
 })
 
 describe('RegistrationPage — 없는 손잡이를 그리지 않는다', () => {
-  it('수요축 "분리"는 아직 아무것도 분리하지 않는다고 말한다', () => {
+  /**
+   * Q-66 ① 해소: 분리가 **실제로 표본을 나눈다.** 예전엔 SPLIT이 저장만 되고 아무 코드도 그 값을 보지
+   * 않아 "아직 안 나눕니다"라고 밝혀야 했다 — 이제 그 문장은 거짓이라 지웠다. 대신 고르면 무슨 일이
+   * 생기는지 말한다(값별 기준가 + 판별 못 한 딜은 빠짐).
+   */
+  it('분리를 고르면 무슨 일이 생기는지 말한다 — 값별 기준가와 미상 딜 제외', () => {
     render(<RegistrationPage />)
 
-    // `SPLIT`은 `product.demand_axis_mode`에 저장되지만 **어떤 코드도 그 값을 보고 분기하지 않는다.**
-    // 기준가 표본 분리도, variant 분리도 없다. 기다리면 된다고 믿게 두는 것이 과대약속이다.
-    expect(screen.getByText(/분리\(SPLIT\)는 아직 표본을 나누지 않습니다/)).toBeInTheDocument()
+    expect(screen.getByText(/수요축 값별로 기준가를 따로/)).toBeInTheDocument()
+    expect(screen.getByText(/판별하지 못한 딜은 기준가에서 빠집니다/)).toBeInTheDocument()
+    expect(screen.queryByText(/아직 표본을 나누지 않습니다/)).toBeNull()
   })
 
   /**

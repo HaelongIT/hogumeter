@@ -30,6 +30,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -60,6 +62,8 @@ class GetBenchmarkUseCaseTest {
 	VariantBenchmarkParams params;
 	@Autowired
 	AlertPolicyRepository policies;
+	@Autowired
+	VariantDemandScope demandScope;
 
 	private GetBenchmarkUseCase useCase;
 	private long variantId;
@@ -67,21 +71,28 @@ class GetBenchmarkUseCaseTest {
 
 	@BeforeEach
 	void setUp() {
-		ProductEntity product = products.save(new ProductEntity("아이폰 17", "스마트폰", DemandAxisMode.SPLIT));
+		// 기본은 묶음(GROUPED) — 확정본의 기본값이고, 아래 대부분의 케이스는 수요축과 무관한 일반 산식이다.
+		// 분리(SPLIT)는 축 값을 지정해야 조회가 되므로 그 케이스에서만 따로 만든다(Q-66 ①).
+		ProductEntity product = products.save(new ProductEntity("아이폰 17", "스마트폰", DemandAxisMode.GROUPED));
 		VariantEntity variant = variants.save(new VariantEntity(product.getId(), "256GB", Map.of("용량", "256GB")));
 		variantId = variant.getId();
 
-		useCase = new GetBenchmarkUseCase(variants, dealEvents, mapper, vId -> 990_000L, params, CLOCK);
+		useCase = new GetBenchmarkUseCase(variants, dealEvents, mapper, vId -> 990_000L, params, demandScope, CLOCK);
 	}
 
 	private void insertCrossVerifiedDeal(long price, String dateIso) {
+		insertCrossVerifiedDeal(variantId, price, dateIso, null);
+	}
+
+	private void insertCrossVerifiedDeal(long targetVariantId, long price, String dateIso, String demandAxisValue) {
 		Instant when = Instant.parse(dateIso + "T00:00:00Z");
 		RawDealPost r1 = rawPosts.save(new RawDealPost("ppomppu", "p" + counter++,
 				"https://ppomppu.test/" + counter, "제목", when, "ACTIVE"));
 		RawDealPost r2 = rawPosts.save(new RawDealPost("ruliweb", "r" + counter++,
 				"https://ruliweb.test/" + counter, "제목", when, "ACTIVE"));
-		DealEventEntity deal = dealEvents.save(new DealEventEntity(variantId, false, null,
-				price, price, price, price, Origin.LIVE, true, OutlierFlag.NONE, false, DealStatus.VERIFIED, when, when));
+		DealEventEntity deal = dealEvents.save(new DealEventEntity(targetVariantId, false, null,
+				price, price, price, price, Origin.LIVE, true, OutlierFlag.NONE, false, DealStatus.VERIFIED, when, when,
+				demandAxisValue));
 		sources.save(new DealEventSourceEntity(deal.getId(), r1.getId(), "ppomppu"));
 		sources.save(new DealEventSourceEntity(deal.getId(), r2.getId(), "ruliweb"));
 	}
@@ -136,5 +147,69 @@ class GetBenchmarkUseCaseTest {
 	void throwsOnInvalidPeriod() {
 		assertThatThrownBy(() -> useCase.getBenchmark(variantId, 0, false))
 				.isInstanceOf(InvalidBenchmarkPeriodException.class);
+	}
+
+	/**
+	 * Q-66 ①(확정본 §40·41): <b>분리(SPLIT)면 수요축 값별로 분포가 갈린다.</b> 지금까지 SPLIT은 저장만 되고
+	 * 아무 동작도 바꾸지 못했다 — 모든 색이 한 분포에 섞여 median이 색과 무관한 값이 됐다.
+	 */
+	@Nested
+	class SplitProduct {
+
+		private long splitVariantId;
+
+		@BeforeEach
+		void setUpSplitProduct() {
+			ProductEntity product = products.save(new ProductEntity("갤럭시 25", "스마트폰", DemandAxisMode.SPLIT));
+			splitVariantId = variants.save(
+					new VariantEntity(product.getId(), "256GB", Map.of("용량", "256GB"))).getId();
+		}
+
+		/** 기준가를 말하려면 K(기본 5)를 넘겨야 한다 — 색별로 5건씩 넣어야 분리가 의미를 갖는다. */
+		private void insertBlackSample() {
+			insertCrossVerifiedDeal(splitVariantId, 800_000, "2026-06-10", "블랙");
+			insertCrossVerifiedDeal(splitVariantId, 810_000, "2026-06-11", "블랙");
+			insertCrossVerifiedDeal(splitVariantId, 820_000, "2026-06-12", "블랙");
+			insertCrossVerifiedDeal(splitVariantId, 830_000, "2026-06-13", "블랙");
+			insertCrossVerifiedDeal(splitVariantId, 840_000, "2026-06-14", "블랙");
+		}
+
+		@Test
+		@DisplayName("값별로 분포가 갈린다 — 블랙만 물으면 블랙 딜의 median이다")
+		void splitsTheDistributionByDemandAxisValue() {
+			insertBlackSample(); // median 820,000
+			// 화이트는 훨씬 비싸다 — 섞였다면 n=7이고 median이 색과 무관한 값이 된다.
+			insertCrossVerifiedDeal(splitVariantId, 980_000, "2026-06-16", "화이트");
+			insertCrossVerifiedDeal(splitVariantId, 990_000, "2026-06-18", "화이트");
+
+			BenchmarkView black = useCase.getBenchmark(splitVariantId, 6, false, "블랙");
+
+			assertThat(black.n()).as("화이트가 섞이면 7이 된다").isEqualTo(5);
+			assertThat(black.benchmarkPrice()).as("블랙 5건의 median").isEqualTo(820_000L);
+		}
+
+		/** 확정본 §41: <b>값 미상 딜은 기준가 계산에서 제외</b>된다 — 아무 분포에나 넣으면 그 분포가 오염된다. */
+		@Test
+		void unknownValueDealsAreExcludedFromSplitDistributions() {
+			insertBlackSample();
+			insertCrossVerifiedDeal(splitVariantId, 100_000, "2026-06-15", null); // 색 미상 — 아주 싸다
+
+			BenchmarkView black = useCase.getBenchmark(splitVariantId, 6, false, "블랙");
+
+			assertThat(black.n()).as("미상 딜은 어느 색 분포에도 못 들어간다").isEqualTo(5);
+			assertThat(black.periodLowest().price()).as("미상의 10만원이 최저로 잡히면 안 된다").isEqualTo(800_000L);
+		}
+
+		/**
+		 * <b>값을 안 주면 거절한다.</b> 전체 딜로 하나의 기준가를 내면 그게 곧 묶음이고, 사용자는 분리된
+		 * 값을 보는 줄 안다 — 화면상 구분이 없어 그 거짓말은 조용하다(절대 원칙 1·6).
+		 */
+		@Test
+		void refusesToAnswerWithoutADemandAxisValue() {
+			insertCrossVerifiedDeal(splitVariantId, 800_000, "2026-06-10", "블랙");
+
+			assertThatThrownBy(() -> useCase.getBenchmark(splitVariantId, 6, false, null))
+					.isInstanceOf(DemandAxisValueRequiredException.class);
+		}
 	}
 }

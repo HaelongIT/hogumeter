@@ -1,5 +1,6 @@
 package dev.hogumeter.core.adapter.web;
 
+import dev.hogumeter.core.application.DemandAxisValueRequiredException;
 import dev.hogumeter.core.application.InvalidRegistrationException;
 import dev.hogumeter.core.application.ReviewItemNotFoundException;
 import dev.hogumeter.core.application.UnclassifiedPromoteNotSupportedException;
@@ -37,6 +38,12 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ApiError invalidAlertPolicy(InvalidAlertPolicyException e) {
 		return new ApiError(InvalidAlertPolicyException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(DemandAxisValueRequiredException.class)
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	public ApiError demandAxisValueRequired(DemandAxisValueRequiredException e) {
+		return new ApiError(DemandAxisValueRequiredException.CODE, e.getMessage());
 	}
 
 	@ExceptionHandler(ReviewItemNotFoundException.class)

@@ -406,6 +406,54 @@ done
 [ "${alerted:-0}" = 1 ] || fail "목표가를 저장했는데 TARGET 알림이 발화하지 않았다 (정책이 판정에 닿지 않는다). 최근 알림: $(compose logs --no-log-prefix core 2>&1 | grep 'STUB alert' | tail -3 || true)"
 echo "$alert_log" | grep -q 'price=950000' || fail "알림이 딜 가격을 싣지 않았다: $alert_log"
 
+echo "--- 5-1i) 수요축 분리(Q-66 ①): 값별로 기준가가 갈리고, 값 미상 딜은 빠진다 ---"
+# 확정본 §40·41. SPLIT은 V1부터 저장만 되고 아무 동작도 바꾸지 못했다 — 모든 색이 한 분포에 섞였다.
+split_payload=$(mktemp)
+cat >"$split_payload" <<'JSON'
+{"name":"분리 제품","category":"test","demandAxisMode":"SPLIT",
+ "axes":[{"axisType":"PRICE","name":"용량","allowedValues":["256GB"]},
+         {"axisType":"DEMAND","name":"색상","allowedValues":["블랙","화이트"]}],
+ "variants":[{"label":"256GB","priceAxisValues":{"용량":"256GB"}}],
+ "aliases":["분리제품"]}
+JSON
+split_created=$(curl -fsS -X POST "${WEB}/api/v1/products" -H 'Content-Type: application/json' -d @"$split_payload") ||
+	fail "분리 제품 등록 실패"
+rm -f "$split_payload"
+split_pid=$(echo "$split_created" | sed 's/.*"productId"[: ]*\([0-9]*\).*/\1/')
+split_vid=$(curl -fsS "${WEB}/api/v1/products/${split_pid}/variants" |
+	sed 's/.*"variantId"[: ]*\([0-9]*\).*/\1/')
+[ -n "$split_vid" ] || fail "분리 제품 variant를 찾지 못했다"
+
+# 블랙 5건(기준가를 말하려면 K=5를 넘겨야 한다) + 화이트 1건(훨씬 비쌈) + 색 미상 1건.
+# 가격 간격은 **병합 허용폭(±2%)보다 넓게** 30,000원씩 둔다 — 좁으면 BM-04가 한 딜로 합쳐 n이 1이 된다.
+# 미상은 750,000: 이상치 하한(IQR) 밖이 아니라서 "이상치라 빠졌다"가 아니라 **미상이라 빠졌다**를 시험한다.
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "분리용 raw_deal_post 삽입 실패"
+insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status) values
+ ('ppomppu','sp1','https://example.invalid/sp1','분리 제품 256GB 블랙 특가', 800000, now(), 'ACTIVE'),
+ ('ppomppu','sp2','https://example.invalid/sp2','분리 제품 256GB 블랙 특가', 830000, now(), 'ACTIVE'),
+ ('ppomppu','sp3','https://example.invalid/sp3','분리 제품 256GB 블랙 특가', 860000, now(), 'ACTIVE'),
+ ('ppomppu','sp4','https://example.invalid/sp4','분리 제품 256GB 블랙 특가', 890000, now(), 'ACTIVE'),
+ ('ppomppu','sp5','https://example.invalid/sp5','분리 제품 256GB 블랙 특가', 920000, now(), 'ACTIVE'),
+ ('ppomppu','sp6','https://example.invalid/sp6','분리 제품 256GB 화이트 특가', 990000, now(), 'ACTIVE'),
+ ('ppomppu','sp7','https://example.invalid/sp7','분리 제품 256GB 특가', 750000, now(), 'ACTIVE');
+SQL
+
+for _ in $(seq 24); do
+	black=$(curl -fsS "${WEB}/api/v1/variants/${split_vid}/benchmark?periodMonths=6&demandAxisValue=%EB%B8%94%EB%9E%99" || true)
+	echo "$black" | grep -q '"n":5' && break
+	sleep 2
+done
+# 화이트가 섞였다면 6, 미상까지 섞였다면 7이다. median도 함께 본다 — 섞이면 860,000이 아니게 된다.
+echo "$black" | grep -q '"n":5' ||
+	fail "블랙 표본이 5가 아니다(화이트·미상이 섞였거나 아직 미수집): $black"
+echo "$black" | grep -q '"benchmarkPrice":860000' ||
+	fail "블랙 median이 860,000이 아니다(다른 색이 섞였다): $black"
+# 값을 안 주면 400 — 전체 딜로 하나의 기준가를 내면 그게 곧 묶음의 거짓말이다(§41).
+[ "$(curl -s -o /dev/null -w '%{http_code}' \
+	"${WEB}/api/v1/variants/${split_vid}/benchmark?periodMonths=6")" = 400 ] ||
+	fail "분리 제품인데 수요축 값 없이 기준가를 내준다 (묶음의 거짓말, Q-66 ①)"
+
 echo "--- 5-1e) 미상 큐: 매칭 실패 원문이 사람에게 보인다 + 중복 재처리 실측 (Q-27 ④) ---"
 # `review_queue_item`은 2026-07-10까지 **쓰이기만 하고 아무도 읽지 않았다.** 매칭이 무엇을
 # 놓치는지 볼 방법이 없었다 — 놓침을 허용하는 시스템에서 놓친 걸 못 보면 그건 유실이다.

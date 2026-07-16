@@ -4,6 +4,7 @@ import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.DealTags;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
+import dev.hogumeter.core.domain.product.DemandAxisMode;
 import java.util.List;
 
 /**
@@ -15,6 +16,25 @@ import java.util.List;
 public final class DealSets {
 
 	private DealSets() {
+	}
+
+	/**
+	 * 수요축 범위(Q-66 ①, 확정본 §40·41). <b>분리(SPLIT)</b>면 그 축 값의 딜만 남긴다 — 값별로 분포가
+	 * 갈리는 게 분리의 정의다. <b>묶음(GROUPED)</b>이면 전부 그대로 — 모든 값이 한 분포를 공유한다.
+	 *
+	 * <p><b>값 미상(null) 딜은 SPLIT에서 자동으로 빠진다</b> — null은 어떤 요청값과도 같지 않기 때문이다.
+	 * 그게 §41의 "미상 버킷은 기준가 계산 제외"이고, 별도 분기가 필요 없다. 미상 딜을 아무 분포에나
+	 * 넣으면 그 분포가 조용히 오염된다 — 모르면 빼는 쪽이 정직하다.
+	 *
+	 * @param demandAxisValue SPLIT일 때 볼 축 값. 호출자가 그 존재를 보장한다(없으면 조회 자체가 거절된다).
+	 */
+	public static List<DealEvent> demandScope(List<DealEvent> deals, DemandAxisMode mode, String demandAxisValue) {
+		if (mode != DemandAxisMode.SPLIT) {
+			return List.copyOf(deals);
+		}
+		return deals.stream()
+				.filter(d -> demandAxisValue.equals(d.demandAxisValue()))
+				.toList();
 	}
 
 	/**

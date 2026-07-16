@@ -143,6 +143,52 @@ describe('DecisionPage', () => {
   })
 })
 
+/**
+ * Q-66 ①: 분리(SPLIT) 제품은 **값마다 분포가 다르다**. 값을 고르기 전에 조회하면 core가 400을 내고,
+ * 전체로 답하게 두면 그건 묶음이다 — 그래서 고를 때까지 묻지 않고, 고르면 그 값으로 묻는다.
+ */
+describe('DecisionPage — 수요축 분리 제품', () => {
+  const galaxy = {
+    productId: 2,
+    name: '갤럭시 25',
+    category: 'phone',
+    demandAxisMode: 'SPLIT' as const,
+    axes: [
+      { axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB'] },
+      { axisType: 'DEMAND' as const, name: '색상', allowedValues: ['블랙', '화이트'] },
+    ],
+    variants: [{ variantId: 21, label: '256GB', priceAxisValues: { 용량: '256GB' } }],
+  }
+
+  beforeEach(() => {
+    vi.spyOn(api, 'listProducts').mockResolvedValue([galaxy])
+    vi.spyOn(api, 'getSignal').mockResolvedValue(signal)
+    vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
+    vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
+    vi.spyOn(api, 'listPurchases').mockResolvedValue([])
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5 })
+  })
+
+  it('값을 고르기 전엔 묻지 않고, 왜 골라야 하는지 말한다', async () => {
+    render(<DecisionPage />)
+    await screen.findByRole('option', { name: '갤럭시 25 — 256GB' })
+    await userEvent.selectOptions(screen.getByLabelText('variant'), '21')
+
+    expect(await screen.findByRole('note', { name: '수요축 안내' })).toHaveTextContent('색상')
+    await waitFor(() => expect(api.getBenchmark).not.toHaveBeenCalled())
+  })
+
+  it('값을 고르면 신호등·기준가를 **같은 값**으로 부른다', async () => {
+    render(<DecisionPage />)
+    await screen.findByRole('option', { name: '갤럭시 25 — 256GB' })
+    await userEvent.selectOptions(screen.getByLabelText('variant'), '21')
+    await userEvent.selectOptions(await screen.findByLabelText('색상'), '블랙')
+
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(21, 6, '블랙'))
+    expect(api.getSignal).toHaveBeenCalledWith(21, '블랙')
+  })
+})
+
 describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
   beforeEach(() => {
     vi.spyOn(api, 'listProducts').mockResolvedValue([iphone])
@@ -158,7 +204,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
     await pick()
 
-    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 6))
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 6, null))
     expect(api.getCadence).toHaveBeenCalledWith(11, 6)
   })
 
@@ -168,7 +214,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     await pick()
     await userEvent.selectOptions(screen.getByLabelText('기간'), '12')
 
-    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 12))
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 12, null))
     expect(api.getCadence).toHaveBeenCalledWith(11, 12)
   })
 
@@ -184,6 +230,6 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
       '신호등은 기간 설정과 무관하게 최근 6개월',
     )
     // core는 신호등에 기간을 받지 않는다 — 인자를 지어내지 않았다.
-    expect(api.getSignal).toHaveBeenLastCalledWith(11)
+    expect(api.getSignal).toHaveBeenLastCalledWith(11, null)
   })
 })

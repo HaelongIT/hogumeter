@@ -13,6 +13,7 @@ import dev.hogumeter.core.domain.alert.AlertPolicy;
 import dev.hogumeter.core.domain.benchmark.BenchmarkCalculator;
 import dev.hogumeter.core.domain.benchmark.BenchmarkView;
 import dev.hogumeter.core.domain.deal.DealEvent;
+import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.purchase.Purchase;
 import dev.hogumeter.core.domain.purchase.PurchaseTriggers;
 import java.time.Clock;
@@ -36,12 +37,13 @@ public class EvaluateAlertOnDealUseCase {
 	private final CurrentPriceProvider currentPrice;
 	private final AlertDispatcher dispatcher;
 	private final DealAlertRepository alerts;
+	private final VariantDemandScope demandScope;
 	private final Clock clock;
 	private final BenchmarkCalculator calculator = new BenchmarkCalculator();
 
 	public EvaluateAlertOnDealUseCase(DealEventRepository dealEvents, DealEventMapper mapper,
 			AlertPolicyRepository policies, PurchaseRepository purchases, CurrentPriceProvider currentPrice,
-			AlertDispatcher dispatcher, DealAlertRepository alerts, Clock clock) {
+			AlertDispatcher dispatcher, DealAlertRepository alerts, VariantDemandScope demandScope, Clock clock) {
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.policies = policies;
@@ -49,6 +51,7 @@ public class EvaluateAlertOnDealUseCase {
 		this.currentPrice = currentPrice;
 		this.dispatcher = dispatcher;
 		this.alerts = alerts;
+		this.demandScope = demandScope;
 		this.clock = clock;
 	}
 
@@ -61,9 +64,15 @@ public class EvaluateAlertOnDealUseCase {
 				.map(p -> new AlertPolicy(p.getTargetPrice(), p.getQuietHoursStart(), p.getQuietHoursEnd()))
 				.orElseGet(() -> new AlertPolicy(null, null, null));
 
-		List<DealEvent> deals = dealEvents.findByVariantId(variantId).stream()
+		// 분리 제품이면 **이 딜과 같은 수요축 값**의 분포로 판정한다(Q-66 ①) — 전체로 판정하면 그게 묶음의
+		// 거짓말이다(블랙 딜을 화이트가 섞인 기준가에 대는 셈). 값 미상 딜은 어느 분포에도 댈 수 없으므로
+		// 판단하지 않는다 — 지어낸 기준으로 알림을 내느니 조용한 게 낫고, 사람이 큐에서 분류한다(확정본 §41).
+		if (demandScope.modeOf(variantId) == DemandAxisMode.SPLIT && deal.demandAxisValue() == null) {
+			return DispatchOutcome.NO_ALERT;
+		}
+		List<DealEvent> deals = demandScope.scope(variantId, dealEvents.findByVariantId(variantId).stream()
 				.map(mapper::toDomain)
-				.toList();
+				.toList(), deal.demandAxisValue());
 		Long current = currentPrice.currentPriceFor(variantId); // 미확립이면 null(Q-53)
 		BenchmarkView view = calculator.compute(deals, current, periodMonths, params, clock);
 

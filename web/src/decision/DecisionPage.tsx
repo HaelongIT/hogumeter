@@ -23,12 +23,17 @@ interface Loaded {
 const describe = (failure: unknown) =>
   failure instanceof ApiFailure ? `조회 실패 (${failure.code})` : '조회 실패 — core가 떠 있는지 확인하세요.'
 
-/** 제품 목록을 (제품, variant) 쌍으로 편다. variant가 없는 제품은 고를 수 없다. */
+/**
+ * 제품 목록을 (제품, variant) 쌍으로 편다. variant가 없는 제품은 고를 수 없다.
+ *
+ * 분리(SPLIT) 제품이면 수요축을 함께 들고 온다 — 그 값을 지정해야 조회가 된다(Q-66 ①).
+ */
 function selectable(products: ProductSummary[]) {
   return products.flatMap((product) =>
     product.variants.map((variant) => ({
       variantId: variant.variantId,
       label: `${product.name} — ${variant.label}`,
+      demandAxis: product.demandAxisMode === 'SPLIT' ? (product.axes.find((a) => a.axisType === 'DEMAND') ?? null) : null,
     })),
   )
 }
@@ -43,11 +48,15 @@ const PERIODS = [3, 6, 12] as const
 const SIGNAL_PERIOD_MONTHS = 6
 
 export function DecisionPage({ initialVariantId = null }: { initialVariantId?: number | null } = {}) {
-  const [options, setOptions] = useState<{ variantId: number; label: string }[]>([])
+  const [options, setOptions] = useState<ReturnType<typeof selectable>>([])
   const [variantId, setVariantId] = useState<number | null>(initialVariantId)
   const [periodMonths, setPeriodMonths] = useState<number>(6)
+  const [demandAxisValue, setDemandAxisValue] = useState<string | null>(null)
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // 분리 제품이면 어느 축 값을 볼지 골라야 한다 — 안 고르면 core가 400을 낸다(전체로 답하면 묶음의 거짓말).
+  const demandAxis = options.find((option) => option.variantId === variantId)?.demandAxis ?? null
 
   useEffect(() => {
     api
@@ -56,16 +65,23 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
       .catch(() => setError('제품 목록을 불러오지 못했습니다.'))
   }, [])
 
+  // variant를 바꾸면 이전 제품의 색이 남아 있으면 안 된다 — 남으면 조용히 엉뚱한 값으로 조회한다.
+  useEffect(() => {
+    setDemandAxisValue(null)
+  }, [variantId])
+
   useEffect(() => {
     if (variantId === null) return
+    if (demandAxis !== null && demandAxisValue === null) return // 색을 고르기 전엔 묻지 않는다
     let live = true
     setError(null)
     setLoaded(null)
 
     // 셋은 서로 독립이다. 하나가 실패하면 화면을 반쪽만 그리지 않고 실패를 말한다.
+    // 신호등·기준가는 **같은 수요축 값**으로 부른다 — 다르면 한 화면이 서로 다른 사실을 말한다.
     Promise.all([
-      api.getSignal(variantId), // 기간 무관 — core가 6개월로 고정한다
-      api.getBenchmark(variantId, periodMonths),
+      api.getSignal(variantId, demandAxisValue), // 기간 무관 — core가 6개월로 고정한다
+      api.getBenchmark(variantId, periodMonths, demandAxisValue),
       api.getCadence(variantId, periodMonths),
     ])
       .then(([signal, benchmark, cadence]) => live && setLoaded({ signal, benchmark, cadence }))
@@ -74,7 +90,7 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
     return () => {
       live = false
     }
-  }, [variantId, periodMonths])
+  }, [variantId, periodMonths, demandAxis, demandAxisValue])
 
   const badge = loaded && signalBadge(loaded.signal)
 
@@ -109,6 +125,32 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
           </select>
         </label>
       </div>
+
+      {/* 분리(SPLIT) 제품은 값마다 분포가 다르다 — 어느 값을 볼지 사람이 골라야 답할 수 있다(Q-66 ①). */}
+      {demandAxis !== null && (
+        <div className="context-row">
+          <label>
+            {demandAxis.name}
+            <select
+              value={demandAxisValue ?? ''}
+              onChange={(event) => setDemandAxisValue(event.target.value === '' ? null : event.target.value)}
+            >
+              <option value="">선택하세요</option>
+              {demandAxis.allowedValues.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      {demandAxis !== null && demandAxisValue === null && (
+        <p role="note" aria-label="수요축 안내">
+          이 제품은 <strong>{demandAxis.name}</strong>별로 기준가를 따로 냅니다(분리). 어느 {demandAxis.name}을(를)
+          볼지 고르세요 — 전부 합쳐서 하나로 내면 그건 묶음이지 분리가 아닙니다.
+        </p>
+      )}
 
       {options.length === 0 && !error && (
         <div className="empty-decision">

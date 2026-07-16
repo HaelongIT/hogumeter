@@ -53,6 +53,6 @@ describe('App — 등록에서 판단으로 이어진다', () => {
 
     expect(await screen.findByRole('heading', { name: '지금 사도 되나' })).toBeInTheDocument()
     // 사용자가 셀렉트를 다시 만지지 않아도 조회가 돈다.
-    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(91, 6))
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(91, 6, null))
   })
 })

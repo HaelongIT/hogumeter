@@ -7,8 +7,11 @@ import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.DealTags;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
+import dev.hogumeter.core.domain.product.DemandAxisMode;
 import java.util.List;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -64,5 +67,42 @@ class DealSetsTest {
 		assertThat(DealSets.pricingSet(onlyUnclassified)).isEmpty();
 		assertThat(DealSets.occurrenceSet(onlyUnclassified)).isEmpty();
 		assertThat(DealSets.signalSet(onlyUnclassified)).isEmpty();
+	}
+
+	/**
+	 * Q-66 ① 수요축 범위(확정본 §40·41). 묶음은 한 분포를 공유하고, 분리는 값별로 갈린다.
+	 * 미상 딜은 분리에서 빠진다 — 그게 §41의 "값 미상 버킷은 기준가 계산 제외"다.
+	 */
+	@Nested
+	class DemandScope {
+
+		private final DealEvent black = aDealEvent().withPriceFirst(10).demandAxisValue("블랙").build();
+		private final DealEvent white = aDealEvent().withPriceFirst(20).demandAxisValue("화이트").build();
+		private final DealEvent unknownColor = aDealEvent().withPriceFirst(30).build(); // 값 미상
+		private final List<DealEvent> all = List.of(black, white, unknownColor);
+
+		@Test
+		void groupedSharesOneDistribution() {
+			assertThat(DealSets.demandScope(all, DemandAxisMode.GROUPED, null))
+					.as("묶음이면 색을 가르지 않는다 — 미상도 그대로 표본이다")
+					.containsExactly(black, white, unknownColor);
+		}
+
+		@Test
+		void splitKeepsOnlyTheRequestedValue() {
+			assertThat(DealSets.demandScope(all, DemandAxisMode.SPLIT, "블랙")).containsExactly(black);
+		}
+
+		@Test
+		@DisplayName("분리에서 값 미상 딜은 빠진다 — 아무 분포에나 넣으면 그 분포가 오염된다")
+		void splitExcludesUnknownValue() {
+			assertThat(DealSets.demandScope(all, DemandAxisMode.SPLIT, "블랙")).doesNotContain(unknownColor);
+			assertThat(DealSets.demandScope(all, DemandAxisMode.SPLIT, "화이트")).doesNotContain(unknownColor);
+		}
+
+		@Test
+		void splitOnAValueNobodyPostedIsEmptyRatherThanEverything() {
+			assertThat(DealSets.demandScope(all, DemandAxisMode.SPLIT, "레드")).isEmpty();
+		}
 	}
 }

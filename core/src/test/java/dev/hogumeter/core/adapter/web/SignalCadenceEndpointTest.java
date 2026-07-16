@@ -56,7 +56,7 @@ class SignalCadenceEndpointTest {
 
 	@BeforeEach
 	void setUp() {
-		ProductEntity product = products.save(new ProductEntity("아이폰 17", "스마트폰", DemandAxisMode.SPLIT));
+		ProductEntity product = products.save(new ProductEntity("아이폰 17", "스마트폰", DemandAxisMode.GROUPED));
 		VariantEntity variant = variants.save(new VariantEntity(product.getId(), "256GB", Map.of("용량", "256GB")));
 		variantId = variant.getId();
 		// 교차검증 5건 {820,850,890,920,950}k, 최근(신선) 분산 배치 → SUFFICIENT + 신선도 자격
