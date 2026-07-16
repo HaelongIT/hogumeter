@@ -27,7 +27,10 @@ public class Matcher {
 					.filter(v -> v.axisValues().stream().allMatch(joined::contains))
 					.toList();
 			if (matches.size() == 1) {
-				return MatchResult.confirmed(matches.get(0).variantId());
+				// 수요축 값도 제목에서 판별해 실어 준다(Q-66 ①). 판별 못 하면 null = 값 미상 —
+				// 그 딜은 SPLIT 분포에 못 들어가고 사람이 분류한다(확정본 §41). 여기선 지어내지 않는 게 전부다.
+				String demandAxisValue = (spec.demandAxis() == null) ? null : spec.demandAxis().valueIn(joined);
+				return MatchResult.confirmed(matches.get(0).variantId(), demandAxisValue);
 			}
 			return MatchResult.unknown(Set.of(spec.productId())); // 축값 판별 불가/모호 → 미상
 		}

@@ -21,7 +21,7 @@ class PriceRefreshTest {
 
 	private static DealEvent deal(long first, long min, long max, long last, Instant lastSeen) {
 		return new DealEvent(1L, false, Set.of(), first, min, max, last, Origin.LIVE, Set.of("ppomppu"),
-				OutlierFlag.NONE, false, DealStatus.ACTIVE, T0, lastSeen, "ppomppu", "https://x/1", Set.of());
+				OutlierFlag.NONE, false, DealStatus.ACTIVE, T0, lastSeen, "ppomppu", "https://x/1", Set.of(), null);
 	}
 
 	private static PriceEvidence evidence(long price, long plusHours, boolean active) {

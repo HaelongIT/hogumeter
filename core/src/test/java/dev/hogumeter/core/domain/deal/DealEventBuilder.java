@@ -28,12 +28,20 @@ public final class DealEventBuilder {
 	private String site = "ppomppu";
 	private String sourceUrl = "https://ppomppu.test/deal";
 	private Set<String> appliedConditions = Set.of();
+	/** 기본은 값 미상(null) — 수요축을 등록한 제품이 대부분이 아니다(Q-66 ①). */
+	private String demandAxisValue;
 
 	private DealEventBuilder() {
 	}
 
 	public DealEventBuilder appliedConditions(String... conditions) {
 		this.appliedConditions = Set.of(conditions);
+		return this;
+	}
+
+	/** 수요축 값(Q-66 ①). 안 부르면 미상 — SPLIT 표본에서 빠지는 쪽이 기본이다. */
+	public DealEventBuilder demandAxisValue(String value) {
+		this.demandAxisValue = value;
 		return this;
 	}
 
@@ -135,6 +143,6 @@ public final class DealEventBuilder {
 		Instant ls = (lastSeen != null) ? lastSeen : firstSeen;
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, pMin, pMax, pLast,
 				origin, resolvedSites, outlierFlag, permanentlyExcluded, status, firstSeen, ls, site, sourceUrl,
-				appliedConditions);
+				appliedConditions, demandAxisValue);
 	}
 }

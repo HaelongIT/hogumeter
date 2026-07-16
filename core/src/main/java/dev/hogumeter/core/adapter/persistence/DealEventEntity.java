@@ -76,6 +76,13 @@ public class DealEventEntity {
 	@Column(name = "applied_conditions", insertable = false, updatable = false)
 	private List<String> appliedConditions;
 
+	/**
+	 * 제목에서 판별한 수요축 값(Q-66 ①, V6). <b>null = 값 미상</b> — 수요축 없는 제품이거나, 제목에 값이
+	 * 없거나, 둘 이상 보여 모르는 경우다. 조건 태그와 달리 <b>딜 생성 시 매칭이 정한다</b>(쓰기 가능).
+	 */
+	@Column(name = "demand_axis_value")
+	private String demandAxisValue;
+
 	protected DealEventEntity() {
 	}
 
@@ -83,6 +90,14 @@ public class DealEventEntity {
 			long priceFirst, long priceMin, long priceMax, long priceLast, Origin origin, boolean crossVerified,
 			OutlierFlag outlierFlag, boolean permanentlyExcluded, DealStatus status,
 			Instant firstSeen, Instant lastSeen) {
+		this(variantId, unclassified, productCandidates, priceFirst, priceMin, priceMax, priceLast, origin,
+				crossVerified, outlierFlag, permanentlyExcluded, status, firstSeen, lastSeen, null);
+	}
+
+	public DealEventEntity(Long variantId, boolean unclassified, List<Long> productCandidates,
+			long priceFirst, long priceMin, long priceMax, long priceLast, Origin origin, boolean crossVerified,
+			OutlierFlag outlierFlag, boolean permanentlyExcluded, DealStatus status,
+			Instant firstSeen, Instant lastSeen, String demandAxisValue) {
 		this.variantId = variantId;
 		this.unclassified = unclassified;
 		this.productCandidates = productCandidates;
@@ -97,6 +112,7 @@ public class DealEventEntity {
 		this.status = status;
 		this.firstSeen = firstSeen;
 		this.lastSeen = lastSeen;
+		this.demandAxisValue = demandAxisValue;
 	}
 
 	public Long getId() {
@@ -158,6 +174,11 @@ public class DealEventEntity {
 	/** null = 태그 없음(빈 배열 아님, 값 없음을 값으로 쓰지 않는다). */
 	public List<String> getAppliedConditions() {
 		return appliedConditions;
+	}
+
+	/** null = 값 미상(Q-66 ①). SPLIT 제품에선 미상 딜이 기준가 표본에서 빠지고 사람이 분류한다. */
+	public String getDemandAxisValue() {
+		return demandAxisValue;
 	}
 
 	/** 병합 결과(도메인 merge 산출)를 반영. 이상치 플래그·영구제외는 유지(C-4: 유입 1회 판정). */

@@ -43,6 +43,6 @@ public class DealEventMapper {
 		return new DealEvent(e.getVariantId(), e.isUnclassified(), candidates,
 				e.getPriceFirst(), e.getPriceMin(), e.getPriceMax(), e.getPriceLast(),
 				e.getOrigin(), siteSet, e.getOutlierFlag(), e.isPermanentlyExcluded(), e.getStatus(),
-				e.getFirstSeen(), e.getLastSeen(), site, sourceUrl, conditions);
+				e.getFirstSeen(), e.getLastSeen(), site, sourceUrl, conditions, e.getDemandAxisValue());
 	}
 }

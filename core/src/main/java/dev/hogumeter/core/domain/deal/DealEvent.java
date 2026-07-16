@@ -15,6 +15,9 @@ import java.util.Set;
  * @param permanentlyExcluded 사기 기각 딜 — 재수집돼도 표본 복귀 없음(BM-05 AC-3)
  * @param appliedConditions BM-02 조건 태그(`카할`·`배송비미상` 등). `deal_event.applied_conditions`에서 복원.
  *     `배송비미상`은 저장가가 실제보다 낮은 하한이라 pricingSet에서 제외한다(Q-46 ②, 하향 편향 방지).
+ * @param demandAxisValue 제목에서 판별한 수요축 값(Q-66 ①, 확정본 §41). <b>null = 값 미상</b> —
+ *     수요축 없는 제품이거나, 제목에 값이 없거나, 둘 이상 보여 모르는 경우다. SPLIT 제품에선 미상 딜이
+ *     기준가 표본에서 빠지고 사람이 분류한다. GROUPED에선 분포를 가르지 않으므로 아무 영향이 없다.
  */
 public record DealEvent(
 		Long variantId,
@@ -33,7 +36,8 @@ public record DealEvent(
 		Instant lastSeen,
 		String site,
 		String sourceUrl,
-		Set<String> appliedConditions) {
+		Set<String> appliedConditions,
+		String demandAxisValue) {
 
 	public DealEvent {
 		productCandidates = Set.copyOf(productCandidates);
@@ -85,13 +89,13 @@ public record DealEvent(
 		Instant evidence = at.isAfter(lastSeen) ? at : lastSeen;
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst,
 				Math.min(priceMin, newPrice), Math.max(priceMax, newPrice), newPrice,
-				origin, sourceSites, outlierFlag, permanentlyExcluded, status, firstSeen, evidence, site, sourceUrl, appliedConditions);
+				origin, sourceSites, outlierFlag, permanentlyExcluded, status, firstSeen, evidence, site, sourceUrl, appliedConditions, demandAxisValue);
 	}
 
 	/** 이상치 판정 결과 플래그 부여(BM-05). */
 	public DealEvent flagOutlier(OutlierFlag flag) {
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, priceMin, priceMax, priceLast,
-				origin, sourceSites, flag, permanentlyExcluded, status, firstSeen, lastSeen, site, sourceUrl, appliedConditions);
+				origin, sourceSites, flag, permanentlyExcluded, status, firstSeen, lastSeen, site, sourceUrl, appliedConditions, demandAxisValue);
 	}
 
 	/** 사람이 "진짜였다" 확정 → 이상치 해제, 표본 복귀(BM-05 AC-3). */
@@ -102,11 +106,11 @@ public record DealEvent(
 	/** 사람이 "사기·낚시" 기각 → 영구 제외(재수집돼도 표본 복귀 없음, BM-05 AC-3). */
 	public DealEvent reject() {
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, priceMin, priceMax, priceLast,
-				origin, sourceSites, outlierFlag, true, status, firstSeen, lastSeen, site, sourceUrl, appliedConditions);
+				origin, sourceSites, outlierFlag, true, status, firstSeen, lastSeen, site, sourceUrl, appliedConditions, demandAxisValue);
 	}
 
 	private DealEvent withStatus(DealStatus newStatus) {
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, priceMin, priceMax, priceLast,
-				origin, sourceSites, outlierFlag, permanentlyExcluded, newStatus, firstSeen, lastSeen, site, sourceUrl, appliedConditions);
+				origin, sourceSites, outlierFlag, permanentlyExcluded, newStatus, firstSeen, lastSeen, site, sourceUrl, appliedConditions, demandAxisValue);
 	}
 }

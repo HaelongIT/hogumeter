@@ -11,6 +11,8 @@ import dev.hogumeter.core.adapter.persistence.DealAlertRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventSourceRepository;
+import dev.hogumeter.core.adapter.persistence.ProductAxisEntity;
+import dev.hogumeter.core.adapter.persistence.ProductAxisRepository;
 import dev.hogumeter.core.adapter.persistence.ProductEntity;
 import dev.hogumeter.core.adapter.persistence.ProductRepository;
 import dev.hogumeter.core.adapter.persistence.RawDealPost;
@@ -23,6 +25,7 @@ import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.application.port.out.AlertSender;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
+import dev.hogumeter.core.domain.product.AxisType;
 import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.time.Duration;
@@ -68,8 +71,12 @@ class IngestDealsUseCaseTest {
 	RecordingAlertSender recordingAlertSender;
 	@Autowired
 	DealAlertRepository dealAlerts;
+	@Autowired
+	ProductAxisRepository productAxes;
 
 	private long variantId;
+	private long colorProductId;
+	private long colorVariantId;
 	private int postSeq;
 
 	@BeforeEach
@@ -78,6 +85,14 @@ class IngestDealsUseCaseTest {
 		VariantEntity variant = variants.save(new VariantEntity(product.getId(), "256GB", Map.of("용량", "256GB")));
 		aliases.save(new AliasEntity(product.getId(), "아이폰17"));
 		variantId = variant.getId();
+
+		// 수요축(색상)을 등록한 제품 — 매칭이 제목에서 색을 판별해야 한다(Q-66 ①).
+		ProductEntity colorful = products.save(new ProductEntity("갤럭시 25", "스마트폰", DemandAxisMode.SPLIT));
+		colorProductId = colorful.getId();
+		colorVariantId = variants.save(new VariantEntity(colorProductId, "256GB", Map.of("용량", "256GB"))).getId();
+		productAxes.save(new ProductAxisEntity(colorProductId, AxisType.PRICE, "용량", List.of("256GB")));
+		productAxes.save(new ProductAxisEntity(colorProductId, AxisType.DEMAND, "색상", List.of("블랙", "화이트")));
+
 		recordingAlertSender.sent.clear(); // 스파이는 싱글톤 — @Transactional이 롤백하지 않으므로 매 케이스 초기화
 	}
 
@@ -128,6 +143,34 @@ class IngestDealsUseCaseTest {
 
 		assertThat(dealEvents.findByVariantId(variantId)).isEmpty();
 		assertThat(reviewQueue.findByType(ReviewQueueType.UNCLASSIFIED)).hasSize(1);
+	}
+
+	/**
+	 * Q-66 ①: 수요축을 등록한 제품이면 매칭이 <b>제목에서 그 값을 판별해 딜에 싣는다</b>(확정본 §41).
+	 * 컬럼이 있다는 것과 값이 도달한다는 것은 다르다 — 매칭→도메인→엔티티 다섯 구간 중 하나만 끊겨도
+	 * 값은 조용히 사라진다. 그래서 DB까지 관통해 본다.
+	 */
+	@Test
+	void demandAxisValueIsParsedFromTheTitleAndReachesTheDeal() {
+		aliases.save(new AliasEntity(colorProductId, "갤럭시25"));
+		savePost("ppomppu", "갤럭시 25 256기가 블랙 특가", 890_000L, T);
+
+		useCase.ingestPending();
+
+		DealEventEntity deal = dealEvents.findByVariantId(colorVariantId).get(0);
+		assertThat(deal.getDemandAxisValue()).isEqualTo("블랙");
+	}
+
+	/** 제목이 색을 안 밝히면 <b>미상(null)</b>이다 — 기본값을 골라 담으면 그 분포가 조용히 오염된다. */
+	@Test
+	void demandAxisValueIsUnknownWhenTheTitleDoesNotSayIt() {
+		aliases.save(new AliasEntity(colorProductId, "갤럭시25"));
+		savePost("ppomppu", "갤럭시 25 256기가 특가", 890_000L, T);
+
+		useCase.ingestPending();
+
+		DealEventEntity deal = dealEvents.findByVariantId(colorVariantId).get(0);
+		assertThat(deal.getDemandAxisValue()).isNull();
 	}
 
 	@Test

@@ -86,7 +86,7 @@ public class IngestDealsUseCase {
 		switch (match.tier()) {
 			case CONFIRMED -> {
 				tally.confirmed++;
-				if (confirmDeal(post, match.variantId()) == DispatchOutcome.SENT) {
+				if (confirmDeal(post, match.variantId(), match.demandAxisValue()) == DispatchOutcome.SENT) {
 					tally.firstAlertsSent++;
 				}
 			}
@@ -103,8 +103,8 @@ public class IngestDealsUseCase {
 	}
 
 	/** @return 이 딜에 대한 알림 판정 결과 — 첫 알림이 실제로 나갔는지(SENT) 세기 위함(Q-57 ③). */
-	private DispatchOutcome confirmDeal(RawDealPost post, long variantId) {
-		DealEvent candidate = candidateFrom(post, variantId);
+	private DispatchOutcome confirmDeal(RawDealPost post, long variantId, String demandAxisValue) {
+		DealEvent candidate = candidateFrom(post, variantId, demandAxisValue);
 
 		for (DealEventEntity existing : dealEvents.findByVariantId(variantId)) {
 			DealEvent existingDomain = mapper.toDomain(existing);
@@ -120,7 +120,7 @@ public class IngestDealsUseCase {
 		DealEventEntity created = dealEvents.save(new DealEventEntity(variantId, false, null,
 				candidate.priceFirst(), candidate.priceMin(), candidate.priceMax(), candidate.priceLast(),
 				candidate.origin(), candidate.crossVerified(), candidate.outlierFlag(), false,
-				candidate.status(), candidate.firstSeen(), candidate.lastSeen()));
+				candidate.status(), candidate.firstSeen(), candidate.lastSeen(), candidate.demandAxisValue()));
 		sources.save(new DealEventSourceEntity(created.getId(), post.getId(), post.getSite()));
 		classifyOutlier(created, variantId);
 		return alertEvaluation.evaluate(variantId, created.getId(), mapper.toDomain(created));
@@ -146,13 +146,14 @@ public class IngestDealsUseCase {
 		}
 	}
 
-	private DealEvent candidateFrom(RawDealPost post, long variantId) {
+	private DealEvent candidateFrom(RawDealPost post, long variantId, String demandAxisValue) {
 		long price = post.getHeadlinePrice();
 		Instant firstSeen = post.getPostedAt() != null ? post.getPostedAt() : post.getCapturedAt();
 		// 새 딜은 조건 태그가 없다 — PreserveAppliedConditionsUseCase가 ingest 뒤에 원문에서 끌어올린다.
+		// 수요축 값은 매칭이 제목에서 판별한 것을 그대로 싣는다(Q-66 ①). null = 값 미상 — 지어내지 않는다.
 		return new DealEvent(variantId, false, Set.of(), price, price, price, price, Origin.LIVE,
 				Set.of(post.getSite()), OutlierFlag.NONE, false, DealStatus.fromRawPostStatus(post.getStatus()),
-				firstSeen, firstSeen, post.getSite(), post.getUrl(), Set.of());
+				firstSeen, firstSeen, post.getSite(), post.getUrl(), Set.of(), demandAxisValue);
 	}
 
 	private void enqueueForReview(RawDealPost post, MatchResult match) {

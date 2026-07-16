@@ -56,7 +56,23 @@ public class DealMergePolicy {
 				last.lastSeen(),
 				first.site(),
 				first.sourceUrl(),
-				union(existing.appliedConditions(), incoming.appliedConditions()));
+				union(existing.appliedConditions(), incoming.appliedConditions()),
+				mergeDemandAxisValue(existing.demandAxisValue(), incoming.demandAxisValue()));
+	}
+
+	/**
+	 * 병합된 딜의 수요축 값(Q-66 ①). 둘이 같으면 그 값, 한쪽만 알면 아는 값(다른 글이 색을 안 적었을 뿐이다).
+	 * <b>서로 다르면 null = 미상</b> — 블랙 글과 화이트 글을 한 딜로 합쳤다면 어느 분포에 넣을지 알 수 없다.
+	 * 하나를 골라 담으면 그 분포가 조용히 오염되므로, 지어내지 않고 사람에게 보낸다(확정본 §41).
+	 */
+	private static String mergeDemandAxisValue(String existing, String incoming) {
+		if (existing == null) {
+			return incoming;
+		}
+		if (incoming == null) {
+			return existing;
+		}
+		return existing.equals(incoming) ? existing : null;
 	}
 
 	private static boolean sameTarget(DealEvent a, DealEvent b) {

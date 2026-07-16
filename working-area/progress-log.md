@@ -61,9 +61,35 @@
   `repository-readers-allowlist`에서 Q-66 면제 삭제 — **게이트가 면제 없이 통과**(낡은 예외는 다음 결함을 숨긴다).
   스모크에 `"axes"`·`"axisType":"PRICE"` 왕복 단언 추가. core GREEN·web **163**·build·**스모크 PASS**.
 
-**다음(막히지 않음, 대형·다세션)**: Q-66 ①(SPLIT 분포 분리 — Matcher 확장 + deal_event 스키마 + 값 미상
-버킷 큐 배선) → 그 뒤 ③(SPLIT 필수 검증; ① 전에 하면 동작 안 하는 기능에 입력 friction만 생김).
-Q-28(제외키워드)은 GlobalSetting 읽기 경로 + 딜 제목 접근이 선결.
+**다음(막히지 않음, 대형·다세션)**: Q-66 ①(SPLIT 분포 분리) → 그 뒤 ③(SPLIT 필수 검증; ① 전에 하면
+동작 안 하는 기능에 입력 friction만 생김). Q-28(제외키워드)은 GlobalSetting 읽기 경로 + 딜 제목 접근이 선결.
+
+### Q-66 ① 설계 (착수 2026-07-16 — 확정본 §40·41이 정본, 결정 아님)
+확정본: 묶음/분리는 사용자 토글(기본 묶음). **분리 시 글에서 축 값 판별 불가한 딜은 "값 미상" 버킷 →
+기준가 계산 제외 + 승격 큐에서 사람이 분류.** 즉 딜의 수요축 값은 **제목에서 파싱**한다.
+- **A. 파싱**: `ProductMatchSpec`에 수요축(이름+허용값, GROUPED/수요축 없으면 null) 추가 → `CatalogProjection`이
+  `ProductAxisRepository`로 채움(이미 읽기 경로 있음 — Q-66② 덕). `Matcher`가 CONFIRMED일 때 `joined`에서
+  허용값을 찾음(정확히 하나면 그 값, 없거나 둘 이상이면 **null=미상**). 수법은 `VariantSpec.axisValues`와 동일
+  (정규화 토큰 대조). 정규화값→원값 매핑 필요(저장은 원값 "블랙").
+- **B. 저장**: V6 `deal_event.demand_axis_value text`(null 허용=미상/해당없음) + R6. `DealEvent`·엔티티·매퍼·
+  `IngestDealsUseCase.candidateFrom`.
+- **C. 분포 분리**: `DealSets.pricingSet`/`BenchmarkCalculator`가 SPLIT일 때 요청된 수요축 값으로 표본 필터,
+  **null(미상) 딜은 SPLIT 표본에서 제외**(§41). GROUPED면 지금과 동일(값 무시).
+- **D. API**: `GET .../benchmark?demandAxisValue=블랙`. **SPLIT인데 값이 없으면 400** — 하나의 기준가를 주면
+  그게 곧 묶음 거짓말이다. GROUPED면 파라미터 무시.
+- **E. 값 미상 큐**: SPLIT 제품의 미상 딜 → 승격 큐(신규 type이면 review_queue_item CHECK 마이그레이션 필요).
+- **F. web**: 판단 화면에 수요축 값 선택(값은 `ProductSummary.axes`에서 — Q-66②로 이미 노출됨). SPLIT이면 필수.
+  등록 화면의 "분리는 아직 표본을 나누지 않습니다" 문단 삭제(seam — 그때 거짓이 됨).
+
+**A·B 완료(커밋)**: 파싱(`DemandAxisSpec.valueIn` — 정확히 하나일 때만 확정, 없거나 둘 이상이면 미상) +
+매칭 배선(`ProductMatchSpec.demandAxis` ← `CatalogProjection`이 `ProductAxisRepository`로 채움) +
+저장(V6/R6 `deal_event.demand_axis_value`, 엔티티·`DealEvent`(18필드)·매퍼·`candidateFrom`) +
+병합 규칙(`DealMergePolicy.mergeDemandAxisValue`: 같으면 그 값 · 한쪽만 알면 아는 값 · **다르면 미상**).
+종단 검증: `IngestDealsUseCaseTest`가 "블랙 특가"→`블랙`, 색 미기재→`null`을 DB까지 확인. 롤백 드릴 PASS(V6/R6).
+⚠️**이 컬럼은 아직 판단을 바꾸지 않는다** — C(분포 분리)·D(API)·F(web)가 붙어야 소비처가 생긴다.
+사용자에게 보이는 손잡이는 아직 없으므로(등록 화면 문구 그대로) "없는 손잡이를 그린" 상태는 아니다.
+**다음 증분 = C+D+F를 한 덩어리로**(따로 내면 SPLIT 조회가 400인데 web이 값을 못 보내 화면이 깨진다).
+신호등·알림 경로도 SPLIT이면 같은 값으로 판정해야 함 — 그 전까진 두 경로가 다른 표본을 볼 수 있다(기록).
 
 ---
 
