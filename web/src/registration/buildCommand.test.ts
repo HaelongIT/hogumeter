@@ -4,7 +4,7 @@ import { buildCommand, InvalidForm, type RegistrationForm } from './buildCommand
 const form = (overrides: Partial<RegistrationForm> = {}): RegistrationForm => ({
   name: '아이폰 17',
   category: 'phone',
-  axes: [{ name: '용량', values: '256GB, 512GB' }],
+  axes: [{ name: '용량', values: '256GB, 512GB', type: 'PRICE' }],
   aliases: '아이폰17, iphone17',
   demandAxisMode: 'GROUPED',
   ...overrides,
@@ -25,8 +25,8 @@ describe('buildCommand', () => {
     const command = buildCommand(
       form({
         axes: [
-          { name: '용량', values: '256GB, 512GB' },
-          { name: '색상', values: '블랙, 화이트' },
+          { name: '용량', values: '256GB, 512GB', type: 'PRICE' },
+          { name: '색상', values: '블랙, 화이트', type: 'PRICE' },
         ],
       }),
     )
@@ -44,9 +44,9 @@ describe('buildCommand', () => {
     const command = buildCommand(
       form({
         axes: [
-          { name: 'a', values: '1, 2' },
-          { name: 'b', values: 'x, y' },
-          { name: 'c', values: 'ㄱ, ㄴ' },
+          { name: 'a', values: '1, 2', type: 'PRICE' },
+          { name: 'b', values: 'x, y', type: 'PRICE' },
+          { name: 'c', values: 'ㄱ, ㄴ', type: 'PRICE' },
         ],
       }),
     )
@@ -56,13 +56,13 @@ describe('buildCommand', () => {
   })
 
   it('쉼표든 줄바꿈이든 목록으로 받는다', () => {
-    const command = buildCommand(form({ axes: [{ name: '용량', values: '256GB\n512GB\n' }] }))
+    const command = buildCommand(form({ axes: [{ name: '용량', values: '256GB\n512GB\n', type: 'PRICE' }] }))
 
     expect(command.axes[0]!.allowedValues).toEqual(['256GB', '512GB'])
   })
 
   it('중복 축 값은 접는다 — 같은 variant가 두 번 생기면 안 된다', () => {
-    const command = buildCommand(form({ axes: [{ name: '용량', values: '256GB, 256GB, 512GB' }] }))
+    const command = buildCommand(form({ axes: [{ name: '용량', values: '256GB, 256GB, 512GB', type: 'PRICE' }] }))
 
     expect(command.variants).toHaveLength(2)
   })
@@ -71,8 +71,8 @@ describe('buildCommand', () => {
     const command = buildCommand(
       form({
         axes: [
-          { name: '용량', values: '256GB' },
-          { name: '', values: '' },
+          { name: '용량', values: '256GB', type: 'PRICE' },
+          { name: '', values: '', type: 'PRICE' },
         ],
       }),
     )
@@ -101,8 +101,8 @@ describe('buildCommand', () => {
       buildCommand(
         form({
           axes: [
-            { name: '용량', values: '256GB' },
-            { name: '용량', values: '512GB' },
+            { name: '용량', values: '256GB', type: 'PRICE' },
+            { name: '용량', values: '512GB', type: 'PRICE' },
           ],
         }),
       ),
@@ -112,9 +112,54 @@ describe('buildCommand', () => {
   it.each([
     ['제품명이 비면', { name: '   ' }],
     ['축이 하나도 없으면', { axes: [] }],
-    ['축에 값이 없으면', { axes: [{ name: '용량', values: ' , ' }] }],
-    ['값만 있고 이름이 없으면', { axes: [{ name: ' ', values: '256GB' }] }],
+    ['축에 값이 없으면', { axes: [{ name: '용량', values: ' , ', type: 'PRICE' as const }] }],
+    ['값만 있고 이름이 없으면', { axes: [{ name: ' ', values: '256GB', type: 'PRICE' as const }] }],
   ])('%s 거부한다', (_label, overrides) => {
     expect(() => buildCommand(form(overrides))).toThrow(InvalidForm)
+  })
+
+  /**
+   * Q-66 ②: 축은 두 종류다(확정본 §38). 예전엔 **모든 축을 가격축으로** 보내 색상 같은 축이 variant를
+   * 곱했고, 그만큼 표본이 쪼개져 기준가가 이유 없이 빈약해졌다(n이 작아져 SPARSE).
+   */
+  describe('수요축은 variant를 나누지 않는다', () => {
+    it('색상을 수요축으로 두면 variant가 곱해지지 않는다 — 표본이 쪼개지지 않는다', () => {
+      const command = buildCommand(
+        form({
+          axes: [
+            { name: '용량', values: '256GB, 512GB', type: 'PRICE' },
+            { name: '색상', values: '블랙, 화이트', type: 'DEMAND' },
+          ],
+        }),
+      )
+
+      // 가격축(2) × 수요축(2) = 4가 아니라, 가격축만으로 2다.
+      expect(command.variants).toEqual([
+        { label: '256GB', priceAxisValues: { 용량: '256GB' } },
+        { label: '512GB', priceAxisValues: { 용량: '512GB' } },
+      ])
+    })
+
+    it('수요축도 정의는 그대로 보낸다 — 값을 아는 것과 variant를 나누는 것은 다르다', () => {
+      const command = buildCommand(
+        form({
+          axes: [
+            { name: '용량', values: '256GB', type: 'PRICE' },
+            { name: '색상', values: '블랙, 화이트', type: 'DEMAND' },
+          ],
+        }),
+      )
+
+      expect(command.axes).toEqual([
+        { axisType: 'PRICE', name: '용량', allowedValues: ['256GB'] },
+        { axisType: 'DEMAND', name: '색상', allowedValues: ['블랙', '화이트'] },
+      ])
+    })
+
+    it('가격축이 하나도 없으면 거부한다 — variant를 만들 대상이 없다', () => {
+      expect(() => buildCommand(form({ axes: [{ name: '색상', values: '블랙', type: 'DEMAND' }] }))).toThrow(
+        InvalidForm,
+      )
+    })
   })
 })

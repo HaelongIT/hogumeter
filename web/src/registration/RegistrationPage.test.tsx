@@ -182,11 +182,30 @@ describe('RegistrationPage — 없는 손잡이를 그리지 않는다', () => {
     expect(screen.getByText(/분리\(SPLIT\)는 아직 표본을 나누지 않습니다/)).toBeInTheDocument()
   })
 
-  it('축은 전부 가격축으로 저장된다는 사실을 밝힌다', () => {
+  /**
+   * Q-66 ②: 축 유형은 이제 **동작한다.** 예전엔 모든 축이 가격축이라 색상을 넣으면 variant가 곱해져
+   * 표본이 쪼개졌고, 화면은 그 사실을 경고만 했다. 이제 사람이 수요축으로 고르면 실제로 안 나뉜다.
+   */
+  it('색상을 수요축으로 고르면 variant가 곱해지지 않는다 — 표본이 쪼개지지 않는다', async () => {
+    const user = userEvent.setup()
     render(<RegistrationPage />)
 
-    // `AxisType.DEMAND`는 프로덕션 생산자·소비처가 0이다. 색상처럼 가격에 영향 없는 축을
-    // 넣으면 variant가 곱해져 **표본이 쪼개진다** — 사람이 알고 넣어야 한다.
-    expect(screen.getByText(/가격에 영향 없는 축(.|\n)*표본이 쪼개집니다/)).toBeInTheDocument()
+    await user.type(screen.getByLabelText(/제품명/), '아이폰 17')
+    await user.type(screen.getByLabelText(/축 1 값/), '256GB, 512GB')
+    await user.click(screen.getByRole('button', { name: '축 추가' }))
+    await user.type(screen.getByLabelText(/축 2 이름/), '색상')
+    await user.selectOptions(screen.getByLabelText(/축 2 유형/), 'DEMAND')
+    await user.type(screen.getByLabelText(/축 2 값/), '블랙, 화이트')
+
+    // 가격축(2) × 수요축(2) = 4가 아니라 2다.
+    const preview = await screen.findByRole('region', { name: '생성될 variant' })
+    expect(within(preview).getByText('생성될 variant 2개')).toBeInTheDocument()
+    expect(within(preview).queryByText('256GB / 블랙')).toBeNull()
+  })
+
+  it('축 유형의 기본은 가격축이다 — 대부분의 축이 가격을 가른다', () => {
+    render(<RegistrationPage />)
+
+    expect(screen.getByLabelText(/축 1 유형/)).toHaveValue('PRICE')
   })
 })

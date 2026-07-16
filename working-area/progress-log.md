@@ -20,6 +20,27 @@
   `ApiError.code`에 REVIEW_* 2종 추가. docs/91 Q-15 잔여 ②(web 버튼) 해소.
 - 검증: web **157 테스트 GREEN**(149→157), `npm run build` 통과. ARIA 계약 유지(구조 바꿔도 라벨 보존).
 - 기록: `.claude/rules/web-react.md`에 히어로·램프/대비 규칙 + 미상 큐 버튼 규칙 갱신.
+- [실물 검증] 사용자 지시로 푸시(3798891..8fee1c1) 후 **스택 띄워 실물 캡처**. 히어로가 실제 Space Grotesk로
+  또렷하게 뜨고 램프 발광 "중"이 다크/라이트 모두 적정. **스모크 PASS(13단계)** — 앞서 쓴 새 단언 두 개
+  (Q-27④ `1행+occ≥2`, Q-57 `matched[confirmed=1…]`)가 **처음 실행돼 통과**(CI 위험 해소).
+  **Q-15 종단 증명**: web에서 승격 클릭 → `deal_event.outlier_flag` LOWER→**NONE**, `review_queue_item`
+  status=CONFIRMED·channel=**WEB**·resolved_at 채워짐(**죽은 컬럼 셋 부활**), 기준가 n 5→6·880,000→**865,000원**
+  (승격된 딜이 표본 복귀해 median 이동). 버튼→REST→도메인→표본→기준가 전 사슬 실물 확인.
+
+## 2026-07-16 — 무중단 재개: 프론트가 열리며 막혔던 백로그 해금 (Q-66 ② 등)
+
+사용자: "여러개 할것들 묶어서 무중단 개발 드가자". **프론트 지휘 + core 소유권으로 Q-66·Q-28·Q-48①이
+전부 해금**됐다(앞서 "web 지휘 대기/소비처 부재"로 막았던 것들 — 재현해 검증함).
+
+- [Q-66 ② 해소] **축 유형이 실제로 동작한다.** `buildCommand`가 모든 축을 `axisType:'PRICE'`로 보내고
+  **모든 축을 곱해** variant를 만들던 것을 고침 — 축마다 유형(가격/수요)을 받고 **variant는 가격축만으로**.
+  `RegistrationPage`에 축별 유형 선택(기본 가격축). **core 무수정**(이미 `axis.axisType()`을 저장 중 —
+  생산자만 없었다). 이로써 `AxisType.DEMAND`에 생산자가 생겼고 **기본값 GROUPED가 완전히 옳아짐**.
+  낡은 경고("색상 축을 넣으면 표본이 쪼개집니다")와 그 테스트를 seam대로 제거 — 이제 거짓이라서.
+  web 161 GREEN(157→161)·build 통과. docs/91 Q-66 ② 해소.
+  ⚠️Q-66 잔여: ①(SPLIT 분포 분리)은 **딜의 수요축 값**이 필요 — 확정본 §41이 "판별 불가 딜은 값 미상
+  버킷 → 기준가 제외 + 승격 큐"로 답을 줌. 즉 Matcher 확장 + deal_event 스키마 + 큐 배선(다세션, 결정 아님).
+  ③(SPLIT 필수 검증)은 `RecordPurchaseUseCase` — 이제 우리 소유라 가능.
 
 ---
 
