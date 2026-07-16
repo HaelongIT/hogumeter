@@ -16,6 +16,11 @@ export interface ProductSummary {
   name: string
   category: string | null
   demandAxisMode: DemandAxisMode
+  /**
+   * 축 정의(Q-66 ②). variant 라벨은 **가격축 조합만** 보여 주므로, 이게 없으면 사람은 자기가 어느 축을
+   * 수요축으로 등록했는지 확인할 길이 없다(수요축은 variant를 안 나눠 흔적이 없다).
+   */
+  axes: Axis[]
   variants: VariantView[]
 }
 

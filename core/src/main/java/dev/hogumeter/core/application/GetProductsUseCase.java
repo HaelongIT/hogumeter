@@ -1,9 +1,12 @@
 package dev.hogumeter.core.application;
 
+import dev.hogumeter.core.adapter.persistence.ProductAxisEntity;
+import dev.hogumeter.core.adapter.persistence.ProductAxisRepository;
 import dev.hogumeter.core.adapter.persistence.ProductEntity;
 import dev.hogumeter.core.adapter.persistence.ProductRepository;
 import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
+import dev.hogumeter.core.domain.product.AxisType;
 import dev.hogumeter.core.domain.product.DemandAxisMode;
 import java.util.List;
 import java.util.Map;
@@ -23,10 +26,12 @@ public class GetProductsUseCase {
 
 	private final ProductRepository products;
 	private final VariantRepository variants;
+	private final ProductAxisRepository axes;
 
-	public GetProductsUseCase(ProductRepository products, VariantRepository variants) {
+	public GetProductsUseCase(ProductRepository products, VariantRepository variants, ProductAxisRepository axes) {
 		this.products = products;
 		this.variants = variants;
+		this.axes = axes;
 	}
 
 	@Transactional(readOnly = true)
@@ -41,7 +46,18 @@ public class GetProductsUseCase {
 
 	private ProductSummary summarize(ProductEntity product) {
 		return new ProductSummary(product.getId(), product.getName(), product.getCategory(),
-				product.getDemandAxisMode(), variantsOf(product.getId()));
+				product.getDemandAxisMode(), axesOf(product.getId()), variantsOf(product.getId()));
+	}
+
+	/**
+	 * 축 정의(Q-66 ②). {@code product_axis}는 등록이 쓰기만 하고 <b>아무도 읽지 않는 테이블</b>이었다 —
+	 * 그래서 사람은 자기가 어느 축을 수요축으로 등록했는지 화면에서 확인할 길이 없었다. variant 라벨은
+	 * 가격축 조합만 보여 주므로 수요축은 흔적조차 없다.
+	 */
+	private List<AxisView> axesOf(long productId) {
+		return axes.findByProductId(productId).stream()
+				.map(axis -> new AxisView(axis.getAxisType(), axis.getName(), axis.getAllowedValues()))
+				.toList();
 	}
 
 	private static VariantView toView(VariantEntity variant) {
@@ -49,7 +65,11 @@ public class GetProductsUseCase {
 	}
 
 	public record ProductSummary(long productId, String name, String category, DemandAxisMode demandAxisMode,
-			List<VariantView> variants) {
+			List<AxisView> axes, List<VariantView> variants) {
+	}
+
+	/** 축 하나의 정의. 가격축은 variant를 나누고, 수요축은 나누지 않는다(확정본 §38). */
+	public record AxisView(AxisType axisType, String name, List<String> allowedValues) {
 	}
 
 	public record VariantView(long variantId, String label, Map<String, String> priceAxisValues) {

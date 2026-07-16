@@ -9,6 +9,7 @@ const iphone = {
   name: '아이폰 17',
   category: 'phone',
   demandAxisMode: 'GROUPED' as const,
+  axes: [{ axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB', '512GB'] }],
   variants: [
     { variantId: 11, label: '256GB', priceAxisValues: { 용량: '256GB' } },
     { variantId: 12, label: '512GB', priceAxisValues: { 용량: '512GB' } },
@@ -88,6 +89,28 @@ describe('RegistrationPage', () => {
     expect(within(list).getByText('#12')).toBeInTheDocument()
   })
 
+  /**
+   * Q-66 ②: `product_axis`는 등록이 쓰기만 하고 **아무도 읽지 않는 테이블**이었다. 수요축은 variant를
+   * 나누지 않으므로 variant 목록에 흔적이 없다 — 여기서 못 보면 자기가 무엇을 수요축으로 등록했는지
+   * 확인할 길이 자체가 없다.
+   */
+  it('등록한 축을 유형과 함께 보여준다 — 수요축은 variant 목록에 흔적이 없다', async () => {
+    vi.mocked(api.listProducts).mockResolvedValue([
+      {
+        ...iphone,
+        axes: [
+          { axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB', '512GB'] },
+          { axisType: 'DEMAND' as const, name: '색상', allowedValues: ['블랙', '화이트'] },
+        ],
+      },
+    ])
+    render(<RegistrationPage />)
+
+    const list = await screen.findByRole('list', { name: '등록된 제품' })
+    expect(within(list).getByText(/용량\(가격축\)/)).toBeInTheDocument()
+    expect(within(list).getByText(/색상\(수요축\)/)).toBeInTheDocument()
+  })
+
   it('폼 검증 실패는 서버로 보내지 않고 그 자리에서 알린다', async () => {
     const user = userEvent.setup()
     render(<RegistrationPage />)
@@ -126,6 +149,7 @@ describe('RegistrationPage — 등록 다음에 무엇을 할지 알려준다', 
     name: '아이폰 17',
     category: 'phone',
     demandAxisMode: 'GROUPED' as const,
+    axes: [{ axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB', '512GB'] }],
     variants: [
       { variantId: 91, label: '256GB', priceAxisValues: { 용량: '256GB' } },
       { variantId: 92, label: '512GB', priceAxisValues: { 용량: '512GB' } },

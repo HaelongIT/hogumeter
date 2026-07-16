@@ -204,6 +204,14 @@ export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variant
           {products.map((product) => (
             <li key={product.productId} className="product-item">
               <strong>{product.name}</strong>
+              {/* 수요축은 variant를 나누지 않아 아래 목록에 흔적이 없다 — 여기서만 확인할 수 있다(Q-66 ②). */}
+              {product.axes.length > 0 && (
+                <p className="product-axes">
+                  {product.axes
+                    .map((axis) => `${axis.name}(${axis.axisType === 'DEMAND' ? '수요축' : '가격축'})`)
+                    .join(' · ')}
+                </p>
+              )}
               <ul>
                 {product.variants.map((variant) => (
                   // variantId를 노출한다 — 기준가·신호·주기 조회가 전부 이걸 요구한다.

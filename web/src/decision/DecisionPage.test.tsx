@@ -10,6 +10,7 @@ const iphone = {
   name: '아이폰 17',
   category: 'phone',
   demandAxisMode: 'GROUPED' as const,
+  axes: [{ axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB', '512GB'] }],
   variants: [{ variantId: 11, label: '256GB', priceAxisValues: { 용량: '256GB' } }],
 }
 

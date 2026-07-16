@@ -55,6 +55,16 @@
   ⚠️테스트 의미 변화: `updatePreservesColumnsTheEntityDoesNotMap`이 k_display를 "보존 대상"으로 단언했는데,
   이제 K는 **갱신 대상**이라 남은 미매핑 둘(exclude_keywords·demand_axis_filter)로 그 단언을 옮김.
 
+- [Q-66② 완결] 죽은 읽기 경로 `product_axis` 부활. `GetProductsUseCase`가 `axes.findByProductId`를 부르고
+  `ProductSummary.axes`로 냄 → 등록 화면이 `용량(가격축) · 색상(수요축)`으로 그림. **수요축은 variant를
+  안 나눠 목록에 흔적이 없어, 여기서 못 보면 자기가 뭘 수요축으로 등록했는지 확인할 길이 없었다.**
+  `repository-readers-allowlist`에서 Q-66 면제 삭제 — **게이트가 면제 없이 통과**(낡은 예외는 다음 결함을 숨긴다).
+  스모크에 `"axes"`·`"axisType":"PRICE"` 왕복 단언 추가. core GREEN·web **163**·build·**스모크 PASS**.
+
+**다음(막히지 않음, 대형·다세션)**: Q-66 ①(SPLIT 분포 분리 — Matcher 확장 + deal_event 스키마 + 값 미상
+버킷 큐 배선) → 그 뒤 ③(SPLIT 필수 검증; ① 전에 하면 동작 안 하는 기능에 입력 friction만 생김).
+Q-28(제외키워드)은 GlobalSetting 읽기 경로 + 딜 제목 접근이 선결.
+
 ---
 
 ## 2026-07-12 — 무중단 백로그 진행 (Q-46①·게이트 CI 수정 2건·Q-67 착수)

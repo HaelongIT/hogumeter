@@ -215,6 +215,10 @@ listed=$(curl -fsS "${WEB}/api/v1/products")
 echo "$listed" | grep -q '스모크 제품' || fail "등록한 제품이 목록에 없다(한글 왕복 실패?)"
 echo "$listed" | grep -q '용량' || fail "축 이름(한글)이 왕복하지 않는다"
 echo "$listed" | grep -q '"variantId"' || fail "variantId가 노출되지 않는다"
+# Q-66 ②: 축 정의가 유형과 함께 돌아온다. `product_axis`는 등록이 쓰기만 하고 아무도 읽지 않는
+# 테이블이었다 — 수요축은 variant를 안 나눠 목록에 흔적이 없으니, 이게 없으면 확인할 길이 없다.
+echo "$listed" | grep -q '"axes"' || fail "축 정의(axes)가 제품 목록에 없다 (Q-66 ②)"
+echo "$listed" | grep -q '"axisType":"PRICE"' || fail "축 유형이 왕복하지 않는다 (Q-66 ②): $listed"
 
 echo "--- 5) variant 조회 (web이 기준가로 가려면 이게 있어야 한다) ---"
 product_id=$(echo "$created" | sed 's/.*"productId"[: ]*\([0-9]*\).*/\1/')
