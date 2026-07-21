@@ -3,6 +3,7 @@ package dev.hogumeter.core.adapter.telegram;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.hogumeter.core.TestcontainersConfiguration;
+import dev.hogumeter.core.application.port.out.AdminNotifier;
 import dev.hogumeter.core.application.port.out.AlertSender;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,9 +22,16 @@ class TelegramSenderWiringTest {
 
 	@Autowired
 	AlertSender sender;
+	@Autowired
+	AdminNotifier adminNotifier;
 
 	@Test
 	void enabledSelectsRealTelegramSender() {
 		assertThat(sender).isInstanceOf(TelegramAlertSender.class);
+	}
+
+	@Test
+	void enabledSelectsRealTelegramAdminNotifier() {
+		assertThat(adminNotifier).isInstanceOf(TelegramAdminNotifier.class);
 	}
 }

@@ -1,3 +1,19 @@
+## 2026-07-21 — 연속 실패 관리 알림 OBS-03 (Q-56 완결, 무중단)
+
+플러시 커밋 푸시 후 "무중단 진행 ㄱㄱ". 다음 막히지 않은 최고가치 = **연속 실패 관리 알림**(stepsFailed 카운터가
+선결이었다 — 이제 세니 알림만 붙인다). 실패를 **보이게** 한 데서 **알려주게**로.
+- 신규 `AdminNotifier` 포트(딜 알림과 다르다 — 시스템 건강이라 `AlertMessage` 아님) + `PipelineHealthMonitor`
+  (연속 실패 임계 넘으면 push, **임계에 처음 닿는 순간만** 스팸 방지, 건강해지면 리셋. 임계 기본 3 = collector
+  `SINK_FAILURE_LIMIT` 정합, `pipeline.failure-alert-threshold` seam).
+- `PipelineScheduler`가 매 틱 `healthMonitor.onTick(healthy)` — `healthy = 스냅샷 왕복 + stepsFailed 0`이라
+  **지속 DB 장애(리포트도 못 내는 틱)도** 잡힌다(리포트는 스냅샷 있을 때만, 건강 신호는 항상).
+- 발송: `StubAdminNotifier`(기본 로그) / `TelegramAdminNotifier`(`telegram.enabled=true`, 딜과 같은 chat에 🔧 접두,
+  실패에 안 던짐). `@ConditionalOnProperty`로 딜 발송과 같은 스위치.
+- 관통 테스트: `PipelineHealthMonitorTest`(임계·리셋·재알림·스팸방지), `PipelineSchedulerTest.feedsHealthSignalEachTick`
+  (정상 true·단계실패 false·DB단절 false — healthTick 배선), `TelegramAdminNotifierTest`, 배선 테스트(빈 선택).
+- ⚠️자율결정: 관리 chat = 딜 chat(1인용, 운영자=사용자). 별도 admin chat은 불필요하다 판단.
+- 검증: core 전체 GREEN(신규 3 테스트 클래스). docs/91 Q-56 해소·Q-20 ④ 해소. **커밋 후 무중단 계속.**
+
 ## 2026-07-21 — 방해금지 보류 알림 플러시 오케스트레이션 (Q-20 ②, 사용자 지휘: "순서대로" → 플러시 착수)
 
 앞 배치 2커밋 푸시(`370145a..006674c`) 후 사용자 지시로 **플러시 오케스트레이션**(큰 것) 착수. 방해금지(quiet

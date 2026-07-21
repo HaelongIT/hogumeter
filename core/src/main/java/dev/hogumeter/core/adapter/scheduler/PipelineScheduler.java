@@ -11,6 +11,7 @@ import dev.hogumeter.core.application.FlushHeldAlertsUseCase.FlushReport;
 import dev.hogumeter.core.application.FollowUpAlertUseCase;
 import dev.hogumeter.core.application.IngestDealsUseCase;
 import dev.hogumeter.core.application.IngestReport;
+import dev.hogumeter.core.application.PipelineHealthMonitor;
 import dev.hogumeter.core.application.PreserveAppliedConditionsUseCase;
 import dev.hogumeter.core.application.ReprocessDealPricesUseCase;
 import dev.hogumeter.core.application.ReprocessDealStatusUseCase;
@@ -71,6 +72,7 @@ public class PipelineScheduler {
 	private final Supplier<List<Long>> reprocessStatus;
 	private final BiFunction<List<Long>, FollowUpKind, Integer> followUp;
 	private final Supplier<FlushReport> flushHeld; // 방해금지 종료분 재평가·발송(Q-20 ②)
+	private final Consumer<Boolean> healthTick; // 틱 건강 여부 → 연속 실패 시 관리 알림(OBS-03, Q-56)
 	private final Supplier<PipelineSnapshot> probe;
 	private final Consumer<PipelineTickReport> report;
 
@@ -82,10 +84,12 @@ public class PipelineScheduler {
 	PipelineScheduler(ExpirePurchaseObservationsUseCase expireObservations, IngestDealsUseCase ingest,
 			PreserveAppliedConditionsUseCase conditions, ReprocessDealPricesUseCase prices,
 			ReprocessDealStatusUseCase status, FollowUpAlertUseCase followUp, FlushHeldAlertsUseCase flushHeld,
-			RawDealPostRepository rawPosts, DealEventRepository dealEvents, DealEventSourceRepository sources,
-			ReviewQueueItemRepository reviewQueue, PurchaseRepository purchases, JdbcTemplate jdbc) {
+			PipelineHealthMonitor healthMonitor, RawDealPostRepository rawPosts, DealEventRepository dealEvents,
+			DealEventSourceRepository sources, ReviewQueueItemRepository reviewQueue, PurchaseRepository purchases,
+			JdbcTemplate jdbc) {
 		this(expireObservations::expireDueObservations, ingest::ingestPending, conditions::preserveTags,
 				prices::reprocessPriceChanges, status::reprocessEndedDeals, followUp::sendFollowUps, flushHeld::flush,
+				healthMonitor::onTick,
 				() -> new PipelineSnapshot(
 						rawPosts.count(),
 						sources.count(),
@@ -107,11 +111,11 @@ public class PipelineScheduler {
 				tick -> log.info("pipeline tick {}", tick));
 	}
 
-	/** 테스트 seam(플러시 포함) — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
+	/** 테스트 seam(플러시·건강 포함) — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
 	PipelineScheduler(Runnable expireObservations, Supplier<IngestReport> ingest, Runnable preserveConditions,
 			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
 			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<FlushReport> flushHeld,
-			Supplier<PipelineSnapshot> probe, Consumer<PipelineTickReport> report) {
+			Consumer<Boolean> healthTick, Supplier<PipelineSnapshot> probe, Consumer<PipelineTickReport> report) {
 		this.expireObservations = expireObservations;
 		this.ingest = ingest;
 		this.preserveConditions = preserveConditions;
@@ -119,17 +123,18 @@ public class PipelineScheduler {
 		this.reprocessStatus = reprocessStatus;
 		this.followUp = followUp;
 		this.flushHeld = flushHeld;
+		this.healthTick = healthTick;
 		this.probe = probe;
 		this.report = report;
 	}
 
-	/** 플러시 없는 테스트 seam(기존 호출부 호환) — 방해금지 플러시를 no-op으로 둔다. */
+	/** 플러시·건강 없는 테스트 seam(기존 호출부 호환) — 둘 다 no-op으로 둔다. */
 	PipelineScheduler(Runnable expireObservations, Supplier<IngestReport> ingest, Runnable preserveConditions,
 			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
 			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<PipelineSnapshot> probe,
 			Consumer<PipelineTickReport> report) {
 		this(expireObservations, ingest, preserveConditions, reprocessPrices, reprocessStatus, followUp,
-				FlushReport::empty, probe, report);
+				FlushReport::empty, healthy -> { }, probe, report);
 	}
 
 	@Scheduled(fixedDelayString = "${core.pipeline.interval-ms:60000}",
@@ -151,12 +156,15 @@ public class PipelineScheduler {
 		// 방해금지가 끝난 보류분을 재평가해 보낸다(Q-20 ②) — 밤새 바뀐 상황을 발송 시점에 다시 판정한다.
 		FlushReport flush = runStepReturning("flush-held", flushHeld, FlushReport.empty());
 		PipelineSnapshot after = snapshot();
-		if (before == null || after == null) {
-			return; // DB가 닿지 않는다. snapshot()이 이미 남겼고, 0으로 채운 리포트는 거짓말이다.
+		// 건강 = 스냅샷 왕복 + 단계 실패 0. DB가 닿지 않으면(스냅샷 null) 리포트는 못 내도 건강 신호는 낸다 —
+		// 그래야 지속 DB 장애가 관리 알림으로 이어진다(OBS-03). 리포트는 스냅샷이 있을 때만.
+		boolean healthy = before != null && after != null && stepFailures == 0;
+		if (before != null && after != null) {
+			// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다. stepsFailed로 그 사실도 싣는다.
+			report.accept(PipelineTickReport.between(before, after, ingestReport, followUpPrice, followUpEnded,
+					stepFailures, flush.flushed(), flush.dropped()));
 		}
-		// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다. stepsFailed로 그 사실도 싣는다.
-		report.accept(PipelineTickReport.between(before, after, ingestReport, followUpPrice, followUpEnded,
-				stepFailures, flush.flushed(), flush.dropped()));
+		healthTick.accept(healthy); // 연속 실패면 관리 알림(PipelineHealthMonitor)
 	}
 
 	/**

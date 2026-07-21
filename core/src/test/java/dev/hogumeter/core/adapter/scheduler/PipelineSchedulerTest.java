@@ -158,10 +158,30 @@ class PipelineSchedulerTest {
 	void heldAlertFlushCountsFlowIntoReport() {
 		// 플러시가 (발송 2, 드롭 1)을 내면 리포트에 그대로 실려야 한다 — 배선이 끊기면 0이라 이 테스트가 잡는다.
 		new PipelineScheduler(expire, ingest, conditions, prices, status, followUp,
-				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), () -> EMPTY, reported::set).tick();
+				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), healthy -> { }, () -> EMPTY, reported::set).tick();
 
 		assertThat(reported.get().heldAlertsFlushed()).isEqualTo(2);
 		assertThat(reported.get().heldAlertsDropped()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("건강한 틱은 healthTick(true), 단계 실패·DB 단절은 false — 연속 실패 관리 알림의 입력 (OBS-03)")
+	void feedsHealthSignalEachTick() {
+		List<Boolean> health = new ArrayList<>();
+
+		schedulerWithHealth(ingest, () -> EMPTY, health).tick(); // 정상
+		schedulerWithHealth(boomIngest("스키마 불일치"), () -> EMPTY, health).tick(); // 단계 실패
+		schedulerWithHealth(ingest, () -> {
+			throw new IllegalStateException("db down"); // 스냅샷 실패(DB 단절)
+		}, health).tick();
+
+		assertThat(health).containsExactly(true, false, false);
+	}
+
+	private PipelineScheduler schedulerWithHealth(Supplier<IngestReport> ingest, Supplier<PipelineSnapshot> probe,
+			List<Boolean> health) {
+		return new PipelineScheduler(expire, ingest, conditions, prices, status, followUp,
+				FlushHeldAlertsUseCase.FlushReport::empty, health::add, probe, reported::set);
 	}
 
 	@Test
