@@ -12,7 +12,22 @@ PUR-04 성적표의 시각적 미완**을 완성. 성적표를 API로 냈지만(
   스타일(중립 잉크, 신호색 안 씀).
 - 계약: `present.test.ts` +5(정상·음수갭·갭없음·UNOBSERVED·n=0의 금액부재), `PurchasePanel.test.tsx` +1(CLOSED 성적표 렌더).
   smoke의 PurchaseObservation 필드 검증에 `reportCard` 추가(web-react 규율: 응답 필드 추가 시 스모크에도).
-- 검증: **web 179 통과**(+6) · tsc+build GREEN · core 무수정(web·scripts만).
+- 검증: **web 179 통과**(+6) · tsc+build GREEN · core 무수정(web·scripts만). 커밋 `b94fc88`.
+
+**무중단 체크인 — M1 코드+표시 표면 완결 확정. 남은 코드는 speculative/블록.** "계속 무중단" 이후 PUR-04 web 표시를
+완성하고, ⓒ 감사의 마지막 조각(신호등 신선도)까지 확인했다: `SignalCalculator`가 `qualifyLimit`(7일 초과 제외)·
+`freshnessLimit`(48h 초과 "신선도 약화")을 **실제로 쓴다** — 받고 안 쓰는 죽은 파라미터 아님. 신호등 헤드라인은
+신선도를 정직하게 존중한다. ⓐⓑⓒⓓ 재현 감사:
+- **ⓐ**: M1 roadmap 코드 완결(잔여 4블로커 외부). SIG·CAD·PUR·알림 전부 배선+검증(죽은 값·죽은 파라미터 0).
+- **ⓑ**: 열린 Q 중 현재 참인 순수-코드 트리거 없음 — 실데이터(Q-16/17/18/24/25/26/34/54)·프론트 생산자(Q-28
+  전역설정·LABEL mode 컬럼)·결정(Q-30/31/32/35·Q-62 ARCHIVED 조건·D-3~5)·M2(Q-72)·네이버(Q-3).
+- **ⓒ**: 소비처/생산자 0 게이트 4종(신규 죽은컬럼 포함) GREEN. ReportCardCalculator·ReportIssueGate 부활,
+  성적표 읽기 소비처(web)까지 완결. 새 죽은 코드·죽은 값·죽은 파라미터 0.
+- **ⓓ**: dead-columns 게이트 CI 배선·검증. PUR-04 core GREEN + smoke 갱신 + web 179.
+- **남은 최고가치는 실데이터 M1 검증(사용자 시크릿·승인)** — preflight+런북 준비됨. 코드 경로는 speculative뿐:
+  M5 substrate(고립 시 consumer-0)·ARCHIVED 전이(아카이브 조건 결정+저가치)·Q-28 전역설정 UI(프론트 생산자, 지휘 대기).
+
+TURN-END: ② 일감 소진 — M1 코드+표시 표면 완결(SIG·CAD·PUR·알림 배선+검증, 신선도까지 실사용 확인). ⓐ 잔여 코드밖, ⓑ 열린 Q 현재 참인 순수-코드 없음, ⓒ 게이트 4종 GREEN 새 죽은것 0, ⓓ 새 게이트+PUR-04 CI/스모크 검증. 남은 코드는 speculative(M5·ARCHIVED, consumer-0/저가치)뿐이라 보수적 기본값(안 지음)+방향은 사용자. 최고가치는 실데이터 검증(사용자 몫). 미푸시 1커밋(b94fc88).
 
 ## 2026-07-21 — 죽은 컬럼 감지 게이트: check-table-wiring의 명시된 한계를 기계로 덮다 (토큰 무관 추천 ③, 무중단)
 
