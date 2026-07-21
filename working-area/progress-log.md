@@ -1,3 +1,23 @@
+## 2026-07-21 — 텔레그램 알림 어댑터 (사용자 지휘: "순서대로 진행하자" → "실 어댑터까지 만든다")
+
+먼저 앞 배치 6커밋 **푸시 완료**(`36e2509..035c9ef`, 사용자 지시). 그 뒤 "일감 소진" 마커는 **성급했다** — 알림
+경로를 파 보니 Q-67의 "알림 이력 저장소가 없다"가 **세 번째 거짓 봉인**이었다: `deal_alert` 테이블·`AlertSender`/
+`AlertMessage` 포트·`FollowUpAlertUseCase`(멱등 `(deal_event_id, kind)` 이력)가 전부 이미 서 있었다. **유일한 진짜
+공백은 실 발송 어댑터**(`StubAlertSender` → 텔레그램 HTTP), 그건 봇 토큰이 있어야 한다. 사용자에게 물어 "실
+어댑터까지" 선택받음 — 토큰은 사용자가 `.env`에, 나는 그걸 읽는 코드만(토큰 값 안 만짐).
+
+**Piece 1 (커밋 대기) — 메시지 본문 포맷터 + 이름 배선(토큰 무관, Q-46① 알림 본문 완결).**
+- 신규 `AlertMessageFormatter`(순수, adapter/telegram) — AL-05 요소(강도 아이콘·제품/variant·가격·갭·검증·딱지·
+  조건태그·링크)를 조립. **정직성 강제**: SPARSE면 기준가 금액 안 짓고 "표본 N건 참고"(테스트가 `기준가 \d+원`
+  부재 단언). 조건 태그(Q-46①) 노출 — `배송비미상`이면 "실 결제가는 표시가보다 높을 수 있음". 이름 없으면 "대상 미상".
+- `AlertMessage`에 `productName·variantLabel` 추가. 신규 `VariantNaming`(@Service, variant→product 이름 조회,
+  못 찾으면 `Naming.UNKNOWN`). 두 생산자 배선: `AlertDispatcher`(발송 시에만 조회하는 `LongFunction` seam),
+  `FollowUpAlertUseCase`(@Service 주입). `StubAlertSender`가 이제 **완성 본문을 로그**로 남긴다 — 포맷터를 실
+  어댑터와 공유하므로 스텁 로그가 곧 실제로 나갈 메시지(형식이 조용히 안 갈라짐).
+- 관통 테스트: `AlertDispatcherTest.sentMessageCarriesResolvedProductAndVariantName`(이름이 메시지로 흐름),
+  `AlertMessageFormatterTest`(7건 — 각 강도/후속 종류·SPARSE 금액 금지·조건 태그·이름 부재).
+- 검증: core 전체 GREEN. **다음: Piece 2 — TelegramAlertSender(HTTP) + SEC-03 화이트리스트 + SEC-08 차단감지.**
+
 ## 2026-07-12 — 프론트 UI "판정을 주인공으로" + Q-15 버튼 (사용자 지휘)
 
 사용자가 푸시 지시 → **7커밋 origin/main 푸시 완료**(8b90f46..3798891). 이어서 `/frontend-design`으로 프론트 착수.

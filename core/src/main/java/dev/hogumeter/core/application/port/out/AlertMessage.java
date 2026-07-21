@@ -12,6 +12,11 @@ import dev.hogumeter.core.domain.deal.DealEvent;
  * <p>{@code followUpKind}: null = 첫(원) 알림(view·decision을 채운다). 아니면 후속 알림(AL-03,
  * VERIFIED·PRICE_CHANGED·ENDED) — 후속은 기준가 판정이 아니라 전이 통지라 view·decision이 null일 수 있다.
  * 어댑터가 이 값으로 포맷을 가른다.
+ *
+ * <p>{@code productName}·{@code variantLabel}: AL-05가 요구하는 "제품/variant". {@code deal}은 variantId만
+ * 지녀 이름이 없으므로 생산자가 {@link dev.hogumeter.core.application.VariantNaming}으로 채운다. 못 찾으면
+ * 둘 다 null이고 포맷터가 "대상 미상"으로 그린다 — 지어내지 않는다.
  */
-public record AlertMessage(DealEvent deal, BenchmarkView view, AlertDecision decision, FollowUpKind followUpKind) {
+public record AlertMessage(DealEvent deal, BenchmarkView view, AlertDecision decision, FollowUpKind followUpKind,
+		String productName, String variantLabel) {
 }

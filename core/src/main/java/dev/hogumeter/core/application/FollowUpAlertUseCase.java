@@ -8,6 +8,7 @@ import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.application.port.out.AlertSender;
 import dev.hogumeter.core.domain.alert.FollowUpEvaluator;
+import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.alert.FollowUpKind;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -28,14 +29,16 @@ public class FollowUpAlertUseCase {
 	private final DealEventRepository dealEvents;
 	private final DealEventMapper mapper;
 	private final AlertSender sender;
+	private final VariantNaming naming;
 	private final FollowUpEvaluator evaluator = new FollowUpEvaluator();
 
 	public FollowUpAlertUseCase(DealAlertRepository alerts, DealEventRepository dealEvents,
-			DealEventMapper mapper, AlertSender sender) {
+			DealEventMapper mapper, AlertSender sender, VariantNaming naming) {
 		this.alerts = alerts;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.sender = sender;
+		this.naming = naming;
 	}
 
 	/**
@@ -58,7 +61,10 @@ public class FollowUpAlertUseCase {
 			if (entity == null) {
 				continue; // 사라진 딜 — 근거 없이 알리지 않는다
 			}
-			sender.send(new AlertMessage(mapper.toDomain(entity), null, null, kind));
+			DealEvent deal = mapper.toDomain(entity);
+			VariantNaming.Naming n = (deal.variantId() == null)
+					? VariantNaming.Naming.UNKNOWN : naming.of(deal.variantId());
+			sender.send(new AlertMessage(deal, null, null, kind, n.productName(), n.variantLabel()));
 			alerts.save(new DealAlertEntity(id, kind.name()));
 			sent++;
 		}

@@ -51,7 +51,8 @@ class AlertDispatcherTest {
 	}
 
 	private AlertDispatcher dispatcher(FakeAlertSender sender) {
-		return new AlertDispatcher(new AlertEvaluator(), new AlertGate(), sender);
+		return new AlertDispatcher(new AlertEvaluator(), new AlertGate(), sender,
+				id -> new VariantNaming.Naming("아이폰 17", "256GB"));
 	}
 
 	@Test
@@ -65,6 +66,21 @@ class AlertDispatcherTest {
 		assertThat(outcome).isEqualTo(DispatchOutcome.SENT);
 		assertThat(sender.sent).hasSize(1);
 		assertThat(sender.sent.get(0).decision().intensity()).isEqualTo(AlertIntensity.JACKPOT);
+	}
+
+	/** AL-05: 발송 메시지가 제품/variant 이름을 싣는다 — 배선이 끊기면 null이라, 이 관통 테스트가 잡는다. */
+	@Test
+	void sentMessageCarriesResolvedProductAndVariantName() {
+		FakeAlertSender sender = new FakeAlertSender();
+		AlertDispatcher dispatcher = new AlertDispatcher(new AlertEvaluator(), new AlertGate(), sender,
+				id -> new VariantNaming.Naming("갤럭시 S26", "울트라"));
+		var deal = aDealEvent().withVariantId(42L).withPriceFirst(700_000L)
+				.outlier(OutlierFlag.LOWER).singleSite().build();
+
+		dispatcher.dispatch(deal, sufficient(), new AlertPolicy(null, null, null), params, clockAtHour(12));
+
+		assertThat(sender.sent.get(0).productName()).isEqualTo("갤럭시 S26");
+		assertThat(sender.sent.get(0).variantLabel()).isEqualTo("울트라");
 	}
 
 	@Test

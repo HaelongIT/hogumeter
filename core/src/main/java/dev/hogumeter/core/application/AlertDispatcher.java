@@ -11,6 +11,7 @@ import dev.hogumeter.core.domain.alert.GateDecision;
 import dev.hogumeter.core.domain.benchmark.BenchmarkView;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import java.time.Clock;
+import java.util.function.LongFunction;
 
 /**
  * 신규 딜 → 알림 판정 → 게이트 → 발송을 잇는 유스케이스. 순수 도메인(평가·게이트)을 조립하고
@@ -21,11 +22,14 @@ public class AlertDispatcher {
 	private final AlertEvaluator evaluator;
 	private final AlertGate gate;
 	private final AlertSender sender;
+	private final LongFunction<VariantNaming.Naming> naming; // AL-05 제품/variant 이름(발송 시에만 조회)
 
-	public AlertDispatcher(AlertEvaluator evaluator, AlertGate gate, AlertSender sender) {
+	public AlertDispatcher(AlertEvaluator evaluator, AlertGate gate, AlertSender sender,
+			LongFunction<VariantNaming.Naming> naming) {
 		this.evaluator = evaluator;
 		this.gate = gate;
 		this.sender = sender;
+		this.naming = naming;
 	}
 
 	public DispatchOutcome dispatch(DealEvent deal, BenchmarkView view, AlertPolicy policy,
@@ -41,7 +45,9 @@ public class AlertDispatcher {
 			return DispatchOutcome.NO_ALERT;
 		}
 		if (gate.decide(decision, policy, clock) == GateDecision.SEND_NOW) {
-			sender.send(new AlertMessage(deal, view, decision, null)); // 첫 알림 — followUpKind=null
+			VariantNaming.Naming n = (deal.variantId() == null)
+					? VariantNaming.Naming.UNKNOWN : naming.apply(deal.variantId());
+			sender.send(new AlertMessage(deal, view, decision, null, n.productName(), n.variantLabel()));
 			return DispatchOutcome.SENT;
 		}
 		return DispatchOutcome.HELD;
