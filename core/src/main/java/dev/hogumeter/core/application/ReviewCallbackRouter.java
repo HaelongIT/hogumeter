@@ -26,18 +26,21 @@ public class ReviewCallbackRouter {
 	private static final Logger log = LoggerFactory.getLogger(ReviewCallbackRouter.class);
 
 	private final ResolveReviewItemUseCase resolve;
+	private final IgnoreDealUseCase ignoreDeal;
 	private final Set<Long> allowedChats;
 
 	@org.springframework.beans.factory.annotation.Autowired
-	public ReviewCallbackRouter(ResolveReviewItemUseCase resolve,
+	public ReviewCallbackRouter(ResolveReviewItemUseCase resolve, IgnoreDealUseCase ignoreDeal,
 			@Value("${telegram.allowed-chat-ids:}") String allowedCsv, @Value("${telegram.chat-id:}") String chatId) {
 		this.resolve = resolve;
+		this.ignoreDeal = ignoreDeal;
 		this.allowedChats = parseChats(allowedCsv.isBlank() ? chatId : allowedCsv);
 	}
 
 	/** 테스트 seam — 허용 목록을 직접 준다. */
-	ReviewCallbackRouter(ResolveReviewItemUseCase resolve, Set<Long> allowedChats) {
+	ReviewCallbackRouter(ResolveReviewItemUseCase resolve, IgnoreDealUseCase ignoreDeal, Set<Long> allowedChats) {
 		this.resolve = resolve;
+		this.ignoreDeal = ignoreDeal;
 		this.allowedChats = allowedChats;
 	}
 
@@ -70,6 +73,10 @@ public class ReviewCallbackRouter {
 				case "reject" -> {
 					resolve.reject(id, "TELEGRAM");
 					return "기각했습니다 — 영구 제외합니다.";
+				}
+				case "ignore" -> {
+					ignoreDeal.ignore(id); // Q-22 사후학습 — 노이즈로 기록, 빈출 토큰을 제외 키워드 후보로
+					return "무시했습니다 — 비슷한 알림이 잦으면 제외 키워드를 제안합니다.";
 				}
 				default -> {
 					return "알 수 없는 명령입니다.";

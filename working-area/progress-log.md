@@ -1,3 +1,22 @@
+## 2026-07-21 — Q-22 무시→키워드 사후학습: M1 알림 루프의 마지막 조각 (사용자 추천 채택, 무중단)
+
+사용자 "추천하는대로 무중단 ㄱㄱ" → 추천했던 Q-22 착수. 죽어 있던 `KeywordSuggester`(소비처 0)를 살려 **오알림
+되먹임 루프**를 닫았다(M1 완료 기준 "오알림이 키워드 사후학습으로 수렴").
+- 딜 알림에 `[🔕무시]` 버튼(`TelegramAlertSender`, callback `ignore:{dealEventId}`). 이를 위해 `AlertMessage`에
+  `dealEventId` 추가 → `AlertDispatcher.dispatch`·`FollowUpAlertUseCase`로 배선(테스트 리플 다수 정리).
+- 누르면 `ReviewCallbackRouter`가 `ignore:` 케이스로 `IgnoreDealUseCase`에 넘긴다(SEC-03 그대로) → 딜을 노이즈로
+  기록(`deal_ignore` V9/R9, 딜당 1건 멱등, 제목 박제) → 같은 variant 무시 제목들에서 빈출 토큰(≥2)을
+  `KeywordSuggester`가 뽑아 **KEYWORD_SUGGEST 큐** 생성.
+- ⚠️설계 결정: **자동 반영 없음**(판단은 사람, 절대 원칙 2) — 후보 제안만, 사용자가 정책 패널에서 추가.
+  원-탭 수락은 후속(`alert_policy.period_months` NOT NULL이라 정책 없는 variant엔 upsert 복잡 + KeywordSuggester
+  계약이 "수락 시에만"). 임계 `MIN_FREQUENCY=2`는 잠정(seam).
+- web: `reviewLine`에 KEYWORD_SUGGEST 케이스(후보 표시). 기존 "모르는 유형" 테스트가 KEYWORD_SUGGEST를 예시로
+  써서 깨짐 → 진짜 미지 유형으로 교체.
+- 게이트: `KeywordSuggester`를 domain-consumers-allowlist에서 삭제(이제 소비됨). deal_ignore 배선·findByVariantId
+  호출됨. 게이트 3종 GREEN(소비 24·배선 15).
+- 관통 테스트: `IgnoreDealUseCaseTest`(멱등·빈출→제안), 라우터 ignore 케이스, 알림 [무시] 버튼, web KEYWORD_SUGGEST.
+- 검증: core 전체 GREEN(신규 1 테스트 클래스 + 리플 정리) · web **173** · build. docs/91 Q-22 해소. **커밋 후 무중단 계속.**
+
 ## 2026-07-21 — 인바운드 텔레그램 Piece 2: 미상 큐 버튼 아웃바운드 → 종단 완결 (Q-15, 무중단)
 
 Piece 1(인바운드 수신)에 아웃바운드 짝을 붙여 **종단으로** 산다: 새 미상 항목 → 텔레그램 [승격][기각] 버튼 →

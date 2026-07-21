@@ -34,13 +34,13 @@ public class AlertDispatcher {
 	}
 
 	public DispatchOutcome dispatch(DealEvent deal, BenchmarkView view, AlertPolicy policy,
-			BenchmarkParams params, Clock clock) {
-		return dispatch(deal, view, policy, params, clock, false);
+			BenchmarkParams params, Clock clock, long dealEventId) {
+		return dispatch(deal, view, policy, params, clock, false, dealEventId);
 	}
 
-	/** PUR-03 paidPrice 하회 트리거(활성 관찰)를 함께 반영해 판정한다. */
+	/** PUR-03 paidPrice 하회 트리거(활성 관찰)를 함께 반영해 판정한다. dealEventId는 [무시] 버튼(Q-22)에 실린다. */
 	public DispatchOutcome dispatch(DealEvent deal, BenchmarkView view, AlertPolicy policy,
-			BenchmarkParams params, Clock clock, boolean paidPriceTriggerFires) {
+			BenchmarkParams params, Clock clock, boolean paidPriceTriggerFires, long dealEventId) {
 		AlertDecision decision = evaluator.evaluate(deal, view, policy, params, paidPriceTriggerFires);
 		if (!decision.shouldAlert()) {
 			return DispatchOutcome.NO_ALERT;
@@ -48,7 +48,7 @@ public class AlertDispatcher {
 		if (gate.decide(decision, policy, clock) == GateDecision.SEND_NOW) {
 			VariantNaming.Naming n = (deal.variantId() == null)
 					? VariantNaming.Naming.UNKNOWN : naming.apply(deal.variantId());
-			sender.send(new AlertMessage(deal, view, decision, null, n.productName(), n.variantLabel()));
+			sender.send(new AlertMessage(deal, view, decision, null, n.productName(), n.variantLabel(), dealEventId));
 			return DispatchOutcome.SENT;
 		}
 		return DispatchOutcome.HELD;

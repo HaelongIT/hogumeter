@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import dev.hogumeter.core.adapter.telegram.TelegramInboundApi.CallbackUpdate;
+import dev.hogumeter.core.application.IgnoreDealUseCase;
 import dev.hogumeter.core.application.ResolveReviewItemUseCase;
 import dev.hogumeter.core.application.ReviewCallbackRouter;
 import java.util.ArrayList;
@@ -55,8 +56,19 @@ class TelegramInboundPollerTest {
 		}
 	}
 
+	private static final class NoOpIgnore extends IgnoreDealUseCase {
+		NoOpIgnore() {
+			super(null, null, null, null, null, null, null);
+		}
+
+		@Override
+		public void ignore(long dealEventId) {
+			// 이 폴러 테스트는 promote 경로만 본다 — ignore는 no-op
+		}
+	}
+
 	private final RecordingResolve resolve = new RecordingResolve();
-	private final ReviewCallbackRouter router = new ReviewCallbackRouter(resolve, "555", ""); // 허용 chat 555
+	private final ReviewCallbackRouter router = new ReviewCallbackRouter(resolve, new NoOpIgnore(), "555", "");
 	private final FakeInbound api = new FakeInbound();
 	private final TelegramInboundPoller poller = new TelegramInboundPoller(api, router);
 

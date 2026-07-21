@@ -58,6 +58,14 @@ export function reviewLine(item: ReviewQueueItem): ReviewLine {
         reason: '수요축 값 미상 — 제목에서 값을 판별하지 못해 기준가에서 빠졌습니다. 원문을 보고 분류하세요.',
         detail: `${item.subject ?? '대상 미상'} · ${asText(item.payload.title, '제목 없음')}`,
       }
+    case 'KEYWORD_SUGGEST': {
+      // 무시한 딜들에 자주 나온 토큰(Q-22 사후학습). 자동 반영은 없다 — 사람이 정책 패널에서 추가한다("판단은 사람").
+      const candidates = candidateStrings(item.payload.candidates)
+      return {
+        reason: '🔕 사후학습 — 무시한 딜에 자주 나온 키워드입니다. 정책 패널의 제외 키워드에 추가하면 이 노이즈가 줄어듭니다.',
+        detail: candidates.length ? `제외 키워드 후보: ${candidates.join(', ')}` : '후보 없음',
+      }
+    }
     default:
       // 새 유형이 생겼는데 화면이 모른다. 빈 줄을 그리느니 근거를 통째로 보여준다.
       return {
@@ -75,6 +83,11 @@ function price(value: unknown): string {
 /** 사라진 제품은 core가 `#id`로 보낸다. 그대로 그린다 — 숨기면 근거가 줄어든 걸 아무도 모른다. */
 function candidateLine(candidates: string[]): string {
   return candidates.length === 0 ? '후보 없음' : `후보: ${candidates.join(', ')}`
+}
+
+/** payload.candidates는 jsonb — 문자열 배열이 온다는 보장이 없다. 방어적으로 문자열만 추린다. */
+function candidateStrings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
 /** 배송비를 모르면 저장된 가격은 실결제가가 아니라 **하한**이다(collector `SHIPPING_UNKNOWN`). */

@@ -36,7 +36,7 @@ class AlertMessageFormatterTest {
 	private static AlertMessage first(DealEvent deal, BenchmarkView view, AlertIntensity intensity,
 			List<AlertIntensity> also, List<String> labels) {
 		return new AlertMessage(deal, view, new AlertDecision(true, intensity, also, labels), null,
-				"아이폰 17", "256GB");
+				"아이폰 17", "256GB", null);
 	}
 
 	@Test
@@ -93,7 +93,7 @@ class AlertMessageFormatterTest {
 	@Test
 	void endedFollowUpShowsEndedHeadlineAndLatestPrice() {
 		DealEvent deal = aDealEvent().withPriceFirst(700_000).withSourceUrl("https://ruliweb.test/9").build();
-		AlertMessage m = new AlertMessage(deal, null, null, FollowUpKind.ENDED, "아이폰 17", "256GB");
+		AlertMessage m = new AlertMessage(deal, null, null, FollowUpKind.ENDED, "아이폰 17", "256GB", null);
 
 		String out = formatter.format(m);
 
@@ -106,7 +106,7 @@ class AlertMessageFormatterTest {
 	@Test
 	void priceChangedFollowUpAnnotatesLatestPrice() {
 		DealEvent deal = aDealEvent().withPriceFirst(900_000).withPrices(880_000, 900_000, 880_000).build();
-		AlertMessage m = new AlertMessage(deal, null, null, FollowUpKind.PRICE_CHANGED, "아이폰 17", "256GB");
+		AlertMessage m = new AlertMessage(deal, null, null, FollowUpKind.PRICE_CHANGED, "아이폰 17", "256GB", null);
 
 		String out = formatter.format(m);
 
@@ -119,7 +119,7 @@ class AlertMessageFormatterTest {
 	void missingNameShowsUnknownSubject() {
 		DealEvent deal = aDealEvent().withPriceFirst(820_000).build();
 		AlertMessage m = new AlertMessage(deal, sufficient(890_000, 850_000, 2),
-				new AlertDecision(true, AlertIntensity.GOOD, List.of(), List.of()), null, null, null);
+				new AlertDecision(true, AlertIntensity.GOOD, List.of(), List.of()), null, null, null, null);
 
 		String out = formatter.format(m);
 

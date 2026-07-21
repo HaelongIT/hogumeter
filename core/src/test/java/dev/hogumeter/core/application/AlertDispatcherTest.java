@@ -61,7 +61,7 @@ class AlertDispatcherTest {
 		var deal = aDealEvent().withPriceFirst(700_000L).outlier(OutlierFlag.LOWER).singleSite().build();
 
 		DispatchOutcome outcome = dispatcher(sender).dispatch(
-				deal, sufficient(), new AlertPolicy(null, 23, 8), params, clockAtHour(2));
+				deal, sufficient(), new AlertPolicy(null, 23, 8), params, clockAtHour(2), 42L);
 
 		assertThat(outcome).isEqualTo(DispatchOutcome.SENT);
 		assertThat(sender.sent).hasSize(1);
@@ -77,7 +77,7 @@ class AlertDispatcherTest {
 		var deal = aDealEvent().withVariantId(42L).withPriceFirst(700_000L)
 				.outlier(OutlierFlag.LOWER).singleSite().build();
 
-		dispatcher.dispatch(deal, sufficient(), new AlertPolicy(null, null, null), params, clockAtHour(12));
+		dispatcher.dispatch(deal, sufficient(), new AlertPolicy(null, null, null), params, clockAtHour(12), 42L);
 
 		assertThat(sender.sent.get(0).productName()).isEqualTo("갤럭시 S26");
 		assertThat(sender.sent.get(0).variantLabel()).isEqualTo("울트라");
@@ -89,7 +89,7 @@ class AlertDispatcherTest {
 		var deal = aDealEvent().withPriceFirst(880_000L).singleSite().build();
 
 		DispatchOutcome outcome = dispatcher(sender).dispatch(
-				deal, sufficient(), new AlertPolicy(null, 23, 8), params, clockAtHour(2));
+				deal, sufficient(), new AlertPolicy(null, 23, 8), params, clockAtHour(2), 42L);
 
 		assertThat(outcome).isEqualTo(DispatchOutcome.HELD);
 		assertThat(sender.sent).isEmpty();
@@ -101,7 +101,7 @@ class AlertDispatcherTest {
 		var deal = aDealEvent().withPriceFirst(950_000L).singleSite().build();
 
 		DispatchOutcome outcome = dispatcher(sender).dispatch(
-				deal, sufficient(), new AlertPolicy(null, null, null), params, clockAtHour(12));
+				deal, sufficient(), new AlertPolicy(null, null, null), params, clockAtHour(12), 42L);
 
 		assertThat(outcome).isEqualTo(DispatchOutcome.NO_ALERT);
 		assertThat(sender.sent).isEmpty();

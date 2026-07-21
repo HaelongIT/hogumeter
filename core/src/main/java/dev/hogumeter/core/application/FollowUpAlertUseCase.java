@@ -64,7 +64,7 @@ public class FollowUpAlertUseCase {
 			DealEvent deal = mapper.toDomain(entity);
 			VariantNaming.Naming n = (deal.variantId() == null)
 					? VariantNaming.Naming.UNKNOWN : naming.of(deal.variantId());
-			sender.send(new AlertMessage(deal, null, null, kind, n.productName(), n.variantLabel()));
+			sender.send(new AlertMessage(deal, null, null, kind, n.productName(), n.variantLabel(), id));
 			alerts.save(new DealAlertEntity(id, kind.name()));
 			sent++;
 		}

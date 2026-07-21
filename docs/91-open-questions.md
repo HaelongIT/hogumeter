@@ -131,7 +131,10 @@ _(Q-5. 뽐뿌 golden fixture 재채취 — **해소됨 2026-07-09**: 재채취 *
 - **잠정값**: 특가(SPECIAL) = SUFFICIENT & price ≤ P25(goodDealLine)로만 판정(P25 ≥ 최저이므로 역대최저는 포함, "근접 여백"은 별도 미모델). SPARSE(보유 최저가 이하)·NONE(콜드스타트 30%)은 강도 **GOOD**로 매핑하되 딱지("표본 N건 참고용"/"기준 미확립 참고용")로 신뢰도 구분. seam = `AlertEvaluator`.
 - **재개 트리거**: 1차 검증에서 특가 알림이 너무 좁/넓거나 SPARSE/NONE 폴백 강도 조정이 필요하면 재조정.
 
-## [열림] Q-22. BM-07 빈출 임계·"무시" 트리거 배선
+## [해소] Q-22. BM-07 무시→키워드 사후학습 — M1 알림 루프의 마지막 조각 (2026-07-21)
+- **✅ 해소**: 죽어 있던 순수 `KeywordSuggester`(소비처 0)를 살려, 오알림을 사용자가 **되먹이는** 루프를 닫았다(M1 완료 기준 "오알림이 키워드 사후학습으로 수렴"). 딜 알림에 `[🔕무시]` 버튼(`TelegramAlertSender`, callback `ignore:{dealEventId}` — `AlertMessage`에 dealEventId 추가) → 누르면 `ReviewCallbackRouter`가 `IgnoreDealUseCase`로 넘긴다 → 딜을 노이즈로 기록(`deal_ignore` V9/R9, 딜당 1건 멱등, 제목 박제=학습 입력) → 같은 variant 무시 제목들에서 빈출 토큰(≥2건)을 `KeywordSuggester`가 뽑아 **KEYWORD_SUGGEST 큐**를 만든다. **판단은 사람**(절대 원칙 2): 자동 반영 없음 — 후보를 제안만, 사용자가 정책 패널에서 추가한다. web `reviewLine`이 KEYWORD_SUGGEST를 후보와 함께 그리고, 텔레그램은 정보성 알림(승격 아님). 임계 `MIN_FREQUENCY=2`는 잠정(seam) — 1차 검증에서 튜닝.
+- **테스트**: `IgnoreDealUseCaseTest`(멱등·빈출 토큰→제안), `ReviewCallbackRouterTest.ignoreFromAllowedChatRoutesToLearning`, `TelegramAlertSenderTest.includesIgnoreButtonForTheDeal`, web `present.test`(KEYWORD_SUGGEST 표시).
+- **남은 것**: 원-탭 수락(KEYWORD_SUGGEST를 승격하면 자동으로 exclude_keywords에 추가)은 후속 — `alert_policy.period_months`가 NOT NULL이라 정책 없는 variant엔 upsert가 복잡하고, KeywordSuggester 계약이 "수락 시에만 갱신, 판단은 사람"이라 지금은 제안+수동 추가로 충분.
 - **맥락**: BM-07 사후학습 도메인(빈출 토큰 → KEYWORD_SUGGEST, 수락 시 제외셋 갱신)은 완성. 빈출 임계와 실제 트리거(텔레그램 "무시" 버튼)는 세부 미확정.
 - **잠정값**: `KeywordSuggester` 빈출 임계 = **여러 무시 건 중 2건 이상 공통 토큰**(MIN_FREQUENCY=2), 토큰=공백 분리·한글/영문 포함·길이≥2. "무시" 버튼→post-learning 호출은 AL 텔레그램 어댑터(Q-20) 배선. 불용어/제품 토큰 정교화는 후순위.
 - **재개 트리거**: 실 사용에서 후보 노이즈(제품명·일반어 오제안)가 많으면 불용어 사전·제품 토큰 제외·임계 상향.

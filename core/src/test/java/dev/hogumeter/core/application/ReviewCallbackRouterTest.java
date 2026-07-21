@@ -38,8 +38,22 @@ class ReviewCallbackRouterTest {
 		}
 	}
 
+	private static final class RecordingIgnore extends IgnoreDealUseCase {
+		final List<Long> ignored = new ArrayList<>();
+
+		RecordingIgnore() {
+			super(null, null, null, null, null, null, null);
+		}
+
+		@Override
+		public void ignore(long dealEventId) {
+			ignored.add(dealEventId);
+		}
+	}
+
 	private final RecordingResolve resolve = new RecordingResolve();
-	private final ReviewCallbackRouter router = new ReviewCallbackRouter(resolve, Set.of(555L));
+	private final RecordingIgnore ignoreDeal = new RecordingIgnore();
+	private final ReviewCallbackRouter router = new ReviewCallbackRouter(resolve, ignoreDeal, Set.of(555L));
 
 	@Test
 	void promotesFromAllowedChatWithTelegramChannel() {
@@ -55,6 +69,15 @@ class ReviewCallbackRouterTest {
 
 		assertThat(resolve.calls).containsExactly("reject:42:TELEGRAM");
 		assertThat(reply).contains("기각");
+	}
+
+	/** Q-22: [무시] 콜백은 사후학습으로 흐른다(허용 chat만). */
+	@Test
+	void ignoreFromAllowedChatRoutesToLearning() {
+		String reply = router.route(555L, "ignore:42");
+
+		assertThat(ignoreDeal.ignored).containsExactly(42L);
+		assertThat(reply).contains("무시");
 	}
 
 	/** SEC-03: 허용 목록 밖 chat의 명령은 처리하지 않는다 — use-case를 아예 안 부른다. */

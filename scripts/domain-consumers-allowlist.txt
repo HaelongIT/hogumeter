@@ -11,7 +11,6 @@
 #
 # **테스트는 호출자가 아니다.**
 
-KeywordSuggester      Q-22  키워드 사후학습 배선 미구현.
 DigestRules           Q-33  다이제스트(docs/18)는 M1 범위 밖.
 ReportCardCalculator  Q-62  성적표 발급(PUR-04) 미구현 — 저장소도 유스케이스도 없다.
 ReportIssueGate       Q-62  같은 이유. 발급 게이트만 있고 발급이 없다.

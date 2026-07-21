@@ -2,6 +2,7 @@ package dev.hogumeter.core.adapter.telegram;
 
 import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.application.port.out.AlertSender;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,9 +67,13 @@ public class TelegramAlertSender implements AlertSender {
 	@Override
 	public void send(AlertMessage message) {
 		String text = formatter.format(message);
+		// [🔕무시] 버튼(Q-22 사후학습) — 누르면 이 딜을 노이즈로 기록하고 빈출 토큰을 제외 키워드 후보로 배운다.
+		List<TelegramApi.Button> buttons = message.dealEventId() == null
+				? List.of()
+				: List.of(new TelegramApi.Button("🔕 무시", "ignore:" + message.dealEventId()));
 		int status;
 		try {
-			status = api.sendMessage(chatId, text);
+			status = api.sendMessage(chatId, text, buttons);
 		}
 		catch (RuntimeException transport) {
 			// 네트워크가 닿지 못함 — 일시장애로 다룬다. 던지지 않는다(틱을 죽이지 않게).

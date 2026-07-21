@@ -58,11 +58,21 @@ describe('reviewLine', () => {
     expect(line.detail).toContain('갤럭시 25 특가')
   })
 
+  it('사후학습 제안은 후보 키워드를 보여주고 정책 패널로 안내한다 (Q-22)', () => {
+    const line = reviewLine(item({ type: 'KEYWORD_SUGGEST', payload: { variantId: 7, candidates: ['리퍼', '벌크'] } }))
+
+    expect(line.reason).toContain('사후학습')
+    expect(line.reason).toContain('제외 키워드')
+    expect(line.detail).toContain('리퍼')
+    expect(line.detail).toContain('벌크')
+  })
+
   /** 과대약속 금지: 우리가 모르는 유형이 생겨도 숨기지 않는다. 근거를 그대로 보여준다. */
   it('모르는 유형은 payload를 그대로 내놓는다', () => {
-    const line = reviewLine(item({ type: 'KEYWORD_SUGGEST', payload: { tokens: ['리퍼'] } }))
+    // 실제 유형이 아닌 값으로 default 분기를 시험한다(KEYWORD_SUGGEST는 이제 처리된다).
+    const line = reviewLine(item({ type: 'SOMETHING_NEW' as never, payload: { tokens: ['리퍼'] } }))
 
-    expect(line.reason).toContain('KEYWORD_SUGGEST')
+    expect(line.reason).toContain('SOMETHING_NEW')
     expect(line.detail).toContain('리퍼')
   })
 

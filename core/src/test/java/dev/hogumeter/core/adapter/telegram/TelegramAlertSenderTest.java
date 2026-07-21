@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import dev.hogumeter.core.adapter.telegram.TelegramAlertSender.Disposition;
+import dev.hogumeter.core.adapter.telegram.TelegramApi.Button;
 import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.domain.alert.AlertDecision;
 import dev.hogumeter.core.domain.alert.AlertIntensity;
@@ -24,16 +25,23 @@ class TelegramAlertSenderTest {
 	private static final class FakeApi implements TelegramApi {
 		String sentChatId;
 		String sentText;
+		java.util.List<Button> sentButtons;
 		int status = 200;
 		RuntimeException transport;
 
 		@Override
 		public int sendMessage(String chatId, String text) {
+			return sendMessage(chatId, text, List.of());
+		}
+
+		@Override
+		public int sendMessage(String chatId, String text, java.util.List<Button> buttons) {
 			if (transport != null) {
 				throw transport;
 			}
 			this.sentChatId = chatId;
 			this.sentText = text;
+			this.sentButtons = buttons;
 			return status;
 		}
 	}
@@ -45,7 +53,7 @@ class TelegramAlertSenderTest {
 				new BenchmarkView.PricePoint(850_000L, java.time.LocalDate.of(2026, 6, 1)), null, 2, 2, null, null,
 				new BenchmarkView.Gap(null, null), List.of());
 		return new AlertMessage(deal, view, new AlertDecision(true, AlertIntensity.JACKPOT, List.of(), List.of()),
-				null, "아이폰 17", "256GB");
+				null, "아이폰 17", "256GB", 42L);
 	}
 
 	@Test
@@ -60,6 +68,15 @@ class TelegramAlertSenderTest {
 
 		assertThat(api.sentChatId).as("SEC-03: 설정된 chat로만 나간다").isEqualTo("555000");
 		assertThat(api.sentText).contains("아이폰 17 256GB").contains("820,000원").contains("https://ppomppu.test/1");
+	}
+
+	/** Q-22: 딜 알림에 [무시] 버튼이 붙는다 — callback_data는 그 딜을 가리켜 사후학습으로 흐른다. */
+	@Test
+	void includesIgnoreButtonForTheDeal() {
+		FakeApi api = new FakeApi();
+		new TelegramAlertSender(api, "555000").send(firstAlert());
+
+		assertThat(api.sentButtons).extracting(Button::callbackData).containsExactly("ignore:42");
 	}
 
 	/** SEC-08 순수 분류: 2xx 성공 / 5xx 일시장애(재시도 가능) / 그 외 4xx 거절(재시도 금지). */

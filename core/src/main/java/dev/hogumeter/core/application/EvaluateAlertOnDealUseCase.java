@@ -91,7 +91,7 @@ public class EvaluateAlertOnDealUseCase {
 				.toList();
 		boolean paidPriceFires = PurchaseTriggers.paidPriceTriggerFires(deal.priceFirst(), activePurchases);
 
-		DispatchOutcome outcome = dispatcher.dispatch(deal, view, alertPolicy, params, clock, paidPriceFires);
+		DispatchOutcome outcome = dispatcher.dispatch(deal, view, alertPolicy, params, clock, paidPriceFires, dealEventId);
 		// AL-03: 첫 알림이 실제로 나갔으면 이력에 FIRST를 남긴다 — 후속은 이 FIRST가 있는 딜에만 보낸다(Q-67). 멱등.
 		if (outcome == DispatchOutcome.SENT && !alerts.existsByDealEventIdAndKind(dealEventId, DealAlertEntity.FIRST)) {
 			alerts.save(new DealAlertEntity(dealEventId, DealAlertEntity.FIRST));

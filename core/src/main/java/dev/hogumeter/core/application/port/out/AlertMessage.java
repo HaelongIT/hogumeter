@@ -16,7 +16,10 @@ import dev.hogumeter.core.domain.deal.DealEvent;
  * <p>{@code productName}·{@code variantLabel}: AL-05가 요구하는 "제품/variant". {@code deal}은 variantId만
  * 지녀 이름이 없으므로 생산자가 {@link dev.hogumeter.core.application.VariantNaming}으로 채운다. 못 찾으면
  * 둘 다 null이고 포맷터가 "대상 미상"으로 그린다 — 지어내지 않는다.
+ *
+ * <p>{@code dealEventId}: [🔕무시] 버튼의 콜백("ignore:{id}")에 실려 사후학습(Q-22)의 대상을 가린다.
+ * {@code deal}(도메인)엔 엔티티 id가 없어 따로 싣는다. null이면 어댑터가 무시 버튼을 안 그린다.
  */
 public record AlertMessage(DealEvent deal, BenchmarkView view, AlertDecision decision, FollowUpKind followUpKind,
-		String productName, String variantLabel) {
+		String productName, String variantLabel, Long dealEventId) {
 }
