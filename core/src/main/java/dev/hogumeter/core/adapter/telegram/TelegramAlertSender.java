@@ -59,6 +59,11 @@ public class TelegramAlertSender implements AlertSender {
 	}
 
 	@Override
+	public boolean delivers() {
+		return true; // 실 전송 — 사용자에게 닿는다(스텁과 달리)
+	}
+
+	@Override
 	public void send(AlertMessage message) {
 		String text = formatter.format(message);
 		int status;

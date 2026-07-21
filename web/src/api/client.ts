@@ -1,5 +1,6 @@
 import type {
   AlertPolicyView,
+  AlertStatus,
   ApiError,
   BenchmarkView,
   CadenceView,
@@ -98,6 +99,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(command),
     }),
+
+  // AL-05 알림 발송 상태. delivering=false면 스텁이라 실제로 안 나간다 — 화면이 그 사실을 밝힌다(과대약속 금지).
+  getAlertStatus: () => request<AlertStatus>('/api/v1/alerts/status'),
 
   // REG-03 알림 정책. 미설정 variant도 200(`configured:false`) — 404는 variant가 없다는 뜻이다.
   getAlertPolicy: (variantId: number) => request<AlertPolicyView>(`/api/v1/variants/${variantId}/alert-policy`),

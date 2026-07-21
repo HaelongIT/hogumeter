@@ -31,7 +31,19 @@
 - ⚠️한계: `HttpTelegramApi`는 fake로만 검증(실 네트워크 테스트 금지) — 실 응답은 토큰 발급 후 수동 스파이크.
 - 기록: Q-20 부분해소(아웃바운드 발송 완성), Q-67 세 번째 거짓 봉인 해소(이력·배선·발송 다 있었다), Q-61 SEC-03
   아웃바운드 절반, docs/30 AL-03·텔레그램 갱신, docs/99 교훈("못 두드리는 어댑터는 seam+안 던지게").
-- 검증: core 전체 GREEN(신규 3 테스트 클래스). **텔레그램 발송 = 사용자가 토큰만 채우면 산다.**
+- 검증: core 전체 GREEN(신규 3 테스트 클래스). **텔레그램 발송 = 사용자가 토큰만 채우면 산다.** 커밋 `f8d3583`·`370145a`.
+
+**③ 프론트 증분 — 알림 발송 상태 정직화(2026-07-21, 커밋 대기).** 사용자: "순서대로 프론트 UI 갔다가 다른 백엔드
+증분들 계속하자". 프론트는 이미 성숙(판단·구매·정책·미상큐·등록 다 동작) — 큰 공백 대신, 내 텔레그램 작업이
+드러낸 **과대약속 갭**을 닫았다: **목표가를 설정해도 텔레그램이 꺼져 있으면 알림이 로그로만 남는데 화면이 그걸
+안 말했다**(절대 원칙 6 위반).
+- 백엔드: `AlertSender.delivers()`(default false, 스텁은 로그만) — `TelegramAlertSender`만 true. 활성 빈이 스스로
+  보고하므로 정본 하나(`telegram.enabled` 사본 아님). `GET /api/v1/alerts/status` → `{delivering}`.
+- web: `AlertPolicyPanel`이 상태를 조회해 `delivering===false`일 때만 "⚠️ 지금은 알림이 실제로 발송되지 않습니다
+  — 로그로만 남습니다"를 그린다(상태 모르면 null → 안 그림). 정책 화면 = 목표가 설정 지점이라 경고 위치가 맞다.
+- 테스트: `AlertStatusControllerTest`(기본 stub→false), `TelegramAlertSenderTest.realSenderReportsItDelivers`(true),
+  `AlertPolicyPanel.test`(false→경고·true→경고 없음), 스모크 `delivering:false` 종단.
+- 검증: core GREEN · web **172**(170→172) · build · 스모크 마커. **커밋 후 다음: 백엔드 증분 계속.**
 
 ## 2026-07-12 — 프론트 UI "판정을 주인공으로" + Q-15 버튼 (사용자 지휘)
 

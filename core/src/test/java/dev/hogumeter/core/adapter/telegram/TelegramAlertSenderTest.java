@@ -49,6 +49,11 @@ class TelegramAlertSenderTest {
 	}
 
 	@Test
+	void realSenderReportsItDelivers() {
+		assertThat(new TelegramAlertSender(new FakeApi(), "555000").delivers()).isTrue();
+	}
+
+	@Test
 	void sendsFormattedBodyToConfiguredChat() {
 		FakeApi api = new FakeApi();
 		new TelegramAlertSender(api, "555000").send(firstAlert());

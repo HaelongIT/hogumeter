@@ -212,6 +212,15 @@ export interface ApiError {
 }
 
 /**
+ * GET /api/v1/alerts/status (AL-05) — 알림이 실제로 사용자에게 발송되는가.
+ * `delivering: false`면 스텁이라 로그로만 남는다(텔레그램 미설정). 화면이 그 사실을 밝혀 "목표가만 설정하면
+ * 알림이 온다"는 과대약속을 막는다(절대 원칙 6).
+ */
+export interface AlertStatus {
+  delivering: boolean
+}
+
+/**
  * GET/PUT /api/v1/variants/{id}/alert-policy (REG-03)
  *
  * core의 `AlertPolicyView`는 `@JsonInclude(NON_NULL)`이라 **null인 필드는 키 자체가 없다.**

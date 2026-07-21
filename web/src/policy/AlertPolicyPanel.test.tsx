@@ -7,6 +7,8 @@ import { AlertPolicyPanel } from './AlertPolicyPanel'
 describe('AlertPolicyPanel', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    // 기본은 발송됨 — 경고를 그리지 않는다. 개별 테스트가 필요하면 덮는다.
+    vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
   })
 
   /**
@@ -111,6 +113,29 @@ describe('AlertPolicyPanel', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('BM_VARIANT_NOT_FOUND')
     expect(screen.queryByRole('button', { name: '정책 저장' })).toBeNull()
+  })
+
+  /**
+   * 과대약속 금지(절대 원칙 6): 알림이 실제로 안 나가면(스텁) 그 사실을 밝힌다. 목표가만 설정하고
+   * 텔레그램이 꺼져 있으면 사용자는 알림이 온다고 믿는데 로그로만 남는다.
+   */
+  it('알림이 스텁이면(delivering:false) 실제로 안 나간다고 경고한다', async () => {
+    vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: false })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: true, periodMonths: 6, kDisplay: 5, excludeKeywords: [] })
+
+    render(<AlertPolicyPanel variantId={7} />)
+
+    expect(await screen.findByRole('alert', { name: '알림 미발송 안내' })).toHaveTextContent(/실제로 발송되지 않습니다/)
+  })
+
+  it('알림이 실제로 발송되면(delivering:true) 미발송 경고를 그리지 않는다', async () => {
+    vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: true, periodMonths: 6, kDisplay: 5, excludeKeywords: [] })
+
+    render(<AlertPolicyPanel variantId={7} />)
+
+    await screen.findByLabelText(/임계 K/)
+    expect(screen.queryByRole('alert', { name: '알림 미발송 안내' })).toBeNull()
   })
 
   /**

@@ -51,9 +51,23 @@ function toForm(policy: AlertPolicyView): PolicyForm {
 export function AlertPolicyPanel({ variantId }: { variantId: number }) {
   const [form, setForm] = useState<PolicyForm>(EMPTY)
   const [configured, setConfigured] = useState<boolean | null>(null)
+  const [delivering, setDelivering] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
+
+  // 알림이 실제로 발송되는가(텔레그램)인지, 로그로만 남는 스텁인지. 실패해도 정책 화면은 그린다 —
+  // 상태를 모르면 경고를 그리지 않는다(false 확정일 때만 "안 나갑니다"라고 말한다).
+  useEffect(() => {
+    let live = true
+    api
+      .getAlertStatus()
+      .then((s) => live && setDelivering(s.delivering))
+      .catch(() => live && setDelivering(null))
+    return () => {
+      live = false
+    }
+  }, [])
 
   useEffect(() => {
     let live = true
@@ -105,6 +119,15 @@ export function AlertPolicyPanel({ variantId }: { variantId: number }) {
   return (
     <section aria-label="알림 정책">
       <h2>알림 정책</h2>
+
+      {/* 과대약속 금지(절대 원칙 6): 목표가를 설정해도 텔레그램이 꺼져 있으면 알림은 로그로만 남는다.
+          delivering===false(스텁 확정)일 때만 경고한다 — 상태를 모르면(null) 그리지 않는다. */}
+      {delivering === false && (
+        <p role="alert" aria-label="알림 미발송 안내">
+          ⚠️ 지금은 알림이 <strong>실제로 발송되지 않습니다</strong> — 서버 로그로만 남습니다. 텔레그램을
+          설정해야(<code>TELEGRAM_ENABLED=true</code> + 토큰) 실제로 받습니다. 아래 정책은 그때 적용됩니다.
+        </p>
+      )}
 
       {/* 미설정을 "기본값 적용 중"으로 그리면 사용자는 목표가 알림이 켜져 있다고 믿는다. 실제로는
           `alert_policy` 행이 없어 목표가 트리거가 발화하지 않는다(확정본 §107). 판정 기간의 시스템

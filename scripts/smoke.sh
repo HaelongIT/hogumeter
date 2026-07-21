@@ -410,6 +410,10 @@ echo '{"targetPrice":0,"periodMonths":6}' >"$policy"
 	-H 'Content-Type: application/json' -d @"$policy")" = 400 ] || fail "목표가 0원이 400이 아니다"
 rm -f "$policy"
 
+# AL-05: 기본(텔레그램 미설정)이면 알림은 스텁이라 실제로 안 나간다 — 화면이 그걸 밝히도록 REST가 delivering:false를 낸다.
+curl -fsS "${WEB}/api/v1/alerts/status" | grep -q '"delivering":false' ||
+	fail "기본 스텁인데 알림 발송 상태가 delivering:false가 아니다 (AL-05 과대약속 방지)"
+
 # 목표가(1,000,000) 아래의 딜을 새로 넣는다. 알림 판정은 딜 생성 시점에 돈다.
 compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
 	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "알림용 raw_deal_post 삽입 실패"
