@@ -15,7 +15,21 @@
   - ⚠️명시된 한계(적어 둠): generic 컬럼명(price·source·id)은 우연히 코드에 나타나 오판(false-negative) — distinctive
     이름의 죽은 컬럼만 확실히 잡는다. 이 한계가 다음 게이트의 명세.
 - 검증: 게이트 GREEN(156컬럼·면제 11) · 계약 ALL PASS(8) · check-ci-coverage GREEN(CI 배선 확인) · eol=lf.
-  Q-68에 기계화 주석 · docs/99 교훈("명시된 한계는 다음 게이트의 명세다") · 커밋 예정. core 무수정(scripts·ci·docs만).
+  Q-68에 기계화 주석 · docs/99 교훈("명시된 한계는 다음 게이트의 명세다") · 커밋 `ddcf51e`. core 무수정(scripts·ci·docs만).
+
+**무중단 체크인 — 토큰 무관 추천 3종 완료(미푸시 2커밋: 2d93451 PUR-04·ddcf51e 게이트).** 사용자 "추천 순서대로 쭉 가"
+→ ①PUR-04 성적표 발급(죽은 ReportCardCalculator 부활) done · ②collector Q-54는 실관측+결정 블록이라 건너뜀
+· ③죽은 컬럼 게이트 done. ⓐⓑⓒⓓ 재현 감사로 남은 막히지 않은 코드 확인:
+- **ⓐ**: M1 roadmap 코드 완결(잔여 4블로커 코드 밖). ⓑ 열린 Q 중 현재 참인 순수-코드 트리거 없음 — 남은 것은
+  실데이터(Q-16/17/18/54 sink 관측)·프론트 생산자(Q-28 전역설정·LABEL)·결정(Q-62 ARCHIVED 조건·Q-30 삭제매트릭스·
+  D-3~5)·M2 실폴링(Q-72)·M5 substrate(고립 시 consumer-0).
+- **ⓒ**: 소비처-0 게이트 3종 + 신규 죽은컬럼 게이트 GREEN. ReportCardCalculator·ReportIssueGate 부활(소비 26),
+  confidence 죽은 컬럼 기계로 잠금. 새 죽은 코드 0.
+- **ⓓ**: check-dead-columns.test.sh CI 배선+검증. PUR-04는 core 전체 GREEN + 스모크 갱신(발급 종단).
+- **남은 최고가치는 여전히 실데이터 M1 검증(사용자 시크릿·승인)** — preflight+런북으로 준비됨. 코드 경로는
+  M5(consumer-0 위험, 마일스톤 착수 결정) 또는 프론트 생산자(Q-28 전역설정 UI, 지휘 대기)뿐.
+
+TURN-END: ② 일감 소진 — 사용자 요청 추천 3종 처리 완료(①③ done, ② 실관측+결정 블록). ⓐ M1 코드완결 잔여 코드밖, ⓑ 열린 Q 현재 참인 순수-코드 없음(실데이터·프론트생산자·결정·M2·M5-consumer0), ⓒ 게이트 4종 GREEN 새 죽은코드 0, ⓓ 새 게이트 CI 배선 검증. 최고가치는 실데이터 M1 검증(사용자 몫). 대화형 지휘 세션이라 다음 방향 사용자에게 넘김. 미푸시 2커밋(푸시는 지시 대기).
 
 ## 2026-07-21 — PUR-04 성적표 발급: 죽어 있던 ReportCardCalculator를 살려 구매-이후 루프를 닫다 (토큰 무관 추천 ①, 무중단)
 
