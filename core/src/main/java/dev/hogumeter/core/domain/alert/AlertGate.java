@@ -5,8 +5,8 @@ import java.time.ZonedDateTime;
 
 /**
  * AL-04 발송 게이트(순수 도메인, Clock 주입). 🔥(JACKPOT)는 방해금지를 관통해 즉시 발송,
- * 그 외는 방해금지 시간이면 보류(HOLD). ⚠️ 보류분의 <b>종료 시 플러시는 아직 없다</b>(Q-20 ②) — 즉 지금
- * HOLD 판정을 받은 알림은 유실된다. 그 손실은 {@code IngestReport.heldAlerts}로 카운트돼 눈에 보인다.
+ * 그 외는 방해금지 시간이면 보류(HOLD). 보류분은 {@code held_alert} 큐에 적히고, 방해금지가 끝난 틱에
+ * {@code FlushHeldAlertsUseCase}가 <b>재평가해</b> 보낸다(Q-20 ②) — 저장된 본문이 아니라 발송 시점 상태로.
  */
 public class AlertGate {
 

@@ -325,8 +325,9 @@ echo "$tick" | grep -q 'followUpsSent\[priceChanged=0 ended=0\]' ||
 	fail "후속 알림 카운터가 틱 로그에 없다 (Q-57): $tick"
 # Q-56: 단계 실패 수도 실린다 — 건강한 틱은 0이라, 이게 비-0이면 "도는 척" 틱이 로그 한 줄에 보인다.
 echo "$tick" | grep -q 'stepsFailed=0' || fail "단계 실패 카운터가 틱 로그에 없거나 0이 아니다 (Q-56): $tick"
-# Q-20 ②: 방해금지로 보류돼 유실되는 알림 수도 실린다(플러시 미구현). 이 딜엔 방해금지가 없어 0.
+# Q-20 ②: 방해금지로 보류된 알림 수 + 종료분 플러시 결과도 실린다. 이 딜엔 방해금지가 없어 전부 0.
 echo "$tick" | grep -q 'heldAlerts=0' || fail "보류 알림 카운터가 틱 로그에 없다 (Q-20 ②): $tick"
+echo "$tick" | grep -q 'heldFlushed\[sent=0 dropped=0\]' || fail "보류 플러시 카운터가 틱 로그에 없다 (Q-20 ②): $tick"
 
 # OBS-01: core 로그도 구조화(JSON)여야 한다. collector는 이미 JSON Lines다 —
 # 두 컨테이너의 로그가 같은 모양이어야 한 곳에서 읽는다. 형식은 조용히 되돌아가므로 매번 본다.

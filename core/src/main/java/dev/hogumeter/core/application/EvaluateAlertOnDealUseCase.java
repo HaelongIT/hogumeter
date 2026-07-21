@@ -6,6 +6,8 @@ import dev.hogumeter.core.adapter.persistence.DealAlertEntity;
 import dev.hogumeter.core.adapter.persistence.DealAlertRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventMapper;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
+import dev.hogumeter.core.adapter.persistence.HeldAlertEntity;
+import dev.hogumeter.core.adapter.persistence.HeldAlertRepository;
 import dev.hogumeter.core.adapter.persistence.PurchaseRepository;
 import dev.hogumeter.core.application.port.out.CurrentPriceProvider;
 import dev.hogumeter.core.domain.BenchmarkParams;
@@ -37,6 +39,7 @@ public class EvaluateAlertOnDealUseCase {
 	private final CurrentPriceProvider currentPrice;
 	private final AlertDispatcher dispatcher;
 	private final DealAlertRepository alerts;
+	private final HeldAlertRepository heldAlerts;
 	private final VariantDemandScope demandScope;
 	private final VariantExcludeKeywords excludeKeywords;
 	private final Clock clock;
@@ -44,8 +47,8 @@ public class EvaluateAlertOnDealUseCase {
 
 	public EvaluateAlertOnDealUseCase(DealEventRepository dealEvents, DealEventMapper mapper,
 			AlertPolicyRepository policies, PurchaseRepository purchases, CurrentPriceProvider currentPrice,
-			AlertDispatcher dispatcher, DealAlertRepository alerts, VariantDemandScope demandScope,
-			VariantExcludeKeywords excludeKeywords, Clock clock) {
+			AlertDispatcher dispatcher, DealAlertRepository alerts, HeldAlertRepository heldAlerts,
+			VariantDemandScope demandScope, VariantExcludeKeywords excludeKeywords, Clock clock) {
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.policies = policies;
@@ -53,6 +56,7 @@ public class EvaluateAlertOnDealUseCase {
 		this.currentPrice = currentPrice;
 		this.dispatcher = dispatcher;
 		this.alerts = alerts;
+		this.heldAlerts = heldAlerts;
 		this.demandScope = demandScope;
 		this.excludeKeywords = excludeKeywords;
 		this.clock = clock;
@@ -91,6 +95,11 @@ public class EvaluateAlertOnDealUseCase {
 		// AL-03: 첫 알림이 실제로 나갔으면 이력에 FIRST를 남긴다 — 후속은 이 FIRST가 있는 딜에만 보낸다(Q-67). 멱등.
 		if (outcome == DispatchOutcome.SENT && !alerts.existsByDealEventIdAndKind(dealEventId, DealAlertEntity.FIRST)) {
 			alerts.save(new DealAlertEntity(dealEventId, DealAlertEntity.FIRST));
+		}
+		// AL-04/07(Q-20 ②): 방해금지로 보류됐으면 큐에 적어 둔다 — 방해금지가 끝난 틱에 재평가해 보낸다
+		// (FlushHeldAlertsUseCase). 안 적으면 유실. 딜당 1건(멱등) — 여러 틱 연속 보류돼도 하나만.
+		if (outcome == DispatchOutcome.HELD && !heldAlerts.existsByDealEventId(dealEventId)) {
+			heldAlerts.save(new HeldAlertEntity(dealEventId, variantId));
 		}
 		return outcome;
 	}

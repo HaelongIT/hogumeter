@@ -9,10 +9,9 @@ package dev.hogumeter.core.application;
  * (매칭 실패)은 둘 다 리뷰 큐로 가지만 성질이 다르고, {@code rejected}(무관)는 큐에도 안 간다.
  * {@code firstAlertsSent}는 이번 수집에서 실제로 나간 <b>첫 알림</b> 수다(후속 알림은 별개 단계·별개 카운터).
  *
- * <p>{@code heldAlerts}는 방해금지(quiet hours)로 <b>보류된</b> 첫 알림 수다 — 발송과 부류가 다르다.
- * ⚠️ 지금은 보류분을 담을 큐도, 종료 시 플러시도 <b>없다</b>(Q-20 ②) — 즉 이 알림들은 <b>유실</b>된다.
- * 그 손실을 카운터로 <b>보이게</b> 한다("성공했는데 조용히 0건"의 반대: 조용히 유실되면 못 고친다).
- * 이 값이 매 틱 0이 아니면 플러시 미구현이 사람 눈에 든다.
+ * <p>{@code heldAlerts}는 이번 틱에 방해금지(quiet hours)로 <b>새로 보류된</b> 첫 알림 수다 — 발송과 부류가
+ * 다르다. 보류분은 {@code held_alert} 큐에 적혀 방해금지가 끝난 틱에 재평가·발송된다(Q-20 ②,
+ * {@code FlushHeldAlertsUseCase}). 그 종료분 처리 결과는 틱 리포트의 {@code heldAlertsFlushed/Dropped}가 낸다.
  */
 public record IngestReport(int confirmed, int candidate, int unknown, int rejected,
 		int skippedNoPrice, int firstAlertsSent, int heldAlerts) {

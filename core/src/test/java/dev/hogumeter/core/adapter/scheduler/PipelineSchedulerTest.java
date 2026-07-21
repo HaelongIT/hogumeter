@@ -3,6 +3,7 @@ package dev.hogumeter.core.adapter.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import dev.hogumeter.core.application.FlushHeldAlertsUseCase;
 import dev.hogumeter.core.application.IngestReport;
 import dev.hogumeter.core.domain.alert.FollowUpKind;
 import java.util.ArrayList;
@@ -150,6 +151,17 @@ class PipelineSchedulerTest {
 		assertThat(reported.get()).isNotNull();
 		assertThat(reported.get().dealsCreated()).isZero();
 		assertThat(reported.get().stepsFailed()).as("건강한 틱은 단계 실패 0").isZero();
+	}
+
+	@Test
+	@DisplayName("방해금지 플러시 결과가 틱 리포트에 흐른다 (Q-20 ②)")
+	void heldAlertFlushCountsFlowIntoReport() {
+		// 플러시가 (발송 2, 드롭 1)을 내면 리포트에 그대로 실려야 한다 — 배선이 끊기면 0이라 이 테스트가 잡는다.
+		new PipelineScheduler(expire, ingest, conditions, prices, status, followUp,
+				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), () -> EMPTY, reported::set).tick();
+
+		assertThat(reported.get().heldAlertsFlushed()).isEqualTo(2);
+		assertThat(reported.get().heldAlertsDropped()).isEqualTo(1);
 	}
 
 	@Test

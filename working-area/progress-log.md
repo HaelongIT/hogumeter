@@ -1,3 +1,20 @@
+## 2026-07-21 — 방해금지 보류 알림 플러시 오케스트레이션 (Q-20 ②, 사용자 지휘: "순서대로" → 플러시 착수)
+
+앞 배치 2커밋 푸시(`370145a..006674c`) 후 사용자 지시로 **플러시 오케스트레이션**(큰 것) 착수. 방해금지(quiet
+hours)로 HOLD된 알림이 유실되던 걸 실제로 **이어 발송**한다.
+- **저장**: `EvaluateAlertOnDeal`이 HELD면 `held_alert` 큐(V8/R8, 딜당 1건 멱등)에 적는다.
+- **플러시**: 신규 `FlushHeldAlertsUseCase`가 `PipelineScheduler` 새 step으로 매 틱 돈다 — 각 보류 딜의 variant
+  방해금지가 **끝났으면** `evaluate()`를 **다시 부른다**(게이트가 이제 SEND_NOW → 실제로 나감). ⚠️핵심 설계:
+  **저장된 본문이 아니라 재평가**(AL-07) — 밤새 기준가·상태가 바뀌므로 현재값으로 판정, 자격 잃었으면 드롭
+  (지어낸 밤사이 값으로 안 알린다). `@Transactional`로 발송·큐삭제 원자 → 재시도 이중발송 없음.
+- **관측**: 틱 로그 `heldFlushed[sent=N dropped=M]`. `IngestReport.heldAlerts`(새 보류)와 부류를 가른다.
+- **v1 한계(기록)**: 재평가에서 종료(ENDED)된 딜은 억제→드롭 — AL-04 "(종료됨) 발송"은 후속 경로(①)가 채운다.
+- ⚠️발견: AlertGate·AlertDispatcher·GateDecision·IngestReport의 "플러시 미구현·유실" 주석(직전 커밋서 정직화한
+  것)을 이제 "플러시 있음"으로 재정정 — 구현이 따라잡았다.
+- 관통 테스트: `FlushHeldAlertsUseCaseTest`(시계 08:00 고정 + 정책 창 달리해 종료→발송·아직→보류·종료딜→드롭),
+  `PipelineSchedulerTest.heldAlertFlushCountsFlowIntoReport`(배선), `PipelineTickReportTest`(렌더), 스모크 종단.
+- 검증: core 전체 GREEN(신규 2 테스트 클래스 + V8/R8). docs/91 Q-20 ② 해소(v1). **커밋 후 푸시는 사용자 지시 대기.**
+
 ## 2026-07-21 — 텔레그램 알림 어댑터 (사용자 지휘: "순서대로 진행하자" → "실 어댑터까지 만든다")
 
 먼저 앞 배치 6커밋 **푸시 완료**(`36e2509..035c9ef`, 사용자 지시). 그 뒤 "일감 소진" 마커는 **성급했다** — 알림

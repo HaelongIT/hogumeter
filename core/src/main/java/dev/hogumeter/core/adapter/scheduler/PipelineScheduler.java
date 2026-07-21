@@ -6,6 +6,8 @@ import dev.hogumeter.core.adapter.persistence.PurchaseRepository;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
 import dev.hogumeter.core.application.ExpirePurchaseObservationsUseCase;
+import dev.hogumeter.core.application.FlushHeldAlertsUseCase;
+import dev.hogumeter.core.application.FlushHeldAlertsUseCase.FlushReport;
 import dev.hogumeter.core.application.FollowUpAlertUseCase;
 import dev.hogumeter.core.application.IngestDealsUseCase;
 import dev.hogumeter.core.application.IngestReport;
@@ -68,6 +70,7 @@ public class PipelineScheduler {
 	private final Supplier<List<Long>> reprocessPrices;
 	private final Supplier<List<Long>> reprocessStatus;
 	private final BiFunction<List<Long>, FollowUpKind, Integer> followUp;
+	private final Supplier<FlushReport> flushHeld; // 방해금지 종료분 재평가·발송(Q-20 ②)
 	private final Supplier<PipelineSnapshot> probe;
 	private final Consumer<PipelineTickReport> report;
 
@@ -78,11 +81,11 @@ public class PipelineScheduler {
 	@Autowired
 	PipelineScheduler(ExpirePurchaseObservationsUseCase expireObservations, IngestDealsUseCase ingest,
 			PreserveAppliedConditionsUseCase conditions, ReprocessDealPricesUseCase prices,
-			ReprocessDealStatusUseCase status, FollowUpAlertUseCase followUp, RawDealPostRepository rawPosts,
-			DealEventRepository dealEvents, DealEventSourceRepository sources,
+			ReprocessDealStatusUseCase status, FollowUpAlertUseCase followUp, FlushHeldAlertsUseCase flushHeld,
+			RawDealPostRepository rawPosts, DealEventRepository dealEvents, DealEventSourceRepository sources,
 			ReviewQueueItemRepository reviewQueue, PurchaseRepository purchases, JdbcTemplate jdbc) {
 		this(expireObservations::expireDueObservations, ingest::ingestPending, conditions::preserveTags,
-				prices::reprocessPriceChanges, status::reprocessEndedDeals, followUp::sendFollowUps,
+				prices::reprocessPriceChanges, status::reprocessEndedDeals, followUp::sendFollowUps, flushHeld::flush,
 				() -> new PipelineSnapshot(
 						rawPosts.count(),
 						sources.count(),
@@ -104,19 +107,29 @@ public class PipelineScheduler {
 				tick -> log.info("pipeline tick {}", tick));
 	}
 
-	/** 테스트 seam — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
+	/** 테스트 seam(플러시 포함) — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
 	PipelineScheduler(Runnable expireObservations, Supplier<IngestReport> ingest, Runnable preserveConditions,
 			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
-			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<PipelineSnapshot> probe,
-			Consumer<PipelineTickReport> report) {
+			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<FlushReport> flushHeld,
+			Supplier<PipelineSnapshot> probe, Consumer<PipelineTickReport> report) {
 		this.expireObservations = expireObservations;
 		this.ingest = ingest;
 		this.preserveConditions = preserveConditions;
 		this.reprocessPrices = reprocessPrices;
 		this.reprocessStatus = reprocessStatus;
 		this.followUp = followUp;
+		this.flushHeld = flushHeld;
 		this.probe = probe;
 		this.report = report;
+	}
+
+	/** 플러시 없는 테스트 seam(기존 호출부 호환) — 방해금지 플러시를 no-op으로 둔다. */
+	PipelineScheduler(Runnable expireObservations, Supplier<IngestReport> ingest, Runnable preserveConditions,
+			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
+			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<PipelineSnapshot> probe,
+			Consumer<PipelineTickReport> report) {
+		this(expireObservations, ingest, preserveConditions, reprocessPrices, reprocessStatus, followUp,
+				FlushReport::empty, probe, report);
 	}
 
 	@Scheduled(fixedDelayString = "${core.pipeline.interval-ms:60000}",
@@ -135,12 +148,15 @@ public class PipelineScheduler {
 				() -> followUp.apply(priceChanged, FollowUpKind.PRICE_CHANGED), 0);
 		int followUpEnded = runStepReturning("follow-up-ended",
 				() -> followUp.apply(ended, FollowUpKind.ENDED), 0);
+		// 방해금지가 끝난 보류분을 재평가해 보낸다(Q-20 ②) — 밤새 바뀐 상황을 발송 시점에 다시 판정한다.
+		FlushReport flush = runStepReturning("flush-held", flushHeld, FlushReport.empty());
 		PipelineSnapshot after = snapshot();
 		if (before == null || after == null) {
 			return; // DB가 닿지 않는다. snapshot()이 이미 남겼고, 0으로 채운 리포트는 거짓말이다.
 		}
 		// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다. stepsFailed로 그 사실도 싣는다.
-		report.accept(PipelineTickReport.between(before, after, ingestReport, followUpPrice, followUpEnded, stepFailures));
+		report.accept(PipelineTickReport.between(before, after, ingestReport, followUpPrice, followUpEnded,
+				stepFailures, flush.flushed(), flush.dropped()));
 	}
 
 	/**

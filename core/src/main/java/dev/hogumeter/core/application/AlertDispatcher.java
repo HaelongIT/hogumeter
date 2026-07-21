@@ -15,8 +15,8 @@ import java.util.function.LongFunction;
 
 /**
  * 신규 딜 → 알림 판정 → 게이트 → 발송을 잇는 유스케이스. 순수 도메인(평가·게이트)을 조립하고
- * 아웃 포트(AlertSender)로만 발송한다. ⚠️ HOLD(방해금지)의 <b>플러시는 미구현</b>(Q-20 ②) — 보류된 알림을
- * 담을 큐도, 종료 시 재디스패치도 없어 지금은 유실된다(그 수는 {@code IngestReport.heldAlerts}로 보인다).
+ * 아웃 포트(AlertSender)로만 발송한다. HOLD(방해금지)는 {@code EvaluateAlertOnDeal}이 {@code held_alert}
+ * 큐에 적고, {@code FlushHeldAlertsUseCase}가 방해금지 종료 후 재평가해 보낸다(Q-20 ②).
  */
 public class AlertDispatcher {
 

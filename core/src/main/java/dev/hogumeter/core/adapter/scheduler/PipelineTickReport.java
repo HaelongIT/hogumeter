@@ -48,10 +48,13 @@ public record PipelineTickReport(
 		IngestReport ingest,
 		int followUpPriceChangedSent,
 		int followUpEndedSent,
-		int stepsFailed) {
+		int stepsFailed,
+		int heldAlertsFlushed,
+		int heldAlertsDropped) {
 
 	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest,
-			int followUpPriceChangedSent, int followUpEndedSent, int stepsFailed) {
+			int followUpPriceChangedSent, int followUpEndedSent, int stepsFailed, int heldAlertsFlushed,
+			int heldAlertsDropped) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
 		return new PipelineTickReport(
@@ -69,7 +72,9 @@ public record PipelineTickReport(
 				ingest,
 				followUpPriceChangedSent,
 				followUpEndedSent,
-				stepsFailed);
+				stepsFailed,
+				heldAlertsFlushed,
+				heldAlertsDropped);
 	}
 
 	/** 한 줄 요약. 0을 생략하지 않는다 — "성공했는데 0건"이 사라지면 드리프트를 못 본다. */
@@ -95,6 +100,7 @@ public record PipelineTickReport(
 				+ " heldAlerts=" + ingest.heldAlerts()
 				+ " followUpsSent[priceChanged=" + followUpPriceChangedSent
 				+ " ended=" + followUpEndedSent + "]"
+				+ " heldFlushed[sent=" + heldAlertsFlushed + " dropped=" + heldAlertsDropped + "]"
 				+ " stepsFailed=" + stepsFailed;
 	}
 }
