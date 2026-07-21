@@ -1,3 +1,21 @@
+## 2026-07-21 — 인바운드 텔레그램 Piece 1: 콜백 수신·라우팅·SEC-03 (Q-15, 무중단)
+
+사용자 "순서대로 진행해 무중단 ㄱㄱ" → 인바운드 텔레그램 착수. 큰 결합 기능이라 둘로 나눔. **Piece 1 = 인바운드
+절반**(버튼 콜백을 받아 승격·기각으로 라우팅). Piece 2 = 아웃바운드 버튼(리뷰 항목을 버튼과 함께 발송) 예정.
+- `ReviewCallbackRouter`(순수 라우팅): `callback_data`("promote:123") 파싱 → **SEC-03 인바운드 화이트리스트**
+  (`telegram.allowed-chat-ids`, 비면 `telegram.chat-id` 폴백, 둘 다 비면 **아무도 허용 안 함** = 닫힌 기본값) →
+  `ResolveReviewItem.promote/reject(id, "TELEGRAM")`. 실패도 문구로 돌려줌(안 던짐). `channel='TELEGRAM'` 기록
+  (V1 CHECK가 이미 WEB·TELEGRAM 허용 — `ResolveReviewItem`에 channel 파라미터 추가, 웹은 WEB 그대로).
+- `TelegramInboundApi` seam(아웃바운드와 분리 — 기존 발송 fake 안 깨짐) + `HttpTelegramApi`가 getUpdates
+  (Map 파싱 — JsonNode API 불확실성 회피, 방어적)·answerCallbackQuery 구현. `TelegramInboundPoller`(@Scheduled
+  짧은 주기 폴링, `telegram.enabled=true`만, offset으로 재수신 방지, 던지지 않음).
+- 안전: 기본(스텁)은 폴러 미생성 → 실 네트워크 없음. 배선 테스트는 `telegram.poll-interval-ms=1h`로 실 폴 차단.
+- ⚠️한계: getUpdates 실 파싱은 fake로만 검증(실 네트워크 금지) — 수동 스파이크 필요. Piece 1만으론 버튼이
+  없어 idle(과대약속 아님 — 인프라만). Piece 2가 버튼을 붙이면 종단으로 산다.
+- 관통 테스트: `ReviewCallbackRouterTest`(SEC-03 허용/거부·파싱·채널·예외 문구), `TelegramInboundPollerTest`
+  (라우팅·answer·offset 전진·안 던짐), 배선 테스트(라우터·폴러 빈). config: compose+.env.example TELEGRAM_ALLOWED_CHAT_IDS.
+- 검증: core 전체 GREEN(신규 2 테스트 클래스). **다음: Piece 2 — 리뷰 항목 아웃바운드 + 인라인 버튼.**
+
 ## 2026-07-21 — 연속 실패 관리 알림 OBS-03 (Q-56 완결, 무중단)
 
 플러시 커밋 푸시 후 "무중단 진행 ㄱㄱ". 다음 막히지 않은 최고가치 = **연속 실패 관리 알림**(stepsFailed 카운터가

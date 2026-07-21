@@ -36,6 +36,8 @@ services:
       TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      # SEC-03 인바운드: 인라인 버튼 명령을 받아들일 chat_id 화이트리스트. 비면 TELEGRAM_CHAT_ID로 폴백.
+      TELEGRAM_ALLOWED_CHAT_IDS: ${TELEGRAM_ALLOWED_CHAT_IDS:-}
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
       # 파이프라인 트리거 주기(ms). raw_deal_post -> deal_event 변환을 이 주기로 돈다.

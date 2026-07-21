@@ -41,25 +41,36 @@ public class ResolveReviewItemUseCase {
 		this.mapper = mapper;
 	}
 
-	/** 승격 — 이상치 오탐을 정상으로. 미상 항목은 지원하지 않는다(variant 지정 필요). */
+	/** 승격 — 이상치 오탐을 정상으로. 미상 항목은 지원하지 않는다(variant 지정 필요). REST(웹) 경로. */
 	@Transactional
 	public void promote(long reviewItemId) {
+		promote(reviewItemId, "WEB");
+	}
+
+	/** 어느 채널(WEB·TELEGRAM)로 처리됐는지 남긴다 — 인라인 버튼 승격(Q-15)은 TELEGRAM으로 온다. */
+	@Transactional
+	public void promote(long reviewItemId, String channel) {
 		Item item = readPending(reviewItemId);
 		if (!OUTLIER_LOWER.equals(item.type())) {
 			throw new UnclassifiedPromoteNotSupportedException(reviewItemId);
 		}
 		applyToDeal(item, true);
-		resolve(reviewItemId, "CONFIRMED");
+		resolve(reviewItemId, "CONFIRMED", channel);
 	}
 
-	/** 기각 — 사기·낚시로 영구 제외. 미상 항목은 딜이 없어 큐에서 내리기만 한다. */
+	/** 기각 — 사기·낚시로 영구 제외. 미상 항목은 딜이 없어 큐에서 내리기만 한다. REST(웹) 경로. */
 	@Transactional
 	public void reject(long reviewItemId) {
+		reject(reviewItemId, "WEB");
+	}
+
+	@Transactional
+	public void reject(long reviewItemId, String channel) {
 		Item item = readPending(reviewItemId);
 		if (OUTLIER_LOWER.equals(item.type())) {
 			applyToDeal(item, false);
 		}
-		resolve(reviewItemId, "REJECTED");
+		resolve(reviewItemId, "REJECTED", channel);
 	}
 
 	private Item readPending(long reviewItemId) {
@@ -90,14 +101,14 @@ public class ResolveReviewItemUseCase {
 	}
 
 	/**
-	 * PENDING 행에만 원자적으로 처리 표시. {@code channel='WEB'}은 REST(웹)로 처리됐다는 사실이다
-	 * (텔레그램 인라인 버튼은 Q-20). 0행이면 그 사이 누가 처리했다는 뜻 — 없는 것과 같이 취급한다.
+	 * PENDING 행에만 원자적으로 처리 표시. {@code channel}은 어디로 처리됐나(WEB·TELEGRAM) — CHECK가 그 둘만
+	 * 허용한다(V1). 0행이면 그 사이 누가 처리했다는 뜻 — 없는 것과 같이 취급한다(멱등: 두 번 눌러도 두 번째는 404).
 	 */
-	private void resolve(long reviewItemId, String status) {
+	private void resolve(long reviewItemId, String status, String channel) {
 		int updated = jdbc.update(
-				"update review_queue_item set status = ?, channel = 'WEB', resolved_at = now() "
+				"update review_queue_item set status = ?, channel = ?, resolved_at = now() "
 						+ "where id = ? and status = 'PENDING'",
-				status, reviewItemId);
+				status, channel, reviewItemId);
 		if (updated == 0) {
 			throw new ReviewItemNotFoundException(reviewItemId);
 		}
