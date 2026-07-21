@@ -52,6 +52,12 @@ export function reviewLine(item: ReviewQueueItem): ReviewLine {
           .filter(Boolean)
           .join(' · '),
       }
+    case 'DEMAND_UNKNOWN':
+      return {
+        // 분리 제품인데 제목에서 색(수요축 값)을 못 읽었다 — 기준가에서 빠졌으니 사람이 원문을 보고 정한다(Q-66 ①).
+        reason: '수요축 값 미상 — 제목에서 값을 판별하지 못해 기준가에서 빠졌습니다. 원문을 보고 분류하세요.',
+        detail: `${item.subject ?? '대상 미상'} · ${asText(item.payload.title, '제목 없음')}`,
+      }
     default:
       // 새 유형이 생겼는데 화면이 모른다. 빈 줄을 그리느니 근거를 통째로 보여준다.
       return {

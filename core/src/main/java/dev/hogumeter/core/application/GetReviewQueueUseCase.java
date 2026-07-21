@@ -66,11 +66,12 @@ public class GetReviewQueueUseCase {
 			  left join raw_deal_post post
 			         on q.type = 'UNCLASSIFIED'
 			        and post.id = nullif(q.payload ->> 'rawDealPostId', '')::bigint
+			  -- OUTLIER_LOWER·DEMAND_UNKNOWN은 둘 다 dealEventId를 가리킨다 — 같은 조인으로 원문·대상을 잇는다.
 			  left join lateral (
 			       select rp.url
 			         from deal_event_source des
 			         join raw_deal_post rp on rp.id = des.raw_deal_post_id
-			        where q.type = 'OUTLIER_LOWER'
+			        where q.type in ('OUTLIER_LOWER', 'DEMAND_UNKNOWN')
 			          and des.deal_event_id = nullif(q.payload ->> 'dealEventId', '')::bigint
 			        order by des.id
 			        limit 1
@@ -80,7 +81,7 @@ public class GetReviewQueueUseCase {
 			         from deal_event de
 			         join variant v on v.id = de.variant_id
 			         join product p on p.id = v.product_id
-			        where q.type = 'OUTLIER_LOWER'
+			        where q.type in ('OUTLIER_LOWER', 'DEMAND_UNKNOWN')
 			          and de.id = nullif(q.payload ->> 'dealEventId', '')::bigint
 			  ) subject on true
 			  left join lateral (
@@ -89,7 +90,7 @@ public class GetReviewQueueUseCase {
 			       select string_agg(tag, ',' order by tag collate "C") as tags
 			         from deal_event de
 			         cross join lateral unnest(de.applied_conditions) as tag
-			        where q.type = 'OUTLIER_LOWER'
+			        where q.type in ('OUTLIER_LOWER', 'DEMAND_UNKNOWN')
 			          and de.id = nullif(q.payload ->> 'dealEventId', '')::bigint
 			  ) conditions on true
 			 where q.status = 'PENDING'

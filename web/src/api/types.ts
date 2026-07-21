@@ -165,7 +165,7 @@ export interface PurchaseRecorded {
   purchaseId: number
 }
 
-export type ReviewQueueType = 'UNCLASSIFIED' | 'OUTLIER_LOWER' | 'KEYWORD_SUGGEST'
+export type ReviewQueueType = 'UNCLASSIFIED' | 'OUTLIER_LOWER' | 'KEYWORD_SUGGEST' | 'DEMAND_UNKNOWN'
 
 /**
  * GET /api/v1/review-queue (읽기 전용) — 처리 대기(PENDING) 항목만. 같은 근거는 하나로 접혀 온다.

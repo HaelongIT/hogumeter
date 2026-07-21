@@ -466,6 +466,11 @@ curl -fsS -X POST "${WEB}/api/v1/purchases" -H 'Content-Type: application/json' 
 	grep -q '"purchaseId"' || fail "분리 제품 구매(값 지정)가 기록되지 않는다 (Q-66 ③)"
 rm -f "$buy"
 
+# Q-66 ① E: 색을 못 읽은 딜(sp7 "특가")은 분포에서 빠질 뿐 아니라 **승격 큐(DEMAND_UNKNOWN)에 뜬다**.
+# 빠지기만 하고 사람이 못 보면 유실이다(§41).
+curl -fsS "${WEB}/api/v1/review-queue" | grep -q '"type":"DEMAND_UNKNOWN"' ||
+	fail "색 미상 딜이 승격 큐에 뜨지 않는다 (Q-66 ① E)"
+
 echo "--- 5-1e) 미상 큐: 매칭 실패 원문이 사람에게 보인다 + 중복 재처리 실측 (Q-27 ④) ---"
 # `review_queue_item`은 2026-07-10까지 **쓰이기만 하고 아무도 읽지 않았다.** 매칭이 무엇을
 # 놓치는지 볼 방법이 없었다 — 놓침을 허용하는 시스템에서 놓친 걸 못 보면 그건 유실이다.

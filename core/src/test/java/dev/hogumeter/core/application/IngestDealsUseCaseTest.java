@@ -173,6 +173,32 @@ class IngestDealsUseCaseTest {
 		assertThat(deal.getDemandAxisValue()).isNull();
 	}
 
+	/**
+	 * Q-66 ① E(확정본 §41): 분리 제품인데 색을 판별 못 한 딜은 <b>승격 큐(DEMAND_UNKNOWN)에 뜬다</b> —
+	 * 분포에서 빠지는 것만으로는 부족하다(사람이 볼 수 없으면 유실). 값을 아는 딜은 큐에 안 뜬다.
+	 */
+	@Test
+	void splitDealWithUnknownValueGoesToTheReviewQueue() {
+		aliases.save(new AliasEntity(colorProductId, "갤럭시25"));
+		savePost("ppomppu", "갤럭시 25 256기가 특가", 890_000L, T); // 색 미상
+		savePost("ppomppu", "갤럭시 25 256기가 블랙 특가", 880_000L, T); // 색 판별됨
+
+		useCase.ingestPending();
+
+		List<ReviewQueueItemEntity> queued = reviewQueue.findByType(ReviewQueueType.DEMAND_UNKNOWN);
+		assertThat(queued).as("미상 딜만 큐에 뜬다 — 블랙은 안 뜬다").hasSize(1);
+	}
+
+	/** 묶음(GROUPED) 제품은 색이 없어도 미상 큐에 올리지 않는다 — 어차피 한 분포라 값이 필요 없다. */
+	@Test
+	void groupedDealWithNoValueDoesNotGoToDemandUnknownQueue() {
+		savePost("ppomppu", "아이폰 17 256기가 특가 89만", 890_000L, T); // variantId는 GROUPED 제품
+
+		useCase.ingestPending();
+
+		assertThat(reviewQueue.findByType(ReviewQueueType.DEMAND_UNKNOWN)).isEmpty();
+	}
+
 	@Test
 	void repeatedIngestOfSameUnclassifiedFoldsIntoOneRow() {
 		// Q-27④: 미상 원문은 딜로 링크되지 않아 findUnprocessed가 매 틱 다시 반환한다. 두 번 수집해도

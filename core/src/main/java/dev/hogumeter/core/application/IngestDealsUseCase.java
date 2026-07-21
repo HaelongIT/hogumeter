@@ -21,6 +21,7 @@ import dev.hogumeter.core.domain.matching.AliasDictionary;
 import dev.hogumeter.core.domain.matching.MatchResult;
 import dev.hogumeter.core.domain.matching.Matcher;
 import dev.hogumeter.core.domain.matching.ProductMatchSpec;
+import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.review.ReviewQueueItem;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.time.Instant;
@@ -45,6 +46,7 @@ public class IngestDealsUseCase {
 	private final CatalogProjection catalog;
 	private final ReviewQueueItemRepository reviewQueue;
 	private final EvaluateAlertOnDealUseCase alertEvaluation;
+	private final VariantDemandScope demandScope;
 	private final Matcher matcher = new Matcher();
 	private final DealMergePolicy mergePolicy = new DealMergePolicy();
 	private final OutlierDetector outlierDetector = new OutlierDetector();
@@ -55,7 +57,8 @@ public class IngestDealsUseCase {
 
 	public IngestDealsUseCase(RawDealPostRepository rawPosts, DealEventRepository dealEvents,
 			DealEventSourceRepository sources, DealEventMapper mapper, CatalogProjection catalog,
-			ReviewQueueItemRepository reviewQueue, EvaluateAlertOnDealUseCase alertEvaluation) {
+			ReviewQueueItemRepository reviewQueue, EvaluateAlertOnDealUseCase alertEvaluation,
+			VariantDemandScope demandScope) {
 		this.rawPosts = rawPosts;
 		this.dealEvents = dealEvents;
 		this.sources = sources;
@@ -63,6 +66,7 @@ public class IngestDealsUseCase {
 		this.catalog = catalog;
 		this.reviewQueue = reviewQueue;
 		this.alertEvaluation = alertEvaluation;
+		this.demandScope = demandScope;
 	}
 
 	@Transactional
@@ -123,6 +127,7 @@ public class IngestDealsUseCase {
 				candidate.status(), candidate.firstSeen(), candidate.lastSeen(), candidate.demandAxisValue()));
 		sources.save(new DealEventSourceEntity(created.getId(), post.getId(), post.getSite()));
 		classifyOutlier(created, variantId);
+		enqueueIfDemandUnknown(post, created, variantId); // Q-66 ① E
 		return alertEvaluation.evaluate(variantId, created.getId(), mapper.toDomain(created));
 	}
 
@@ -144,6 +149,24 @@ public class IngestDealsUseCase {
 					"priceFirst", created.getPriceFirst(),
 					"dealEventId", created.getId()), "o:" + created.getId());
 		}
+	}
+
+	/**
+	 * Q-66 ① E(확정본 §41): 분리 제품인데 제목에서 수요축 값을 판별 못 한 딜을 <b>승격 큐에 올려</b>
+	 * 사람이 분류하게 한다. 이 딜은 이미 SPLIT 분포에서 빠지지만(정직), 큐에 뜨지 않으면 사람이 볼 수 없다 —
+	 * "놓친 것을 못 보면 유실"이다. 묶음 제품이나 값을 아는 딜은 대상이 아니다.
+	 *
+	 * <p>dedup_key로 접는다(Q-27 ④) — 같은 딜이 매 틱 다시 오지는 않지만(링크되면 findUnprocessed가 거른다),
+	 * 접힘 계약을 일관되게 지킨다. 근거는 제목·딜 id·왜 미상인지.
+	 */
+	private void enqueueIfDemandUnknown(RawDealPost post, DealEventEntity created, long variantId) {
+		if (created.getDemandAxisValue() != null || demandScope.modeOf(variantId) != DemandAxisMode.SPLIT) {
+			return;
+		}
+		upsertReviewItem(ReviewQueueType.DEMAND_UNKNOWN, Map.of(
+				"title", post.getTitle(),
+				"dealEventId", created.getId(),
+				"reason", "제목에서 수요축 값을 판별하지 못했습니다"), "dv:" + created.getId());
 	}
 
 	private DealEvent candidateFrom(RawDealPost post, long variantId, String demandAxisValue) {

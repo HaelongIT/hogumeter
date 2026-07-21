@@ -47,6 +47,17 @@ describe('reviewLine', () => {
     expect(line.reason).not.toMatch(/사기|대박|싸다|위험/)
   })
 
+  it('수요축 값 미상은 대상과 제목을 말한다 — 왜 기준가에서 빠졌는지 (Q-66 ①)', () => {
+    const line = reviewLine(
+      item({ type: 'DEMAND_UNKNOWN', subject: '갤럭시 25 — 256GB', payload: { title: '갤럭시 25 특가' } }),
+    )
+
+    expect(line.reason).toContain('수요축 값 미상')
+    expect(line.reason).toContain('기준가에서 빠졌습니다')
+    expect(line.detail).toContain('갤럭시 25 — 256GB')
+    expect(line.detail).toContain('갤럭시 25 특가')
+  })
+
   /** 과대약속 금지: 우리가 모르는 유형이 생겨도 숨기지 않는다. 근거를 그대로 보여준다. */
   it('모르는 유형은 payload를 그대로 내놓는다', () => {
     const line = reviewLine(item({ type: 'KEYWORD_SUGGEST', payload: { tokens: ['리퍼'] } }))

@@ -108,9 +108,17 @@ web: 구매 패널이 판단 화면에서 고른 값을 그대로 받는다 — 
 javadoc("SPLIT 필수")이 이제 실행되는 계약. core GREEN·web **166**·build·**스모크 5-1i 종단**(구매 값 없으면
 400 · 값 주면 블랙 median 860,000 대비 +40,000).
 
-**Q-66 잔여(마지막 조각) = E**: 값 미상 딜을 승격 큐에 올려 사람이 분류(§41). 지금은 SPLIT에서 미상 딜이
-분포에서 빠지지만(정직), **큐에 뜨지 않아 사람이 볼 수 없다** — `review_queue_item.type`에 새 유형(DEMAND_UNKNOWN 등)
-CHECK 마이그레이션 + `IngestDealsUseCase`가 SPLIT 제품의 미상 confirmed 딜을 큐에 올리는 배선.
+**Q-66 E 해소 → Q-66 전체(①②③E) 완결.** 값 미상 딜을 승격 큐에 올려 사람이 분류(§41).
+V7/R7: `review_queue_item.type` CHECK에 `DEMAND_UNKNOWN` 추가(+enum). `IngestDealsUseCase.enqueueIfDemandUnknown` —
+SPLIT 제품의 confirmed 딜이 색 미상이면 큐에 올린다(dedup_key `dv:`딜id). 읽기 모델은 그 유형의 원문·대상을
+OUTLIER_LOWER와 같은 조인(`dealEventId`)으로 잇는다. web: `reviewLine` DEMAND_UNKNOWN 문구(대상·제목),
+버튼은 **기각만**(승격은 값 지정 필요 — 아직 입력 경로 없음, UNCLASSIFIED와 같은 취급). `DEMAND_UNKNOWN`과
+`UNCLASSIFIED`는 다르다(전자는 variant 확정·수요축 값만 미상). core GREEN·web **166**·**롤백 드릴 PASS(V7/R7)**·
+**스모크**(색 없는 sp7이 큐에 DEMAND_UNKNOWN으로 뜬다).
+
+**Q-66 완결 요약**: ②(축 유형 동작·product_axis 읽기) → ①(파싱 DemandAxisSpec·저장 V6·분포 분리 DealSets/
+VariantDemandScope·조회 400·알림 경로) → ③(구매 필수·성적 분포·web 패널) → E(미상 딜 승격 큐). 마이그레이션
+V6·V7 두 개, 예외 `BM_DEMAND_AXIS_VALUE_REQUIRED`, 스모크 5-1i가 전 사슬을 종단으로 잠근다.
 
 ---
 
