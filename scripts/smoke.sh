@@ -210,6 +210,16 @@ created=$(curl -fsS -X POST "${WEB}/api/v1/products" -H 'Content-Type: applicati
 rm -f "$payload"
 echo "$created" | grep -q '"productId"' || fail "등록 응답에 productId가 없다: $created"
 
+# Q-49: 서버측 검증 — 클라이언트 검증을 우회해(curl) 빈 이름을 치면 500(DB NOT NULL)이 아니라
+# 400 + 도메인 코드가 와야 한다(web이 읽는 계약). 파일로 보내 argv 인코딩 사고를 피한다.
+bad_reg=$(mktemp)
+echo '{"name":"  ","category":"test","demandAxisMode":"GROUPED","axes":[],"variants":[{"label":"x","priceAxisValues":{}}],"aliases":[]}' >"$bad_reg"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "${WEB}/api/v1/products" \
+	-H 'Content-Type: application/json' -d @"$bad_reg")" = 400 ] || fail "빈 이름 등록이 400이 아니다 (Q-49)"
+curl -s -X POST "${WEB}/api/v1/products" -H 'Content-Type: application/json' -d @"$bad_reg" |
+	grep -q '"code":"REG_INVALID_PRODUCT"' || fail "등록 400 응답에 도메인 코드가 없다 (Q-49)"
+rm -f "$bad_reg"
+
 listed=$(curl -fsS "${WEB}/api/v1/products")
 # 한글이 postgres를 왕복해 그대로 돌아와야 한다(인코딩 사고는 조용히 깨진다).
 echo "$listed" | grep -q '스모크 제품' || fail "등록한 제품이 목록에 없다(한글 왕복 실패?)"

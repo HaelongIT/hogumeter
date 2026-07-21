@@ -16,7 +16,7 @@ paths:
 - **`src/api/types.ts`는 core 컨트롤러 원문에서 옮긴 것**이다. 추측해서 필드를 만들지 않는다. 계약이 의심되면 `core/src/main/java/.../adapter/web/*.java`와 도메인 record를 직접 읽는다.
 - **응답 인터페이스에 필드를 추가하면 `scripts/smoke.sh`의 그 뷰 필드 검증 목록에도 추가한다.** core가 필드 이름을 바꾸면 단위 테스트는 GREEN인데 화면만 조용히 `undefined`를 그린다 — 부품별 GREEN은 모듈 경계 계약을 보장하지 않는다. 스모크가 `BenchmarkView`·`SignalView`·`CadenceView`·`PurchaseObservation`+`ObservationContext`의 전체 필드 존재를 종단 검증한다(정본 = 각 인터페이스).
 - **통계 필드의 `null`은 버그가 아니라 도메인 계약**이다 — 표본이 빈약하면 통계 용어를 쓰지 않는다(절대 원칙 1). 타입이 `null`을 감추지 않게 한다(`strict`, `noUncheckedIndexedAccess`).
-- **에러는 삼키지 않는다.** core가 `{code, message}`를 주면 `code`를 보존하고, 아니면 `HTTP_{status}`로 살린다. 매핑된 code는 3종(`docs/benchmark/07`)이고 **등록 경로 실패엔 code가 없다**(`docs/91` Q-49 — 서버측 검증 부재).
+- **에러는 삼키지 않는다.** core가 `{code, message}`를 주면 `code`를 보존하고, 아니면 `HTTP_{status}`로 살린다. **등록 경로도 이제 `REG_INVALID_PRODUCT`로 400을 준다**(Q-49 해소, 2026-07-21 — 빈 이름·null 축/모드는 500이 아니라 코드). 클라이언트 검증은 여전히 편의일 뿐이다(curl 우회는 서버가 막는다).
 - **클라이언트 검증은 방어가 아니라 편의다.** `buildCommand`가 막아도 curl로 직접 치면 통과한다.
 
 ## 프록시·인프라

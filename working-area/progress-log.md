@@ -149,7 +149,19 @@ median 전에 그걸 부르고, `DealEventMapper`가 `applied_conditions` 컬럼
   구동됨을 증명. native UPDATE가 영속성 컨텍스트를 우회해 첫 시도 RED(캐시된 null) → `em.clear()`로 해결.
 - 기록: `DealTags` javadoc "표본 하한 취급 미구현" → 구현+테스트로 정정. docs/91 Q-46 [부분해소](②·① 완결,
   알림 본문만 Q-20 대기), docs/30 0-2 갱신. docs/99에 교훈("거짓 봉인 닫기 전에 관통 테스트가 있는지 본다").
-- 검증: core 전체 GREEN(신규 2). **실 폴링 전 필수였던 ②가 닫혔다.** 커밋 후 푸시는 사용자 지시 대기.
+- 검증: core 전체 GREEN(신규 2). **실 폴링 전 필수였던 ②가 닫혔다.** 커밋 `32a4bc4`.
+
+**Q-49 해소(2026-07-21, 커밋 대기) — 절반 거짓 봉인.** POST /products 서버측 검증. board는 "열림 · 검증 없음"
+이었으나 `validate(cmd)`가 **이미** 빈 이름·빈 variant를 막고 `InvalidRegistrationException`→400+코드까지
+배선돼 있었다(또 거짓 봉인). 그러나 **null 축·null 모드·null 별칭은 여전히 NPE/NOT NULL → 500**이었다 — board가
+명시한 잔여 구멍. TDD로 셋을 닫았다(RED 3 → GREEN):
+- null 축·null 모드 → 400(거절). 빈 목록(axes)은 기존대로 허용. null 별칭 → 정상 저장(선택 필드, null=없음).
+- ⚠️자율결정: null 모드를 DB DEFAULT('GROUPED')로 **채우지 않고 거절**한다 — 기본값 정본은 DB 하나이고 코드로
+  복제하면 사본이 드리프트한다. 모드는 클라이언트가 지정한다.
+- 관통 테스트(B(A())): 유스케이스 테스트는 예외 던짐만, 핸들러는 매핑만 증명 → `RegistrationControllerTest`에
+  HTTP 400 + `REG_INVALID_PRODUCT` 관통 테스트를 새로 뒀다. 스모크에 빈 이름 POST → 400+코드 종단 단언 추가.
+- 기록: docs/91 Q-49 [해소], web-react.md "등록 경로 실패엔 code 없다" → "이제 REG_INVALID_PRODUCT" 정정.
+- 검증: core 전체 GREEN(신규 4). 커밋 후 푸시는 사용자 지시 대기.
 
 ---
 
