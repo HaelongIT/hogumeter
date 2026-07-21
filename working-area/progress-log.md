@@ -43,7 +43,19 @@
   — 로그로만 남습니다"를 그린다(상태 모르면 null → 안 그림). 정책 화면 = 목표가 설정 지점이라 경고 위치가 맞다.
 - 테스트: `AlertStatusControllerTest`(기본 stub→false), `TelegramAlertSenderTest.realSenderReportsItDelivers`(true),
   `AlertPolicyPanel.test`(false→경고·true→경고 없음), 스모크 `delivering:false` 종단.
-- 검증: core GREEN · web **172**(170→172) · build · 스모크 마커. **커밋 후 다음: 백엔드 증분 계속.**
+- 검증: core GREEN · web **172**(170→172) · build · 스모크 마커. 커밋 `79f70ea`.
+
+**백엔드 증분 — 방해금지 보류 알림의 유실을 보이게(2026-07-21, 커밋 대기).** 텔레그램 작업이 드러낸 또 다른
+거짓 주석: AlertGate·AlertDispatcher·GateDecision이 "보류분은 종료 시 플러시된다"고 적었으나 **플러시는 없다** —
+방해금지(quiet hours) HOLD 알림은 **유실**된다. 전체 플러시 오케스트레이션(HOLD 큐 + 재디스패치 + AL-04/07
+재평가)은 크고 스펙이 있어 별도 증분. 지금은 그 **손실을 보이게** 했다(Q-56/57 카운터 계보):
+- `IngestReport.heldAlerts` 추가 — 수집 루프가 `DispatchOutcome.HELD`를 세어 틱 로그 `heldAlerts=N`에 싣는다.
+  0이 아니면 "보류돼 사라진 알림"이 사람 눈에 든다(조용한 유실 방지).
+- 거짓 주석 셋 정정(플러시 있다 → 없다, Q-20 ②). docs/91 Q-20 ② 갱신.
+- 관통 테스트: `IngestDealsUseCaseTest.quietHoursHeldAlertIsCountedNotSent`(시계 02:00 고정 + 방해금지 0~6시 →
+  GOOD 알림이 heldAlerts=1·firstAlertsSent=0·실제 미발송). 고정 시계는 방해금지 미설정 케이스엔 무영향(그냥 SEND).
+  `PipelineTickReportTest`(heldAlerts 렌더), 스모크 `heldAlerts=0` 종단.
+- 검증: core 전체 GREEN(신규 1 + IngestReport 필드). **다음: 백엔드 증분 계속 또는 플러시 오케스트레이션(큰 것).**
 
 ## 2026-07-12 — 프론트 UI "판정을 주인공으로" + Q-15 버튼 (사용자 지휘)
 

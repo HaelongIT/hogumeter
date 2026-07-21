@@ -121,14 +121,15 @@ class PipelineTickReportTest {
 	@Test
 	@DisplayName("매칭 tier 분포·첫 알림 발송 수가 요약에 실린다 — 스냅샷 차이로는 못 보는 것")
 	void reportsMatchingTierCountsAndFirstAlerts() {
-		IngestReport ingest = new IngestReport(3, 1, 2, 5, 4, 2);
+		IngestReport ingest = new IngestReport(3, 1, 2, 5, 4, 2, 1);
 
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
 				ingest, 0, 0, 0);
 
 		assertThat(report.ingest()).isEqualTo(ingest);
 		assertThat(report.toString()).contains(
-				"matched[confirmed=3 candidate=1 unknown=2 rejected=5 skippedNoPrice=4]", "firstAlertsSent=2");
+				"matched[confirmed=3 candidate=1 unknown=2 rejected=5 skippedNoPrice=4]", "firstAlertsSent=2",
+				"heldAlerts=1"); // 방해금지 보류 수도 요약에 보인다(유실을 조용히 두지 않는다)
 	}
 
 	/**

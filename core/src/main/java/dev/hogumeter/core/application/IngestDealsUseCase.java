@@ -90,8 +90,13 @@ public class IngestDealsUseCase {
 		switch (match.tier()) {
 			case CONFIRMED -> {
 				tally.confirmed++;
-				if (confirmDeal(post, match.variantId(), match.demandAxisValue()) == DispatchOutcome.SENT) {
+				DispatchOutcome outcome = confirmDeal(post, match.variantId(), match.demandAxisValue());
+				if (outcome == DispatchOutcome.SENT) {
 					tally.firstAlertsSent++;
+				}
+				else if (outcome == DispatchOutcome.HELD) {
+					// 방해금지로 보류 — 지금은 플러시가 없어 유실된다(Q-20 ②). 세어서 보이게 한다.
+					tally.heldAlerts++;
 				}
 			}
 			case CANDIDATE -> {
@@ -207,9 +212,11 @@ public class IngestDealsUseCase {
 		int rejected;
 		int skippedNoPrice;
 		int firstAlertsSent;
+		int heldAlerts;
 
 		IngestReport toReport() {
-			return new IngestReport(confirmed, candidate, unknown, rejected, skippedNoPrice, firstAlertsSent);
+			return new IngestReport(confirmed, candidate, unknown, rejected, skippedNoPrice, firstAlertsSent,
+					heldAlerts);
 		}
 	}
 }

@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.tuple;
 import dev.hogumeter.core.TestcontainersConfiguration;
 import dev.hogumeter.core.adapter.persistence.AliasEntity;
 import dev.hogumeter.core.adapter.persistence.AliasRepository;
+import dev.hogumeter.core.adapter.persistence.AlertPolicyEntity;
+import dev.hogumeter.core.adapter.persistence.AlertPolicyRepository;
 import dev.hogumeter.core.adapter.persistence.DealAlertEntity;
 import dev.hogumeter.core.adapter.persistence.DealAlertRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventEntity;
@@ -30,6 +32,8 @@ import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +77,8 @@ class IngestDealsUseCaseTest {
 	DealAlertRepository dealAlerts;
 	@Autowired
 	ProductAxisRepository productAxes;
+	@Autowired
+	AlertPolicyRepository policies;
 
 	private long variantId;
 	private long colorProductId;
@@ -277,12 +283,37 @@ class IngestDealsUseCaseTest {
 		assertThat(report.firstAlertsSent()).isEqualTo(1);
 	}
 
+	/**
+	 * Q-20 ②: 방해금지(quiet hours)로 <b>보류된</b> 알림은 지금 플러시가 없어 <b>유실</b>된다 — 그 손실을
+	 * {@code heldAlerts}로 <b>보이게</b> 한다(조용히 사라지면 못 고친다). 시계를 02:00에 고정하고 정책에
+	 * 방해금지 0~6시를 두면, GOOD 알림이 발송이 아니라 보류된다. `firstAlertsSent`가 아니라 이 카운터가 는다.
+	 */
+	@Test
+	void quietHoursHeldAlertIsCountedNotSent() {
+		policies.save(new AlertPolicyEntity(variantId, null, 6, 0, 6, 5, List.of())); // 방해금지 0~6시
+		savePost("ppomppu", "아이폰 17 256기가 특가 89만", 890_000L, T); // CONFIRMED → GOOD 알림(SPARSE)
+
+		IngestReport report = useCase.ingestPending();
+
+		assertThat(report.heldAlerts()).as("02:00은 방해금지라 보류된다").isEqualTo(1);
+		assertThat(report.firstAlertsSent()).as("발송이 아니라 보류다").isZero();
+		assertThat(recordingAlertSender.sent).as("실제로 나가지 않았다").isEmpty();
+	}
+
 	@TestConfiguration
 	static class RecordingSenderConfig {
 		@Bean
 		@Primary
 		RecordingAlertSender recordingAlertSender() {
 			return new RecordingAlertSender();
+		}
+
+		/** 시계를 방해금지 구간(02:00)에 고정 — HELD 카운트를 결정적으로 시험한다. 딜 시각 T(2026-07-01)는
+		 *  6개월 창 안이라 다른 케이스(방해금지 미설정 → 그냥 SEND)엔 영향이 없다. */
+		@Bean
+		@Primary
+		Clock testClock() {
+			return Clock.fixed(Instant.parse("2026-07-21T02:00:00Z"), ZoneOffset.UTC);
 		}
 	}
 

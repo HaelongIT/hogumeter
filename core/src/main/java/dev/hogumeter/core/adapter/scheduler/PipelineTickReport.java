@@ -92,6 +92,7 @@ public record PipelineTickReport(
 				+ " rejected=" + ingest.rejected()
 				+ " skippedNoPrice=" + ingest.skippedNoPrice() + "]"
 				+ " firstAlertsSent=" + ingest.firstAlertsSent()
+				+ " heldAlerts=" + ingest.heldAlerts()
 				+ " followUpsSent[priceChanged=" + followUpPriceChangedSent
 				+ " ended=" + followUpEndedSent + "]"
 				+ " stepsFailed=" + stepsFailed;

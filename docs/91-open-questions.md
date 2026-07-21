@@ -121,7 +121,7 @@ _(Q-5. 뽐뿌 golden fixture 재채취 — **해소됨 2026-07-09**: 재채취 *
 ## [부분해소] Q-20. 텔레그램 아웃바운드 발송 어댑터 완성 — 봇 명령·인바운드·플러시·현재가만 남음
 - **맥락**: AL 순수 도메인(트리거·1발·게이트·후속 자격)은 완성. 실 발송(텔레그램)·봇 명령·현재가(네이버)는 외부 연동이라 무중단 정지 조건.
 - **✅ 아웃바운드 발송 해소(2026-07-21)**: `AlertMessageFormatter`(순수, AL-05 본문 — 강도 아이콘·제품/variant·가격·갭·검증·조건태그(Q-46①)·링크, SPARSE 금액 금지) + `TelegramAlertSender`(`telegram.enabled=true`일 때만, `HttpTelegramApi`로 sendMessage) + `TelegramApi` seam(fake로 검증). SEC-08 분류(2xx/5xx=일시장애/4xx=거절, 거절은 재시도 안 함, 어떤 실패에도 안 던져 틱 보호). `@ConditionalOnProperty`로 기본은 스텁(실발송 없음), opt-in만 실 어댑터 — `TelegramSenderWiringTest`가 그 스위치를 잠근다. 토큰·chat은 사용자가 `.env`에(코드는 읽기만, 토큰 값 미접촉). **실 네트워크 테스트는 금지**라 `HttpTelegramApi`는 fake로만 검증 — 실 응답은 토큰 발급 후 수동 스파이크(pre-deploy §권장).
-- **남은 것**: ① 봇 명령(/status·/queue·/mute)·**인라인 버튼 콜백**(Q-15 승격을 텔레그램에서) = 인바운드 핸들러(webhook/폴링) 미구현 — SEC-03 인바운드 화이트리스트도 그때(Q-61). ② **보류분 플러시 오케스트레이션**(HOLD 큐 저장 + 종료 시 재디스패치 + 상태 재확인) 미구현. ③ 현재가(네이버, Q-3). ④ 관리 알림(연속 실패 push, Q-56).
+- **남은 것**: ① 봇 명령(/status·/queue·/mute)·**인라인 버튼 콜백**(Q-15 승격을 텔레그램에서) = 인바운드 핸들러(webhook/폴링) 미구현 — SEC-03 인바운드 화이트리스트도 그때(Q-61). ② **보류분 플러시 오케스트레이션**(HOLD 큐 저장 + 종료 시 재디스패치 + AL-04/07 상태·강도 재평가) 미구현 — **지금 방해금지 보류 알림은 유실된다.** 다만 그 손실을 **보이게** 했다(2026-07-21): `IngestReport.heldAlerts`가 세고 틱 로그 `heldAlerts=N`에 실린다(0이 아니면 유실이 눈에 든다). "플러시가 스케줄러가 종료 시 재디스패치한다"던 옛 주석은 **거짓이었다**(AlertGate·AlertDispatcher·GateDecision에서 정정). ③ 현재가(네이버, Q-3). ④ 관리 알림(연속 실패 push, Q-56).
 - **재개 트리거**: 실 발송은 사용자가 `.env`에 `TELEGRAM_ENABLED=true`+토큰+chat 채우면 즉시 산다(코드는 완성). 인바운드·플러시·현재가는 각기 위 ①②③.
 
 ## [열림] Q-21. AL 트리거 세부 — "역대최저 근접" 여백·SPARSE/NONE 강도 매핑
