@@ -25,6 +25,7 @@ import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
 import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.application.port.out.AlertSender;
+import dev.hogumeter.core.application.port.out.ReviewNotifier;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.product.AxisType;
@@ -79,6 +80,8 @@ class IngestDealsUseCaseTest {
 	ProductAxisRepository productAxes;
 	@Autowired
 	AlertPolicyRepository policies;
+	@Autowired
+	RecordingReviewNotifier reviewNotifier;
 
 	private long variantId;
 	private long colorProductId;
@@ -300,6 +303,22 @@ class IngestDealsUseCaseTest {
 		assertThat(recordingAlertSender.sent).as("실제로 나가지 않았다").isEmpty();
 	}
 
+	/**
+	 * Q-15 아웃바운드: 새 미상 큐 항목이 생기면 알린다(텔레그램이면 버튼과 함께). <b>새 항목에만</b> — 같은
+	 * 원문이 매 틱 다시 스캔돼도(Q-27 ④) 재적재는 알리지 않는다(스팸 방지, dedup가 여기서 갈린다).
+	 */
+	@Test
+	void notifiesOnceOnNewReviewItemNotOnRecurrence() {
+		savePost("ppomppu", "애플 아이폰 신형 256기가", 800_000L, T); // "17" 없음 → CANDIDATE → UNCLASSIFIED 큐
+
+		useCase.ingestPending();
+		useCase.ingestPending(); // 미상 원문은 링크 안 돼 재스캔 → 재적재(recordRecurrence), 재알림 아님
+
+		assertThat(reviewNotifier.calls).hasSize(1);
+		assertThat(reviewNotifier.calls.get(0).promotable()).as("미상은 승격 불가 — 기각만").isFalse();
+		assertThat(reviewNotifier.calls.get(0).summary()).contains("미상 딜");
+	}
+
 	@TestConfiguration
 	static class RecordingSenderConfig {
 		@Bean
@@ -308,12 +327,31 @@ class IngestDealsUseCaseTest {
 			return new RecordingAlertSender();
 		}
 
+		@Bean
+		@Primary
+		RecordingReviewNotifier recordingReviewNotifier() {
+			return new RecordingReviewNotifier();
+		}
+
 		/** 시계를 방해금지 구간(02:00)에 고정 — HELD 카운트를 결정적으로 시험한다. 딜 시각 T(2026-07-01)는
 		 *  6개월 창 안이라 다른 케이스(방해금지 미설정 → 그냥 SEND)엔 영향이 없다. */
 		@Bean
 		@Primary
 		Clock testClock() {
 			return Clock.fixed(Instant.parse("2026-07-21T02:00:00Z"), ZoneOffset.UTC);
+		}
+	}
+
+	/** 미상 큐 알림을 기록하는 스파이 — 새 항목에만 알리는지(재적재엔 안 함) 통관 검증. */
+	static class RecordingReviewNotifier implements ReviewNotifier {
+		record Call(long reviewItemId, String summary, boolean promotable) {
+		}
+
+		final List<Call> calls = new ArrayList<>();
+
+		@Override
+		public void notify(long reviewItemId, String summary, boolean promotable) {
+			calls.add(new Call(reviewItemId, summary, promotable));
 		}
 	}
 

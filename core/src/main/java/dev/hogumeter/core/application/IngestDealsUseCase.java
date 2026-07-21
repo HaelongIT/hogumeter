@@ -3,6 +3,7 @@ package dev.hogumeter.core.application;
 import dev.hogumeter.core.adapter.persistence.CatalogProjection;
 import dev.hogumeter.core.adapter.persistence.DealEventEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventMapper;
+import dev.hogumeter.core.application.port.out.ReviewNotifier;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventSourceEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventSourceRepository;
@@ -47,6 +48,7 @@ public class IngestDealsUseCase {
 	private final ReviewQueueItemRepository reviewQueue;
 	private final EvaluateAlertOnDealUseCase alertEvaluation;
 	private final VariantDemandScope demandScope;
+	private final ReviewNotifier reviewNotifier;
 	private final Matcher matcher = new Matcher();
 	private final DealMergePolicy mergePolicy = new DealMergePolicy();
 	private final OutlierDetector outlierDetector = new OutlierDetector();
@@ -58,7 +60,7 @@ public class IngestDealsUseCase {
 	public IngestDealsUseCase(RawDealPostRepository rawPosts, DealEventRepository dealEvents,
 			DealEventSourceRepository sources, DealEventMapper mapper, CatalogProjection catalog,
 			ReviewQueueItemRepository reviewQueue, EvaluateAlertOnDealUseCase alertEvaluation,
-			VariantDemandScope demandScope) {
+			VariantDemandScope demandScope, ReviewNotifier reviewNotifier) {
 		this.rawPosts = rawPosts;
 		this.dealEvents = dealEvents;
 		this.sources = sources;
@@ -67,6 +69,7 @@ public class IngestDealsUseCase {
 		this.reviewQueue = reviewQueue;
 		this.alertEvaluation = alertEvaluation;
 		this.demandScope = demandScope;
+		this.reviewNotifier = reviewNotifier;
 	}
 
 	@Transactional
@@ -201,7 +204,23 @@ public class IngestDealsUseCase {
 	private void upsertReviewItem(ReviewQueueType type, Map<String, Object> payload, String dedupKey) {
 		reviewQueue.findByDedupKey(dedupKey).ifPresentOrElse(
 				ReviewQueueItemEntity::recordRecurrence,
-				() -> reviewQueue.save(new ReviewQueueItemEntity(type, payload, dedupKey)));
+				() -> {
+					// 새로 생긴 항목만 알린다(재적재/반복은 아님 — dedup가 여기서 갈린다). 텔레그램이면 버튼과 함께.
+					ReviewQueueItemEntity saved = reviewQueue.save(new ReviewQueueItemEntity(type, payload, dedupKey));
+					reviewNotifier.notify(saved.getId(), reviewSummary(type, payload),
+							type == ReviewQueueType.OUTLIER_LOWER);
+				});
+	}
+
+	/** 미상 큐 알림 한 줄. OUTLIER_LOWER는 제목이 없어 가격으로, 나머지는 제목으로 식별한다(payload 그대로). */
+	private static String reviewSummary(ReviewQueueType type, Map<String, Object> payload) {
+		return switch (type) {
+			case OUTLIER_LOWER -> "🔍 이상치 의심 딜 (" + payload.get("priceFirst") + "원) — 정상 딜이면 승격, 사기·낚시면 기각하세요.";
+			case DEMAND_UNKNOWN -> "🔍 수요축 미상: " + payload.get("title") + " — 분류가 필요합니다(기각만 가능).";
+			case UNCLASSIFIED -> "🔍 미상 딜: " + payload.get("title") + " — 제품 매칭 실패(기각만 가능).";
+			// KEYWORD_SUGGEST(BM-07 사후학습)는 이 수집 경로에서 만들지 않는다 — 방어적 분기(Q-22 배선 시 문구 조정).
+			case KEYWORD_SUGGEST -> "🔍 키워드 제안 검토가 필요합니다.";
+		};
 	}
 
 	/** 수집 한 회의 가변 집계기 — 루프가 끝나면 불변 {@link IngestReport}로 굳힌다. */

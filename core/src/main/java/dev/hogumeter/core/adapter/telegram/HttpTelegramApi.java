@@ -37,22 +37,44 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 
 	@Override
 	public int sendMessage(String chatId, String text) {
-		String body = "chat_id=" + enc(chatId) + "&text=" + enc(text);
-		HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/sendMessage"))
+		return post(baseUrl + "/sendMessage", "chat_id=" + enc(chatId) + "&text=" + enc(text));
+	}
+
+	/** form-urlencoded POST → HTTP 상태. 네트워크 단절은 {@link TelegramTransportException}(발신자가 일시장애로 다룬다). */
+	private int post(String url, String formBody) {
+		HttpRequest request = HttpRequest.newBuilder(URI.create(url))
 				.header("Content-Type", "application/x-www-form-urlencoded")
 				.timeout(Duration.ofSeconds(10))
-				.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+				.POST(HttpRequest.BodyPublishers.ofString(formBody, StandardCharsets.UTF_8))
 				.build();
 		try {
 			return client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
 		}
 		catch (IOException e) {
-			throw new TelegramTransportException(e); // 네트워크 단절 — 발신자가 일시장애로 다룬다
+			throw new TelegramTransportException(e);
 		}
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			throw new TelegramTransportException(e);
 		}
+	}
+
+	@Override
+	public int sendMessage(String chatId, String text, List<Button> buttons) {
+		if (buttons == null || buttons.isEmpty()) {
+			return sendMessage(chatId, text);
+		}
+		// reply_markup은 JSON이어야 한다(form 값 안에 JSON을 넣는다). callback_data는 라우터가 파싱할 "promote:123".
+		StringBuilder markup = new StringBuilder("{\"inline_keyboard\":[[");
+		for (int i = 0; i < buttons.size(); i++) {
+			Button b = buttons.get(i);
+			markup.append(i == 0 ? "" : ",")
+					.append("{\"text\":").append(json.writeValueAsString(b.text()))
+					.append(",\"callback_data\":").append(json.writeValueAsString(b.callbackData())).append("}");
+		}
+		markup.append("]]}");
+		String body = "chat_id=" + enc(chatId) + "&text=" + enc(text) + "&reply_markup=" + enc(markup.toString());
+		return post(baseUrl + "/sendMessage", body);
 	}
 
 	@Override
@@ -79,22 +101,7 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 
 	@Override
 	public void answerCallbackQuery(String callbackQueryId, String text) {
-		String body = "callback_query_id=" + enc(callbackQueryId) + "&text=" + enc(text);
-		HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/answerCallbackQuery"))
-				.header("Content-Type", "application/x-www-form-urlencoded")
-				.timeout(Duration.ofSeconds(10))
-				.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-				.build();
-		try {
-			client.send(request, HttpResponse.BodyHandlers.discarding());
-		}
-		catch (IOException e) {
-			throw new TelegramTransportException(e);
-		}
-		catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			throw new TelegramTransportException(e);
-		}
+		post(baseUrl + "/answerCallbackQuery", "callback_query_id=" + enc(callbackQueryId) + "&text=" + enc(text));
 	}
 
 	/**

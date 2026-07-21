@@ -40,7 +40,7 @@
 
 **나머지는 코드 밖:**
 
-1. **텔레그램 봇 토큰 미발급**(Q-20) → **아웃바운드 발송 어댑터는 완성**(2026-07-21, `TelegramAlertSender` + 본문 포맷터 + SEC-08). 사용자가 `.env`에 `TELEGRAM_ENABLED=true`+토큰+chat_id를 채우면 알림이 실제로 나간다 — "텔레그램 알림 수신"은 토큰만 있으면 검증된다. 아직 남은 건 **인바운드**(인라인 버튼 승격 → 미상 분류)로, 그 커밋에 SEC-03 인바운드 화이트리스트가 함께 든다(Q-61). 아웃바운드는 설정된 chat 하나로만 나가 이미 안전.
+1. **텔레그램 봇 토큰 미발급**(Q-20) → **어댑터는 아웃바운드·인바운드 모두 완성**(2026-07-21). 아웃바운드: `TelegramAlertSender`(딜 알림)·`TelegramAdminNotifier`(관리)·`TelegramReviewNotifier`(미상 큐 버튼). 인바운드: `TelegramInboundPoller`+`ReviewCallbackRouter`(버튼 콜백→승격·기각, SEC-03 화이트리스트). **M1 완료 기준의 "버튼으로 미상 분류"까지 코드로 산다** — 사용자가 `.env`에 `TELEGRAM_ENABLED=true`+토큰+chat_id를 채우면 알림 수신·버튼 분류가 동작한다(실 응답은 수동 스파이크 1회). 기본(스텁)은 실 네트워크 없음.
 2. **네이버 API 키 미발급**(Q-3) → 현재가(BM-06 `currentPrice`)·갭 계산·REG-01 후보 검색 불가.
 3. **실 폴링 미가동** → `COLLECTOR_ALLOW_NETWORK=1`은 운영자 승인 사항. 실 데이터가 없으면 "기준가가 운영자 체감과 부합"을 대조할 수 없다. 켜기 전에 **사람이** `ALLOW_REAL_ROBOTS=1 bash scripts/check-robots.sh`를 한 번 돌린다(`pre-deploy §F`).
 4. **백필(REG-04) 미구현** → `raw_deal_post`에 `origin` 컬럼이 없다(있는 건 `deal_event.origin`). 계약 변경이 선행.

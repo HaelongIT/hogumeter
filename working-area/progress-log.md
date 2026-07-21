@@ -1,3 +1,18 @@
+## 2026-07-21 — 인바운드 텔레그램 Piece 2: 미상 큐 버튼 아웃바운드 → 종단 완결 (Q-15, 무중단)
+
+Piece 1(인바운드 수신)에 아웃바운드 짝을 붙여 **종단으로** 산다: 새 미상 항목 → 텔레그램 [승격][기각] 버튼 →
+누르면 Piece 1 라우터가 처리. **M1 완료 기준 "버튼으로 미상 분류"가 코드로 충족**(토큰만 있으면 동작).
+- `TelegramApi`에 `sendMessage(chatId, text, buttons)` default 추가(버튼 무시 — 실 구현만 `reply_markup`, 발송 fake 안 깨짐)
+  + `Button` record. `HttpTelegramApi`가 inline_keyboard JSON으로 override. POST 로직을 `post()` 헬퍼로 정리.
+- `ReviewNotifier` 포트 + `NoOpReviewNotifier`(텔레그램 off = 조용, web 큐가 창구) + `TelegramReviewNotifier`
+  (버튼: 이상치=[승격][기각], 미상=[기각]만 — core 400과 일치, 과대약속 금지).
+- `IngestDealsUseCase.upsertReviewItem`이 **새 항목에만** 알린다(recordRecurrence 아님 — dedup가 여기서 갈림).
+  타입별 요약(이상치는 가격, 미상은 제목). 스위치는 KEYWORD_SUGGEST까지 exhaustive(방어).
+- 관통 테스트: `IngestDealsUseCaseTest.notifiesOnceOnNewReviewItemNotOnRecurrence`(생성 1회·재적재 0회·미상 promotable=false),
+  `TelegramReviewNotifierTest`(버튼 개수·안 던짐). 배선 테스트에 라우터·폴러 빈 확인(Piece 1).
+- 기록: Q-15 텔레그램 버튼 해소·Q-61 SEC-03 인바운드 해소·Q-20 ① 해소·docs/30 M1 텔레그램 완성.
+- 검증: core 전체 GREEN(신규 1 테스트 클래스 + 기존 확장). **커밋 후 푸시는 사용자 지시 대기.**
+
 ## 2026-07-21 — 인바운드 텔레그램 Piece 1: 콜백 수신·라우팅·SEC-03 (Q-15, 무중단)
 
 사용자 "순서대로 진행해 무중단 ㄱㄱ" → 인바운드 텔레그램 착수. 큰 결합 기능이라 둘로 나눔. **Piece 1 = 인바운드
