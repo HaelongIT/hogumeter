@@ -313,8 +313,8 @@ _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildComm
   ③ 첫 알림 발송 수는 `EvaluateAlertOnDealUseCase.evaluate`가 이미 반환하던 `DispatchOutcome==SENT`로 센다.
   smoke가 종단으로 `matched[confirmed=1 …]`를 잠근다. 테스트: `PipelineTickReportTest`·`IngestDealsUseCaseTest.
   reportCountsMatchTiersAndFirstAlerts`·`PipelineSchedulerTest`.
-- **남은 것**: ① OBS-01 구조화 로그(JSON) — 지금은 텍스트. ④ **API 쿼터**는 네이버 키 대기(Q-3). **후속 알림 발송 수**는
-  `FollowUpAlertUseCase.sendFollowUps`가 int로 반환하나 아직 틱 리포트에 집계 안 함(첫 알림과 부류가 달라 별도 카운터).
+- **~~후속 알림 발송 수 미집계~~ 해소(2026-07-21)**: `sendFollowUps`가 int를 반환하는데 `PipelineScheduler`가 그걸 `BiConsumer`로 받아 **버리고 있었다**(값이 흐르다 버려지는 절반 카운터). `BiFunction`으로 바꿔 `runStepReturning`으로 붙잡고 `PipelineTickReport.followUpPriceChangedSent·followUpEndedSent`로 싣는다 — 첫 알림과 부류가 다르고 후속끼리도 PRICE_CHANGED·ENDED를 가른다(ENDED가 몰리면 딜 대거 종료, PRICE_CHANGED가 몰리면 가격 이동 — 뜻이 다르다). 로그: `followUpsSent[priceChanged=.. ended=..]`. 테스트: `PipelineSchedulerTest.followUpSendCountsFlowIntoReport`(값이 리포트로 흐름을 관통), `PipelineTickReportTest.reportsFollowUpSendCountsByKind`, 스모크가 종단으로 마커를 잠근다.
+- **남은 것**: ① OBS-01 구조화 로그(JSON) — 지금은 텍스트(로그 수집기 붙일 때, core 전체 형식 변경이라 조율). ④ **API 쿼터**는 네이버 키 대기(Q-3).
 - **잠정값**: 텍스트 로그 + 틱 단위 카운터. `docker logs`로 읽는다.
 - **재개 트리거**: ①은 로그 수집기(운영 배포)를 붙일 때 — core 전체 로그 형식을 바꾸는 일이라 상대와 조율. ②③은 use case 반환값 변경이 필요하니 **core 기존 파일 수정**이라 조율 대상. ④는 Q-3.
 

@@ -161,7 +161,19 @@ median 전에 그걸 부르고, `DealEventMapper`가 `applied_conditions` 컬럼
 - 관통 테스트(B(A())): 유스케이스 테스트는 예외 던짐만, 핸들러는 매핑만 증명 → `RegistrationControllerTest`에
   HTTP 400 + `REG_INVALID_PRODUCT` 관통 테스트를 새로 뒀다. 스모크에 빈 이름 POST → 400+코드 종단 단언 추가.
 - 기록: docs/91 Q-49 [해소], web-react.md "등록 경로 실패엔 code 없다" → "이제 REG_INVALID_PRODUCT" 정정.
-- 검증: core 전체 GREEN(신규 4). 커밋 후 푸시는 사용자 지시 대기.
+- 검증: core 전체 GREEN(신규 4). 커밋 `e7b4359`.
+
+**Q-57 후속 알림 카운터(2026-07-21, 커밋 대기) — 값이 흐르다 버려지고 있었다.** `sendFollowUps`가 발송 수를
+int로 반환하는데 `PipelineScheduler`가 그걸 **`BiConsumer`로 받아 통째로 버렸다** — 첫 알림은 세는데 후속은
+안 세는 절반 카운터(OBS-02 "알림 발송 수", Q-57 title). `BiFunction`으로 바꿔 `runStepReturning`으로 붙잡고
+`PipelineTickReport`에 `followUpPriceChangedSent·followUpEndedSent`로 싣는다.
+- ⚠️자율결정: 후속끼리도 **PRICE_CHANGED·ENDED를 가른다**(부류가 다른 사실을 한 카운터로 안 센다 —
+  ENDED 몰림=딜 대거 종료, PRICE_CHANGED 몰림=가격 이동). 로그 `followUpsSent[priceChanged=.. ended=..]`.
+- 관통 테스트: `PipelineSchedulerTest.followUpSendCountsFlowIntoReport`(followUp이 종류별로 2·3 반환 →
+  리포트에 그대로 — 버려지면 0이라 RED). `PipelineTickReportTest.reportsFollowUpSendCountsByKind`. 스모크에
+  `followUpsSent[priceChanged=0 ended=0]` 종단 마커 추가(0도 생략 안 함).
+- 기록: docs/91 Q-57 후속 카운터 해소(남은 건 ① JSON 로그·④ 네이버 쿼터 — 둘 다 외부/조율).
+- 검증: core 전체 GREEN(신규 2). 커밋 후 푸시는 사용자 지시 대기.
 
 ---
 

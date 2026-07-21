@@ -20,6 +20,12 @@ import dev.hogumeter.core.application.IngestReport;
  * <p>{@code ingest}는 이번 틱 수집의 매칭 tier 분포·첫 알림 발송 수다(OBS-02, Q-57 ②③). 스냅샷 차이로는
  * 셀 수 없다 — CANDIDATE·REJECTED는 딜을 만들지 않아 링크·딜 수에 흔적이 없다. 그래서 {@link IngestReport}로
  * 유스케이스가 직접 세어 넘긴다. 이 값이 있어야 "매칭이 대부분 REJECTED다"(카탈로그 협소) 같은 신호가 보인다.
+ *
+ * <p>{@code followUpPriceChangedSent}·{@code followUpEndedSent}는 이번 틱 <b>후속 알림</b> 발송 수다(AL-03,
+ * OBS-02 "알림 발송 수", Q-57). 첫 알림과 부류가 달라 합치지 않고, 후속끼리도 <b>PRICE_CHANGED와 ENDED를
+ * 가른다</b> — ENDED가 몰리면 딜이 대거 종료된 것이고 PRICE_CHANGED가 몰리면 가격이 움직인 것이라 뜻이 다르다.
+ * 발송 수는 스냅샷에 흔적이 없어(전송은 상태 변화가 아니다) 스케줄러가 세어 넘긴다 — 안 그러면 {@code
+ * sendFollowUps}가 낸 값이 조용히 버려진다("첫 알림은 세는데 후속은 안 세는" 절반 카운터).
  */
 public record PipelineTickReport(
 		long postsLinked,
@@ -33,9 +39,12 @@ public record PipelineTickReport(
 		long shippingUnknownTotal,
 		long pending,
 		long rawTotal,
-		IngestReport ingest) {
+		IngestReport ingest,
+		int followUpPriceChangedSent,
+		int followUpEndedSent) {
 
-	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest) {
+	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest,
+			int followUpPriceChangedSent, int followUpEndedSent) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
 		return new PipelineTickReport(
@@ -50,7 +59,9 @@ public record PipelineTickReport(
 				after.shippingUnknownDeals(),
 				after.unprocessed(),
 				after.rawPosts(),
-				ingest);
+				ingest,
+				followUpPriceChangedSent,
+				followUpEndedSent);
 	}
 
 	/** 한 줄 요약. 0을 생략하지 않는다 — "성공했는데 0건"이 사라지면 드리프트를 못 본다. */
@@ -72,6 +83,8 @@ public record PipelineTickReport(
 				+ " unknown=" + ingest.unknown()
 				+ " rejected=" + ingest.rejected()
 				+ " skippedNoPrice=" + ingest.skippedNoPrice() + "]"
-				+ " firstAlertsSent=" + ingest.firstAlertsSent();
+				+ " firstAlertsSent=" + ingest.firstAlertsSent()
+				+ " followUpsSent[priceChanged=" + followUpPriceChangedSent
+				+ " ended=" + followUpEndedSent + "]";
 	}
 }

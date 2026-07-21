@@ -320,6 +320,9 @@ echo "$tick" | grep -q 'pending=0' || fail "원문을 다 처리했는데 pendin
 # (스냅샷 차이로는 못 세는 값 — 유스케이스가 직접 세어 리포트로 넘긴다. firstAlertsSent 값은 단위·통합 테스트가 잠근다.)
 echo "$tick" | grep -q 'matched\[confirmed=1 candidate=0 unknown=0 rejected=0 skippedNoPrice=0\]' ||
 	fail "매칭 tier 카운터가 틱 로그에 없다 (Q-57 계약 드리프트): $tick"
+# Q-57: 후속 알림 발송 수도 종단 로그에 실린다(첫 알림만 세고 후속을 버리면 절반 카운터). 이 틱엔 후속 0.
+echo "$tick" | grep -q 'followUpsSent\[priceChanged=0 ended=0\]' ||
+	fail "후속 알림 카운터가 틱 로그에 없다 (Q-57): $tick"
 
 # OBS-01: core 로그도 구조화(JSON)여야 한다. collector는 이미 JSON Lines다 —
 # 두 컨테이너의 로그가 같은 모양이어야 한 곳에서 읽는다. 형식은 조용히 되돌아가므로 매번 본다.

@@ -17,7 +17,7 @@ import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.DealTags;
 import dev.hogumeter.core.domain.purchase.PurchaseState;
 import java.util.List;
-import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -67,7 +67,7 @@ public class PipelineScheduler {
 	private final Runnable preserveConditions;
 	private final Supplier<List<Long>> reprocessPrices;
 	private final Supplier<List<Long>> reprocessStatus;
-	private final BiConsumer<List<Long>, FollowUpKind> followUp;
+	private final BiFunction<List<Long>, FollowUpKind, Integer> followUp;
 	private final Supplier<PipelineSnapshot> probe;
 	private final Consumer<PipelineTickReport> report;
 
@@ -103,7 +103,7 @@ public class PipelineScheduler {
 	/** 테스트 seam — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
 	PipelineScheduler(Runnable expireObservations, Supplier<IngestReport> ingest, Runnable preserveConditions,
 			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
-			BiConsumer<List<Long>, FollowUpKind> followUp, Supplier<PipelineSnapshot> probe,
+			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<PipelineSnapshot> probe,
 			Consumer<PipelineTickReport> report) {
 		this.expireObservations = expireObservations;
 		this.ingest = ingest;
@@ -125,14 +125,17 @@ public class PipelineScheduler {
 		List<Long> priceChanged = runStepReturning("reprocess-prices", reprocessPrices, List.of());
 		List<Long> ended = runStepReturning("reprocess-status", reprocessStatus, List.of());
 		// 후속 알림(AL-03) — 가격변화·종료한 딜 중 첫 알림이 나갔던 것에만. 종료가 마지막이라 닫히기 직전 값까지 반영.
-		runStep("follow-up-price", () -> followUp.accept(priceChanged, FollowUpKind.PRICE_CHANGED));
-		runStep("follow-up-ended", () -> followUp.accept(ended, FollowUpKind.ENDED));
+		// 발송 수를 붙잡아 틱 리포트에 싣는다 — 안 그러면 sendFollowUps가 낸 값이 조용히 버려진다(Q-57 절반 카운터).
+		int followUpPrice = runStepReturning("follow-up-price",
+				() -> followUp.apply(priceChanged, FollowUpKind.PRICE_CHANGED), 0);
+		int followUpEnded = runStepReturning("follow-up-ended",
+				() -> followUp.apply(ended, FollowUpKind.ENDED), 0);
 		PipelineSnapshot after = snapshot();
 		if (before == null || after == null) {
 			return; // DB가 닿지 않는다. snapshot()이 이미 남겼고, 0으로 채운 리포트는 거짓말이다.
 		}
 		// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다.
-		report.accept(PipelineTickReport.between(before, after, ingestReport));
+		report.accept(PipelineTickReport.between(before, after, ingestReport, followUpPrice, followUpEnded));
 	}
 
 	/**

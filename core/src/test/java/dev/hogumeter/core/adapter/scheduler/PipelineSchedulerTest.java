@@ -10,7 +10,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,9 +42,8 @@ class PipelineSchedulerTest {
 		calls.add("status");
 		return List.of();
 	};
-	// 후속 알림은 no-op — 순서·격리 단언에 영향을 주지 않는다(배선 검증은 FollowUpAlertUseCase 쪽).
-	private final BiConsumer<List<Long>, FollowUpKind> followUp = (ids, kind) -> {
-	};
+	// 후속 알림은 0 반환 — 순서·격리 단언에 영향을 주지 않는다(배선 검증은 FollowUpAlertUseCase 쪽).
+	private final BiFunction<List<Long>, FollowUpKind, Integer> followUp = (ids, kind) -> 0;
 
 	private static Runnable boom(String message) {
 		return () -> {
@@ -127,6 +126,20 @@ class PipelineSchedulerTest {
 		assertThat(snapshots).as("전후로 정확히 두 번 찍는다").isEmpty();
 		assertThat(reported.get().dealsCreated()).isEqualTo(1);
 		assertThat(reported.get().pending()).isZero();
+	}
+
+	@Test
+	@DisplayName("후속 알림 발송 수를 틱 리포트에 싣는다 — 첫 알림만 세고 후속을 버리면 절반 카운터다 (Q-57)")
+	void followUpSendCountsFlowIntoReport() {
+		// 가격변화 딜 [1,2], 종료 딜 [3,4,5]. followUp이 종류별로 다른 수를 반환한다 — 스케줄러가 그 값을
+		// 붙잡아 리포트에 실어야 한다(예전엔 BiConsumer라 반환이 통째로 버려졌다).
+		BiFunction<List<Long>, FollowUpKind, Integer> counting =
+				(ids, kind) -> kind == FollowUpKind.PRICE_CHANGED ? 2 : 3;
+		new PipelineScheduler(expire, ingest, conditions, () -> List.of(1L, 2L), () -> List.of(3L, 4L, 5L),
+				counting, () -> EMPTY, reported::set).tick();
+
+		assertThat(reported.get().followUpPriceChangedSent()).isEqualTo(2);
+		assertThat(reported.get().followUpEndedSent()).isEqualTo(3);
 	}
 
 	@Test
@@ -264,7 +277,10 @@ class PipelineSchedulerTest {
 		Map<FollowUpKind, List<Long>> received = new EnumMap<>(FollowUpKind.class);
 		Supplier<List<Long>> pricesReturning = () -> List.of(11L, 22L);
 		Supplier<List<Long>> statusReturning = () -> List.of(33L);
-		BiConsumer<List<Long>, FollowUpKind> capture = (ids, kind) -> received.put(kind, ids);
+		BiFunction<List<Long>, FollowUpKind, Integer> capture = (ids, kind) -> {
+			received.put(kind, ids);
+			return ids.size();
+		};
 
 		new PipelineScheduler(expire, ingest, conditions, pricesReturning, statusReturning, capture,
 				() -> EMPTY, reported::set).tick();

@@ -19,9 +19,9 @@ class PipelineTickReportTest {
 		return new PipelineSnapshot(raw, sources, deals, queue, ended, unprocessed, reportPending, 0, 0);
 	}
 
-	/** 매칭 카운터를 안 보는 스냅샷 산술 테스트용 — 수집 리포트는 빈 값으로 둔다. */
+	/** 매칭 카운터를 안 보는 스냅샷 산술 테스트용 — 수집 리포트·후속 알림 수는 0으로 둔다. */
 	private static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after) {
-		return PipelineTickReport.between(before, after, IngestReport.empty());
+		return PipelineTickReport.between(before, after, IngestReport.empty(), 0, 0);
 	}
 
 	@Test
@@ -124,10 +124,25 @@ class PipelineTickReportTest {
 		IngestReport ingest = new IngestReport(3, 1, 2, 5, 4, 2);
 
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				ingest);
+				ingest, 0, 0);
 
 		assertThat(report.ingest()).isEqualTo(ingest);
 		assertThat(report.toString()).contains(
 				"matched[confirmed=3 candidate=1 unknown=2 rejected=5 skippedNoPrice=4]", "firstAlertsSent=2");
+	}
+
+	/**
+	 * OBS-02 후속 알림 발송 수(Q-57): 첫 알림과 부류가 다르고, 후속끼리도 PRICE_CHANGED와 ENDED를 가른다.
+	 * 전송은 스냅샷 상태 변화가 아니라 스케줄러가 세어 넘긴다 — 0을 생략하지 않는다.
+	 */
+	@Test
+	@DisplayName("후속 알림 발송 수가 종류별로 요약에 실린다 (priceChanged·ended)")
+	void reportsFollowUpSendCountsByKind() {
+		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
+				IngestReport.empty(), 4, 2);
+
+		assertThat(report.followUpPriceChangedSent()).isEqualTo(4);
+		assertThat(report.followUpEndedSent()).isEqualTo(2);
+		assertThat(report.toString()).contains("followUpsSent[priceChanged=4 ended=2]");
 	}
 }
