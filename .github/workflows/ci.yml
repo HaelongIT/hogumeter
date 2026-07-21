@@ -94,6 +94,11 @@ jobs:
       - name: .env.example 드리프트 게이트
         run: bash scripts/check-env-example.test.sh
 
+      # 1차 검증/배포 전 설정 점검(SEC-02 노출·텔레그램·robots). "…할 것"에 "…했는지 확인하는 법"을 붙인다 —
+      # 공개 배포인데 web 인증이 비어 데이터가 노출돼도 지금은 아무도 안 잡는다. 차단·통과를 둘 다 시험한다.
+      - name: preflight 설정 점검 계약 테스트
+        run: bash scripts/preflight.test.sh
+
       # REL-04: cron은 조용히 실패한다. `pre-deploy`는 cron 등록을 [필수]로 적어 뒀지만
       # **도는지 확인하는 법이 없었다** — 백업이 3일째 없어도 복구가 필요한 날에야 드러난다.
       - name: 백업 신선도 게이트 계약 테스트

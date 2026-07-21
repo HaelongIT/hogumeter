@@ -30,6 +30,7 @@
 ## C. 보안 · 네트워크
 - **[완료]** ~~CORS 설정~~ **불필요해졌다.** `web` 컨테이너의 nginx가 `/api`를 `core:8080`으로 프록시하므로 브라우저에겐 **동일 오리진**이다. 교차 출처 요청이 발생하지 않아 core에 CORS를 넣을 이유가 없다. 개발(Vite 프록시)과 운영(nginx)의 동작이 같다. **단, 크롬 확장(기능4)이 core에 직접 붙으면 그때 다시 필요**해진다.
 - **[필수]** **web Basic Auth를 켤 것**(SEC-02). 구현돼 있으나 **기본 off**다 — `.env`의 `WEB_BASIC_AUTH_HTPASSWD`를 채워야 활성화된다. 해시 생성: `docker run --rm httpd:2.4-alpine htpasswd -nbm hogu '비밀번호'`(compose에 넣을 땐 `$`를 `$$`로). 끈 상태로 `0.0.0.0`에 열면 **아무나 제품을 등록·삭제한다.** `scripts/smoke.sh` 7단계가 켠/끈 경로를 모두 검증한다.
+  - **배포 전에 잡는 법**: `bash scripts/preflight.sh prod` — 공개 배포(`prod`)인데 `WEB_BASIC_AUTH_HTPASSWD`가 비면 **FAIL**한다(스택을 띄우기 전에 노출을 막는다). 계약: `scripts/preflight.test.sh`(CI).
   - **켰는지 확인하는 법**("켤 것"만 적어 두면 켰는지 알 수 없다):
     1. `docker compose logs web | grep 'SEC-02 basic_auth='` → **`on`** 이어야 한다(기본은 `off`).
     2. `curl -s -o /dev/null -w '%{http_code}' http://<호스트>/` → **401**. `curl … /api/v1/products` → **401**(데이터는 전부 `/api` 뒤에 있다).

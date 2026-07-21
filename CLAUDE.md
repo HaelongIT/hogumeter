@@ -136,6 +136,7 @@ cd web        && npm test && npm run build
 docker compose up -d
 
 # 종단·복구·게이트 (전부 CI가 돌린다. 격리 프로젝트/일회용 컨테이너만 쓴다)
+bash scripts/preflight.sh [dev|prod]  # 배포 전 설정 점검(공개인데 web 인증 없음 등 조용한 오작동). 런북: working-area/first-validation-runbook.md
 bash scripts/smoke.sh              # 빌드→기동→web→nginx→core→postgres→파이프라인→기준가 (13단계)
 bash scripts/backup.sh             # pg_dump + gzip + 7일 보관 + 오프사이트(설정 시)
 bash scripts/backup-drill.sh       # 등록→pg_dump→격리 복원→**행** 확인 왕복 (REL-04)

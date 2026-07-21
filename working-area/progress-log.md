@@ -1,3 +1,23 @@
+## 2026-07-21 — 1차 검증 turnkey: 배포 전 설정 점검 preflight + M1 검증 런북 (사용자 추천 채택, 무중단)
+
+사용자 "푸쉬하고 다음으로 뭘하면 좋을지 추천해주고 추천안대로 순서대로 무중단 ㄱㄱ" → 푸시(`96c8ab5..e5837df`) 후
+**추천: 1차 검증 turnkey 준비**. M1 알림 코드가 완결됐으니, 남은 병목은 "실 데이터로 도는지 보기"이고 그건
+사람의 시크릿·승인·관찰이 있어야 열린다. 그 왕복을 매끄럽게 만든다.
+- `scripts/preflight.sh [dev|prod] [.env]` — 스택을 **띄우기 전에** 조용히 오작동할 설정을 잡는다:
+  DB_PASSWORD 없음(FAIL) / TELEGRAM_ENABLED=true인데 토큰·chat 없음(FAIL, 기동 실패·발송처 없음) /
+  **prod인데 WEB_BASIC_AUTH_HTPASSWD 없음(FAIL, SEC-02 데이터 노출)** / COLLECTOR_ALLOW_NETWORK=1이면 robots
+  실 대조 리마인드(WARN). "…할 것"에 "…했는지 확인하는 법"을 붙인 것(체크리스트 교훈) — SEC-02 노출은 지금까지
+  배포 후에야 드러났다.
+- `scripts/preflight.test.sh` — 8 케이스 계약(mktemp .env 격리, 함수 직접 호출로 카운터 부모 반환, `$?` 대신
+  `if cmd`로 SC2181 회피). `ci.yml` lint 잡에 배선 → `check-ci-coverage` GREEN.
+- `working-area/first-validation-runbook.md` — ".env 채움 → preflight → up → smoke → 등록 → 실 폴링 → 관찰"의
+  정확한 순서 + M1 완료 기준 체크박스(docs/30 통합). 실 데이터 세션의 나침반.
+- 문서 배선: CLAUDE.md 게이트 목록에 preflight 한 줄, pre-deploy-checklist SEC-02 항목에 "배포 전에 잡는 법:
+  preflight prod" 추가(확인 절차를 산문이 아니라 실행 가능한 게이트로).
+- ⚠️자율 결정: dev/prod 2모드만(스테이징 없음 — 1인용). robots 대조는 자동 확인 불가라 WARN(FAIL 아님) — 사람이
+  §F를 돌렸는지는 preflight가 못 본다(정직하게 경계). 되돌리기 쉬움(순수 스크립트+문서).
+- 검증: preflight.test.sh **ALL PASS (8)**, check-ci-coverage GREEN. 커밋 예정(푸시는 지시 대기).
+
 ## 2026-07-21 — Q-22 무시→키워드 사후학습: M1 알림 루프의 마지막 조각 (사용자 추천 채택, 무중단)
 
 사용자 "추천하는대로 무중단 ㄱㄱ" → 추천했던 Q-22 착수. 죽어 있던 `KeywordSuggester`(소비처 0)를 살려 **오알림
