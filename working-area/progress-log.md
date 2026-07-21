@@ -1,3 +1,22 @@
+## 2026-07-21 — 죽은 컬럼 감지 게이트: check-table-wiring의 명시된 한계를 기계로 덮다 (토큰 무관 추천 ③, 무중단)
+
+사용자 "추천 순서대로 쭉 가" → ②(collector 신뢰성 Q-54)는 **재검토 결과 블록**: 재개 트리거가 "1차 검증에서 sink_error
+실측 후 유실·회복률 보고 판단"이라 재시도 큐 vs 디스크 버퍼는 **실 관측 후 결정**이고 현재 exit-1은 의도된 보수적
+선택 — 지금 지으면 투기다(D-3 커서 영속화도 선결). 정직하게 건너뛰고 ③으로.
+- **③ 죽은 컬럼 감지 게이트**(`scripts/check-dead-columns.sh` + `.test.sh` + `dead-columns-allowlist.txt`, CI):
+  `check-table-wiring`은 **테이블** 이름만 봐서 "테이블은 살아 있는데 컬럼이 죽은" 경우(그 게이트의 **명시된 한계**)를
+  못 잡는다 — `deal_event.confidence`가 정확히 그 틈에서 V1부터 죽어 있었고 2026-07-10 수동 감사는 javadoc에 속아
+  놓쳤다(Q-68). 그 한계를 기계로 덮었다.
+  - 판정: DDL 컬럼이 프로덕션 코드(**주석 제외**)에 snake 또는 camel(암시 JPA 필드명)로 나타나는가. 안 나타나면 죽음.
+  - 면제: `<Q-ID|INTENTIONAL>` — Q 인용은 열려 있어야(만료), INTENTIONAL은 설계상 영구(base_price 역산금지·포렌식 타임스탬프).
+  - 실 저장소에서 **11개 포착**: confidence(Q-68)·body_text(Q-18)·M2 컬럼 2(Q-72)·global_setting/price_history(Q-28/Q-3)·
+    demand_axis_filter(Q-48)·포렌식 타임스탬프 넷(sent_at·held_at·ignored_at, INTENTIONAL). 전부 정확한 사유로 면제.
+  - 계약 8케이스: 매핑(스네이크·카멜)·INTENTIONAL·열린 Q 통과 / 죽은 컬럼·**주석에만 있는 컬럼**·만료 Q·낡은 면제 차단.
+  - ⚠️명시된 한계(적어 둠): generic 컬럼명(price·source·id)은 우연히 코드에 나타나 오판(false-negative) — distinctive
+    이름의 죽은 컬럼만 확실히 잡는다. 이 한계가 다음 게이트의 명세.
+- 검증: 게이트 GREEN(156컬럼·면제 11) · 계약 ALL PASS(8) · check-ci-coverage GREEN(CI 배선 확인) · eol=lf.
+  Q-68에 기계화 주석 · docs/99 교훈("명시된 한계는 다음 게이트의 명세다") · 커밋 예정. core 무수정(scripts·ci·docs만).
+
 ## 2026-07-21 — PUR-04 성적표 발급: 죽어 있던 ReportCardCalculator를 살려 구매-이후 루프를 닫다 (토큰 무관 추천 ①, 무중단)
 
 사용자 "추천해주는 순서대로 무중단으로 쭉 가"(토큰 없이 갈 수 있는 것) → 추천 ① **PUR 성적표 완성** 착수. `ReportCardCalculator`

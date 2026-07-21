@@ -1,0 +1,20 @@
+# 죽은 컬럼 면제 — check-dead-columns.sh가 읽는다.
+# 형식: "<table>.<column>  <Q-ID|INTENTIONAL>  <이유>"
+#   Q-<번호>    → docs/91에 [열림]/[부분해소]로 있어야 한다(해소되면 면제 만료 → 게이트가 다시 묻는다). 잠정적으로 죽음.
+#   INTENTIONAL → 설계상 영원히 코드가 안 닿는 컬럼(만료 없음). 근거를 반드시 적는다.
+# 컬럼이 배선되면(코드가 닿으면) 그 줄을 지운다 — 게이트가 "낡은 면제: 이제 닿는다"로 능동 차단한다.
+
+# --- 설계상 영원히 안 닿음 (INTENTIONAL) ---
+deal_event.base_price     INTENTIONAL  BM-02 AC-2 역산 금지 — 항상 null. 스모크 5-1g가 base_price=NULL을 계약으로 못박는다.
+deal_alert.sent_at        INTENTIONAL  포렌식 타임스탬프(DB default now()). 발송 판정은 이력 존재로 하고 시각은 안 읽는다(수동 조사용).
+held_alert.held_at        INTENTIONAL  포렌식 타임스탬프(DB default now()). 플러시는 현재 방해금지로 재평가하지 held_at을 안 본다(Q-20 ②).
+deal_ignore.ignored_at    INTENTIONAL  포렌식 타임스탬프(DB default now()). 무시 판정은 행 존재로 하고 시각은 안 읽는다.
+
+# --- 잠정적으로 죽음 (열린 Q 인용 — 해소되면 면제 만료) ---
+deal_event.confidence                 Q-68  매칭이 연속 신뢰도 점수를 안 냄 — 채우는 코드 0·읽는 코드 0. 이 게이트가 잡아야 할 원형.
+alert_policy.demand_axis_filter       Q-48  수요축 필터 손잡이 — 소비 기능(Q-66 ① SPLIT 필터)이 생겨야 매핑. 벌크 UPDATE가 보존한다.
+global_setting.updated_at             Q-28  전역 제외키워드 global_setting 자체가 미배선(생산자 화면 부재). 테이블이 살면 채워진다.
+price_history.fetched_at              Q-3   네이버 어댑터(키 미발급)가 쓸 죽은 테이블. 키 발급 시 배선.
+raw_deal_post.body_text               Q-18  잘린 제목 복구용 본문 자리 — collector가 목록만 폴링해 항상 null. 본문 fetch 배선 시 채워진다.
+listing_axis_value.axis_id            Q-72  M2 중고 — 생산자(번개 실 폴링)가 정지조건 뒤라 미배선.
+used_listing_observation.observed_at  Q-72  M2 중고 — 생산자(번개 실 폴링)가 정지조건 뒤라 미배선.
