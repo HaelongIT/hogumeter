@@ -22,9 +22,11 @@ import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
 import dev.hogumeter.core.domain.benchmark.Tier;
 import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
 import dev.hogumeter.core.domain.deal.DealStatus;
+import dev.hogumeter.core.domain.deal.DealTags;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.deal.Origin;
 import dev.hogumeter.core.domain.product.DemandAxisMode;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -37,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 슬라이스 2 기준가 조회 — 저장된 deal_event → 도메인 매핑 → BenchmarkView(실 스키마 + Testcontainers). */
@@ -67,6 +70,10 @@ class GetBenchmarkUseCaseTest {
 	VariantDemandScope demandScope;
 	@Autowired
 	VariantExcludeKeywords excludeKeywords;
+	@Autowired
+	JdbcTemplate jdbc;
+	@Autowired
+	EntityManager em;
 
 	private GetBenchmarkUseCase useCase;
 	private long variantId;
@@ -88,7 +95,7 @@ class GetBenchmarkUseCaseTest {
 		insertCrossVerifiedDeal(variantId, price, dateIso, null);
 	}
 
-	private void insertCrossVerifiedDeal(long targetVariantId, long price, String dateIso, String demandAxisValue) {
+	private long insertCrossVerifiedDeal(long targetVariantId, long price, String dateIso, String demandAxisValue) {
 		Instant when = Instant.parse(dateIso + "T00:00:00Z");
 		RawDealPost r1 = rawPosts.save(new RawDealPost("ppomppu", "p" + counter++,
 				"https://ppomppu.test/" + counter, "제목", when, "ACTIVE"));
@@ -99,6 +106,23 @@ class GetBenchmarkUseCaseTest {
 				demandAxisValue));
 		sources.save(new DealEventSourceEntity(deal.getId(), r1.getId(), "ppomppu"));
 		sources.save(new DealEventSourceEntity(deal.getId(), r2.getId(), "ruliweb"));
+		return deal.getId();
+	}
+
+	/**
+	 * 정상 딜을 넣은 뒤 {@code applied_conditions}에 배송비미상 표식을 <b>native SQL로</b> 심는다 —
+	 * `DealEventEntity`의 그 컬럼 매핑은 읽기 전용(insertable=false)이라 `save()`로는 못 쓴다.
+	 * 운영에선 `PreserveAppliedConditionsUseCase`가 같은 자리를 채운다(raw._derived → 컬럼).
+	 */
+	private void insertShippingUnknownDeal(long price, String dateIso) {
+		long id = insertCrossVerifiedDeal(variantId, price, dateIso, null);
+		jdbc.update("update deal_event set applied_conditions = array[?] where id = ?",
+				DealTags.SHIPPING_UNKNOWN, id);
+		// native UPDATE는 영속성 컨텍스트를 우회한다 — clear() 없이 findByVariantId를 부르면 캐시된
+		// 엔티티(appliedConditions=null)가 나와 하한 딜이 제외되지 않는다(core-java.md). 운영에선 다른
+		// 트랜잭션·틱이라 이 문제가 없다 — 이 clear는 한 tx로 압축한 테스트의 인공물이다.
+		em.flush();
+		em.clear();
 	}
 
 	@Test
@@ -194,6 +218,47 @@ class GetBenchmarkUseCaseTest {
 
 		assertThat(view.n()).as("제외 목록에 안 걸리면 6건 그대로").isEqualTo(6);
 		assertThat(view.periodLowest().price()).isEqualTo(780_000L);
+	}
+
+	/**
+	 * Q-46 ②: `배송비미상` 딜은 저장가가 실결제가가 아니라 <b>하한</b>이라(배송비를 몰라 0을 더했다) 기준가를
+	 * 아래로 끈다 → 값 통계(pricingSet)에서 뺀다. `DealSetsTest`가 순수 함수를 잠그지만, 그건 `DealEvent`를
+	 * 손으로 만든다 — 여기선 <b>컬럼 → 매퍼 → 계산기</b> 다섯 구간이 실제로 흐르는지 종단으로 본다(그중 하나만
+	 * 끊겨도 하한 딜이 조용히 기준가를 끌어내린다 — 실 폴링 전 필수, 절대 원칙 3 "놓침").
+	 */
+	@Test
+	void shippingUnknownDealIsExcludedFromBenchmarkThroughTheColumn() {
+		insertCrossVerifiedDeal(820_000, "2026-06-10");
+		insertCrossVerifiedDeal(850_000, "2026-06-12");
+		insertCrossVerifiedDeal(890_000, "2026-06-14");
+		insertCrossVerifiedDeal(920_000, "2026-06-16");
+		insertCrossVerifiedDeal(950_000, "2026-06-18");
+		insertShippingUnknownDeal(300_000, "2026-06-20"); // 배송비를 몰라 30만처럼 보이는 하한
+
+		BenchmarkView view = useCase.getBenchmark(variantId, 6, false);
+
+		assertThat(view.n()).as("배송비미상 딜은 값 통계에서 빠져 6이 아니라 5").isEqualTo(5);
+		assertThat(view.periodLowest().price()).as("하한 300k가 최저가로 오르지 않는다").isEqualTo(820_000L);
+		assertThat(view.benchmarkPrice()).isEqualTo(890_000L);
+	}
+
+	/**
+	 * 거울상(무력화 방지): 같은 300k 딜이라도 표식이 없으면 표본에 들어와 median·최저가를 끈다. 제외가
+	 * <b>표식으로 구동</b>됨을 증명한다 — 이게 없으면 pricingSet 필터가 항상-제외/무력이어도 위 테스트만으론 안 잡힌다.
+	 */
+	@Test
+	void sameDealWithoutShippingUnknownTagPullsTheBenchmarkDown() {
+		insertCrossVerifiedDeal(820_000, "2026-06-10");
+		insertCrossVerifiedDeal(850_000, "2026-06-12");
+		insertCrossVerifiedDeal(890_000, "2026-06-14");
+		insertCrossVerifiedDeal(920_000, "2026-06-16");
+		insertCrossVerifiedDeal(950_000, "2026-06-18");
+		insertCrossVerifiedDeal(300_000, "2026-06-20"); // 같은 값, 표식 없음
+
+		BenchmarkView view = useCase.getBenchmark(variantId, 6, false);
+
+		assertThat(view.n()).as("표식 없으면 6건 그대로").isEqualTo(6);
+		assertThat(view.periodLowest().price()).as("하한 취급이 없으니 300k가 최저가로 온다").isEqualTo(300_000L);
 	}
 
 	@Test

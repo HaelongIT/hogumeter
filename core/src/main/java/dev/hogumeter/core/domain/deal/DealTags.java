@@ -19,8 +19,9 @@ public final class DealTags {
 	 * <p>뽐뿌 {@code 유배}(유료배송 금액미상), 펨코 {@code 조건부무료배송:*}(멤버십·장바구니 임계).
 	 * {@code 카할}(카드할인)은 <b>여기 들지 않는다</b> — 확정본 AC-2가 허용한 as-posted 값이다.
 	 *
-	 * <p>이 표식이 붙은 딜은 기준가를 실제보다 아래로 끈다(좋은 딜을 놓친다, 절대 원칙 3).
-	 * 표본에서 하한으로 취급하는 일은 아직 미구현 — docs/91 Q-46 재개 트리거 ②.
+	 * <p>이 표식이 붙은 딜은 기준가를 실제보다 아래로 끈다(좋은 딜을 놓친다, 절대 원칙 3). 그래서 값
+	 * 통계(pricingSet)에서 <b>하한으로 취급해 제외</b>한다(Q-46 ②, `DealSets.pricingSet`). 발생·신호
+	 * 집합엔 남는다 — 실제 딜이고 가격만 못 믿을 뿐이다. `GetBenchmarkUseCaseTest`가 컬럼→계산기 종단으로 잠근다.
 	 */
 	public static final String SHIPPING_UNKNOWN = "배송비미상";
 

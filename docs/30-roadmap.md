@@ -32,7 +32,7 @@
 
 **완료 기준을 막고 있는 것:**
 
-0-2. **✅ 절반 해소(2026-07-10) — `docs/91` Q-46**: 조건 태그(`카할` 등)가 `raw` jsonb에 갇혀 `deal_event`에 도달하지 않던 것을 고쳤다. "core 기존 파일이라 조율"이라는 봉인은 **거짓이었다**(Q-50·Q-48에 이어 세 번째) — 신규 `PreserveAppliedConditionsUseCase`(네이티브 SQL, 멱등)를 `PipelineScheduler`가 ingest 바로 뒤에 부른다. 소비자도 함께: `PipelineTickReport.conditionalTotal`. 스모크 5-1g가 종단 증명. **정정**: 분포는 as-posted가 옳으므로(확정본 AC-2) "표본 1할 오염"은 과한 서술이었고, 실제 결함은 **표시 누락**이었다. **남은 것**: ① 기준가 응답·알림 본문이 태그를 읽고 말하기(core 기존 파일) ② **`유료배송(금액미상)`의 배송비 0 가산** — 이건 진짜 하향 편향이고 **실 폴링 전 필수**다.
+0-2. **✅ 대부분 해소(2026-07-10~21) — `docs/91` Q-46**: 조건 태그(`카할`·`배송비미상` 등)가 `raw` jsonb에 갇혀 `deal_event`에 도달하지 않던 것을 고쳤다. "core 기존 파일이라 조율"이라는 봉인은 **거짓이었다**(Q-50·Q-48에 이어 세 번째) — 신규 `PreserveAppliedConditionsUseCase`(네이티브 SQL, 멱등)를 `PipelineScheduler`가 ingest 바로 뒤에 부른다. 소비자도 함께: `PipelineTickReport.conditionalTotal`. **① 표시**: `DealEvent.appliedConditions` → `BenchmarkView.DealRef.conditions` → web `conditionsSuffix`("조건부: 카할")·미상 큐 "실제 결제가는 더 높습니다"까지 종단으로 말한다. **② 하향 편향(실 폴링 전 필수)은 닫혔다**: `배송비미상`은 저장가가 하한이라 `DealSets.pricingSet`이 값 통계에서 뺀다(발생·신호엔 남긴다) — 컬럼→매퍼→계산기 종단을 `GetBenchmarkUseCaseTest.shippingUnknownDealIsExcludedFromBenchmarkThroughTheColumn`이 잠갔다. **남은 것**: 알림 본문의 조건 표시(텔레그램 어댑터 Q-20과 함께 — 발송이 스텁이라 지금 지어 넣으면 검증 못 하는 죽은 문구다).
 
 0-1. **⚠️ 코드 안의 블로커 — `docs/91` Q-27 ④(실측 2026-07-10)**: 매칭 실패 원문은 `deal_event_source` 링크를 만들지 않아 `findUnprocessed()`가 계속 미처리로 본다 → **매 틱 다시 리뷰 큐에 쌓인다**(운영 60초 주기면 원문 하나당 하루 1,440행). 조회는 접어서 `occurrences`로 세어 보여주지만(숨기지 않는다), **승격·기각은 이게 고쳐져야 가능하다** — 하나를 처리해도 나머지가 남는다. core 기존 파일 수정이라 상대와 조율.
 
