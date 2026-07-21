@@ -16,7 +16,22 @@
   어댑터와 공유하므로 스텁 로그가 곧 실제로 나갈 메시지(형식이 조용히 안 갈라짐).
 - 관통 테스트: `AlertDispatcherTest.sentMessageCarriesResolvedProductAndVariantName`(이름이 메시지로 흐름),
   `AlertMessageFormatterTest`(7건 — 각 강도/후속 종류·SPARSE 금액 금지·조건 태그·이름 부재).
-- 검증: core 전체 GREEN. **다음: Piece 2 — TelegramAlertSender(HTTP) + SEC-03 화이트리스트 + SEC-08 차단감지.**
+- 검증: core 전체 GREEN. 커밋 `3ed475f`.
+
+**Piece 2 (커밋 대기) — 실 텔레그램 어댑터 + SEC-08 + config.**
+- `TelegramApi` seam + `HttpTelegramApi`(얇은 HttpClient 글루, form-urlencoded로 한글·줄바꿈 안전, **토큰은 URL에만**
+  두고 로그 금지 SEC-01) + `TelegramAlertSender`(`telegram.enabled=true`일 때만). 본문은 `AlertMessageFormatter` 공유.
+- **SEC-08**: `classify(status)` 순수 static — 2xx OK / 5xx 일시장애(재시도 가능) / 4xx 거절(재시도 금지). `send`는
+  **어떤 실패에도 안 던진다**(한 알림 실패가 틱을 안 죽인다 — Q-56 stepsFailed와 조합). 파라미터라이즈드 테스트로 잠금.
+- **SEC-03(아웃바운드)**: 설정된 `TELEGRAM_CHAT_ID` 하나로만 발송. 인바운드 화이트리스트(버튼 콜백)는 Q-15 후속.
+- **안전 스위치**: `@ConditionalOnProperty`로 기본=스텁(실발송 없음), opt-in만 실 어댑터. `TelegramSenderWiringTest`가
+  enabled=true→실 어댑터를 못박음(조건이 조용히 뒤집혀 "켰는데 스텁"이 안 되게). enabled=true인데 토큰·chat 비면 기동 실패.
+- config: compose+`.env.example`에 `TELEGRAM_ENABLED`·`TELEGRAM_CHAT_ID` 추가(OPS-01 게이트 PASS — 드리프트 없음).
+  pre-deploy에 실 발송 켜는 법 + 수동 스파이크 1회 권장. 토큰은 사용자가 `.env`에(코드는 읽기만).
+- ⚠️한계: `HttpTelegramApi`는 fake로만 검증(실 네트워크 테스트 금지) — 실 응답은 토큰 발급 후 수동 스파이크.
+- 기록: Q-20 부분해소(아웃바운드 발송 완성), Q-67 세 번째 거짓 봉인 해소(이력·배선·발송 다 있었다), Q-61 SEC-03
+  아웃바운드 절반, docs/30 AL-03·텔레그램 갱신, docs/99 교훈("못 두드리는 어댑터는 seam+안 던지게").
+- 검증: core 전체 GREEN(신규 3 테스트 클래스). **텔레그램 발송 = 사용자가 토큰만 채우면 산다.**
 
 ## 2026-07-12 — 프론트 UI "판정을 주인공으로" + Q-15 버튼 (사용자 지휘)
 

@@ -31,7 +31,11 @@ services:
       DB_NAME: ${DB_NAME:-hogumeter}
       DB_USER: ${DB_USER:-hogumeter}
       DB_PASSWORD: ${DB_PASSWORD:?}
+      # 텔레그램 실 발송(AL-05). enabled=true일 때만 실 어댑터가 뜬다(기본 미설정 = 스텁 = 실발송 없음).
+      # Spring 완화 바인딩: TELEGRAM_ENABLED -> telegram.enabled, TELEGRAM_CHAT_ID -> telegram.chat-id.
+      TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
       # 파이프라인 트리거 주기(ms). raw_deal_post -> deal_event 변환을 이 주기로 돈다.
