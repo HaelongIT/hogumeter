@@ -4,7 +4,7 @@
  * 세 모드는 배타이고 모드 밖 필드는 `null`이다(core `ObservationContext`의 도메인 계약).
  * 그래서 여기서 `null`을 만나면 "0"으로 읽지 않고 **그 모드가 아니라고** 읽는다.
  */
-import type { ObservationContext, PurchaseObservation, PurchaseState } from '../api/types'
+import type { ObservationContext, PurchaseObservation, PurchaseState, ReportCard } from '../api/types'
 
 /** KST는 UTC+9, DST가 없다. 그래서 오프셋 하나로 족하다. */
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
@@ -44,13 +44,33 @@ function activeDealLine(context: ObservationContext): string {
   return `${lowest} — ${won(Math.abs(context.overpaidWon))} ${verdict} (${pct(context.overpaidPct)})`
 }
 
+/**
+ * PUR-04 성적표 → 화면 한 줄. **정직성**: UNOBSERVED(관측 시작 이전)·n=0(비교 딜 없음)이면 통계를 **짓지 않는다**
+ * (금액·비율 문구 없음). 그 외엔 raw 사실만 — "n건 중 X건이 더 쌌다"·기준가 갭·최저 기회. **"호구" 등급은 없다**
+ * (판단은 사람, 절대 원칙 2) — 소비자가 셋을 보고 스스로 판단한다.
+ */
+export function reportCardLine(card: ReportCard): string {
+  if (card.unobserved) return '관측 시작 이전 구매라 성적을 낼 수 없습니다'
+  if (card.n === 0) return '관찰 기간에 비교할 딜이 없었습니다'
+
+  const parts = [`${card.n}건 중 ${card.cheaperCount}건이 내 구매가보다 쌌습니다`]
+  if (card.paidGap !== null) {
+    // paidGap = 구매가 − 동결 기준가. 양수 = 기준가보다 비쌈. 부호를 문장으로, 값은 절댓값으로.
+    if (card.paidGap === 0) parts.push('기준가와 같음')
+    else parts.push(`기준가보다 ${won(Math.abs(card.paidGap))} ${card.paidGap > 0 ? '비쌈' : '쌈'}`)
+  }
+  if (card.lowestOpportunity !== null) parts.push(`기간 내 최저 ${won(card.lowestOpportunity)}`)
+  return parts.join(' · ')
+}
+
 export function observationLine(observation: PurchaseObservation): string {
   const context = observation.context
 
   switch (context.mode) {
     case 'REPORT_PENDING':
-      // "집계 중"은 진행 중이라는 뜻이다. 성적표를 발급하는 코드가 없어(docs/91 Q-62) 여기서 영원히
-      // 멈춘다 — 기다리면 나온다고 믿게 두지 않는다(과대약속 금지, 절대 원칙 6).
+      // 발급(IssuePendingReportCards)이 만료 직후 돌아 REPORT_PENDING은 순간이다(docs/91 Q-62). 그 순간엔
+      // 아직 성적표가 없으니 그대로 말한다 — 기다리면 나온다고 과대약속하지 않는다(절대 원칙 6).
+      // CLOSED가 되면 reportCardLine이 성적표를 그린다.
       return '관찰 종료 · 성적표는 아직 발급되지 않습니다'
     case 'ACTIVE_DEAL':
       return activeDealLine(context)

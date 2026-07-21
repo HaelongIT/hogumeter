@@ -815,6 +815,12 @@
   color: var(--ink-dim);
 }
 
+/* 성적표(PUR-04)는 CLOSED의 최종 요약 — 관찰 문맥보다 또렷하게(중립 잉크). 신호색은 안 쓴다(판단은 사람). */
+.purchase-report {
+  font-size: 0.8125rem;
+  color: var(--ink);
+}
+
 /* ① 미상 큐 — 유형별 좌측 rail(이상치=amber, 미상=steel, unknown=중립). */
 .shell ul[aria-label='미상 큐'] > li {
   border-left-width: 3px;

@@ -1,3 +1,19 @@
+## 2026-07-21 — PUR-04 성적표 web 표시: 발급한 성적표를 사람이 볼 수 있게 한다 (①의 시각적 완성, 무중단)
+
+사용자 "계속 무중단으로 진행" → 백엔드 미배선 고가치가 소진돼(SIG·CAD·PUR·알림 전부 이미 배선 확인) **방금 만든
+PUR-04 성적표의 시각적 미완**을 완성. 성적표를 API로 냈지만(PurchaseObservation.reportCard) web이 안 그려서
+사람이 "호구였나"를 볼 수 없었다 — 요청한 기능(추천 ①)의 절반이 안 보이던 것. web이 이미 구매를 렌더하므로
+새 화면 자발 착수가 아니라 **기존 렌더의 확장**이다(web-ui-wait 메모리와 정합).
+- `types.ts`: `ReportCard` 인터페이스(core record 원문에서 옮김) + `PurchaseObservation.reportCard: ReportCard|null`.
+- `purchase/present.ts`: 순수 `reportCardLine` — **정직성**: UNOBSERVED·n=0이면 통계 안 지음(금액 문구 없음),
+  그 외엔 raw 사실만("n건 중 X건이 더 쌌다"·기준가 갭·최저 기회). **"호구" 등급 없음**(판단은 사람, 절대 원칙 2).
+  REPORT_PENDING 문구의 낡은 주석("발급 코드 없어" — 이제 있다) 정정.
+- `PurchasePanel.tsx`: CLOSED(성적표 있음)는 관찰 문맥 대신 성적표를 그린다(관찰 끝났고 성적표가 요약). `.purchase-report`
+  스타일(중립 잉크, 신호색 안 씀).
+- 계약: `present.test.ts` +5(정상·음수갭·갭없음·UNOBSERVED·n=0의 금액부재), `PurchasePanel.test.tsx` +1(CLOSED 성적표 렌더).
+  smoke의 PurchaseObservation 필드 검증에 `reportCard` 추가(web-react 규율: 응답 필드 추가 시 스모크에도).
+- 검증: **web 179 통과**(+6) · tsc+build GREEN · core 무수정(web·scripts만).
+
 ## 2026-07-21 — 죽은 컬럼 감지 게이트: check-table-wiring의 명시된 한계를 기계로 덮다 (토큰 무관 추천 ③, 무중단)
 
 사용자 "추천 순서대로 쭉 가" → ②(collector 신뢰성 Q-54)는 **재검토 결과 블록**: 재개 트리거가 "1차 검증에서 sink_error

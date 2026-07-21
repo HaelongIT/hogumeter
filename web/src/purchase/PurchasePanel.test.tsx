@@ -18,6 +18,16 @@ const observing: PurchaseObservation = {
     observationDay: 8,
     cheaperChanceCount: 0,
   },
+  reportCard: null,
+}
+
+const closed: PurchaseObservation = {
+  purchaseId: 9,
+  state: 'CLOSED',
+  paidPrice: 899_000,
+  purchasedAt: '2026-07-01T14:59:00Z',
+  context: { mode: 'REPORT_PENDING', activeLowestPriceLast: null, overpaidWon: null, overpaidPct: null, observationDay: null, cheaperChanceCount: null },
+  reportCard: { unobserved: false, n: 3, cheaperCount: 2, percentile: 0.667, lowestOpportunity: 840_000, paidPrice: 899_000, paidGap: 79_000 },
 }
 
 const fill = async () => {
@@ -97,6 +107,18 @@ describe('PurchasePanel', () => {
       '활성 딜 없음 · 관찰 8일차 · 더 싼 기회 0건',
     )
     expect(screen.getByLabelText('구매가')).toHaveTextContent('899,000원')
+  })
+
+  it('CLOSED 구매는 관찰 문맥 대신 발급된 성적표를 그린다 (PUR-04)', async () => {
+    vi.spyOn(api, 'listPurchases').mockResolvedValue([closed])
+    render(<PurchasePanel variantId={11} />)
+
+    expect(await screen.findByLabelText('성적표 9')).toHaveTextContent(
+      '3건 중 2건이 내 구매가보다 쌌습니다 · 기준가보다 79,000원 비쌈 · 기간 내 최저 840,000원',
+    )
+    // 관찰 문맥은 그리지 않는다 — 관찰은 끝났고 성적표가 그 요약이다.
+    expect(screen.queryByLabelText('관찰 문맥 9')).toBeNull()
+    expect(screen.getByText('성적표 발급')).toBeInTheDocument() // 상태 칩
   })
 
   it('variant가 바뀌면 그 variant의 기록을 다시 부른다', async () => {

@@ -142,6 +142,21 @@ export interface ObservationContext {
   cheaperChanceCount: number | null
 }
 
+/**
+ * PUR-04 성적표 — 관찰이 끝나 발급된(CLOSED) 구매의 "호구였나" 판정. 유머 등급·라벨 없음(정직성).
+ * `unobserved`(관측 시작 이전 구매)거나 `n === 0`이면 통계 필드(percentile·lowestOpportunity)는 null이다 —
+ * 표시 계층 재량이 아니라 도메인 계약. `paidGap`은 구매가 − 동결 기준가(양수=기준가보다 비쌈), 기준가 부재 시 null.
+ */
+export interface ReportCard {
+  unobserved: boolean
+  n: number
+  cheaperCount: number
+  percentile: number | null
+  lowestOpportunity: number | null
+  paidPrice: number
+  paidGap: number | null
+}
+
 /** GET /api/v1/variants/{variantId}/purchases */
 export interface PurchaseObservation {
   purchaseId: number
@@ -149,6 +164,8 @@ export interface PurchaseObservation {
   paidPrice: number
   purchasedAt: string
   context: ObservationContext
+  /** 발급된 성적표(CLOSED만). 그 외 상태는 null — 아직 발급 안 됨을 그대로 노출한다. */
+  reportCard: ReportCard | null
 }
 
 /** POST /api/v1/purchases — `observationDays`가 null이면 core가 90일을 적용한다. */

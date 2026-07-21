@@ -3,7 +3,7 @@ import { ApiFailure, api } from '../api/client'
 import type { PurchaseObservation } from '../api/types'
 import { InvalidForm } from '../registration/buildCommand'
 import { buildPurchaseCommand, type PurchaseForm } from './buildPurchaseCommand'
-import { kstDate, observationLine, stateLabel } from './present'
+import { kstDate, observationLine, reportCardLine, stateLabel } from './present'
 
 const EMPTY = { paidPrice: '', purchasedDate: '', observationDays: '' }
 
@@ -119,9 +119,16 @@ export function PurchasePanel({
                   {kstDate(purchase.purchasedAt)} · <span className="state-chip">{stateLabel(purchase.state)}</span>
                 </span>
               </p>
-              <span className="purchase-obs" aria-label={`관찰 문맥 ${purchase.purchaseId}`}>
-                {observationLine(purchase)}
-              </span>
+              {/* CLOSED면 발급된 성적표가 관찰 문맥을 대신한다 — 관찰은 끝났고 성적표가 그 요약이다. */}
+              {purchase.reportCard ? (
+                <span className="purchase-report" aria-label={`성적표 ${purchase.purchaseId}`}>
+                  {reportCardLine(purchase.reportCard)}
+                </span>
+              ) : (
+                <span className="purchase-obs" aria-label={`관찰 문맥 ${purchase.purchaseId}`}>
+                  {observationLine(purchase)}
+                </span>
+              )}
             </li>
           ))}
         </ul>
