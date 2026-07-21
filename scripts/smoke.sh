@@ -454,6 +454,18 @@ echo "$black" | grep -q '"benchmarkPrice":860000' ||
 	"${WEB}/api/v1/variants/${split_vid}/benchmark?periodMonths=6")" = 400 ] ||
 	fail "분리 제품인데 수요축 값 없이 기준가를 내준다 (묶음의 거짓말, Q-66 ①)"
 
+# Q-66 ③: 구매도 분리면 값이 필수다. 없으면 400(성적을 어느 색 분포에 대고 낼지 알 수 없다).
+buy=$(mktemp)
+echo "{\"variantId\":${split_vid},\"paidPrice\":900000,\"purchasedAt\":\"2026-06-15T23:59:00+09:00\"}" >"$buy"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "${WEB}/api/v1/purchases" \
+	-H 'Content-Type: application/json' -d @"$buy")" = 400 ] ||
+	fail "분리 제품인데 수요축 값 없이 구매가 기록된다 (Q-66 ③)"
+# 값을 주면 그 색 분포에 대고 성적을 낸다 — 블랙 median 860,000 대비 900,000이면 +40,000.
+echo "{\"variantId\":${split_vid},\"demandAxisValue\":\"블랙\",\"paidPrice\":900000,\"purchasedAt\":\"2026-06-15T23:59:00+09:00\"}" >"$buy"
+curl -fsS -X POST "${WEB}/api/v1/purchases" -H 'Content-Type: application/json' -d @"$buy" |
+	grep -q '"purchaseId"' || fail "분리 제품 구매(값 지정)가 기록되지 않는다 (Q-66 ③)"
+rm -f "$buy"
+
 echo "--- 5-1e) 미상 큐: 매칭 실패 원문이 사람에게 보인다 + 중복 재처리 실측 (Q-27 ④) ---"
 # `review_queue_item`은 2026-07-10까지 **쓰이기만 하고 아무도 읽지 않았다.** 매칭이 무엇을
 # 놓치는지 볼 방법이 없었다 — 놓침을 허용하는 시스템에서 놓친 걸 못 보면 그건 유실이다.

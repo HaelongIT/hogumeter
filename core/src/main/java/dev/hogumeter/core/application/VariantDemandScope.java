@@ -55,6 +55,16 @@ public class VariantDemandScope {
 		return product(variantId).getDemandAxisMode();
 	}
 
+	/**
+	 * 분리 제품인데 값이 없으면 거절한다(Q-66 ③). 표본을 좁히지 않고 <b>검증만</b> 하는 자리 — 구매 기록처럼
+	 * "딜을 거르는" 게 아니라 "입력이 온전한가"를 묻는 호출자를 위해.
+	 */
+	public void requireValueWhenSplit(long variantId, String demandAxisValue) {
+		if (modeOf(variantId) == DemandAxisMode.SPLIT && (demandAxisValue == null || demandAxisValue.isBlank())) {
+			throw new DemandAxisValueRequiredException(demandAxisName(variantId));
+		}
+	}
+
 	/** 사람에게 "어느 축 값을 지정하라"고 말하려면 축 이름이 필요하다. 없으면 일반 이름으로 답한다. */
 	private String demandAxisName(long variantId) {
 		return axes.findByProductId(product(variantId).getId()).stream()

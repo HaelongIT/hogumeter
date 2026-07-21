@@ -6,7 +6,8 @@ export interface PurchaseForm {
   paidPrice: string
   purchasedDate: string
   observationDays: string
-  demandAxisValue: string
+  /** 분리 제품이면 판단 화면에서 고른 값, 묶음이면 null(Q-66 ③). 자유 입력이 아니라 선택된 값을 그대로 받는다. */
+  demandAxisValue: string | null
 }
 
 /**
@@ -35,14 +36,12 @@ export function buildPurchaseCommand(form: PurchaseForm): RecordPurchaseCommand 
     throw new InvalidForm('관찰 기간은 1일 이상의 숫자로 입력하세요 (비우면 90일)')
   }
 
-  const demandAxisValue = form.demandAxisValue.trim()
-
   return {
     variantId: form.variantId,
     paidPrice: Number(paid),
     purchasedAt: new Date(`${form.purchasedDate}${KST_END_OF_DAY}`).toISOString(),
     observationDays: observationDays === '' ? null : Number(observationDays),
-    demandAxisValue: demandAxisValue === '' ? null : demandAxisValue,
+    demandAxisValue: form.demandAxisValue,
     // 화면에 딜 연결 입력이 없다. 없는 값을 지어내지 않는다(PUR-01에서 선택 필드).
     linkedDealEventId: null,
   }

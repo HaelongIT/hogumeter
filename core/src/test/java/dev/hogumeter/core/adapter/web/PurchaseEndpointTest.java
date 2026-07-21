@@ -118,4 +118,60 @@ class PurchaseEndpointTest {
 		assertThat(p.getSnapBenchmarkPrice()).isNull(); // 통계 없음(정직성)
 		assertThat(p.getSnapPaidGap()).isNull();
 	}
+
+	/**
+	 * Q-66 ③: 분리(SPLIT) 제품은 <b>어느 수요축 값을 산 것인지</b> 지정해야 한다. 안 주면 성적을 어느 색
+	 * 분포에 대고 낼지 알 수 없다 — 확정본 javadoc의 "SPLIT 필수"가 산문으로만 있고 검증이 없었다.
+	 */
+	@Test
+	void splitPurchaseWithoutDemandAxisValueIs400() throws Exception {
+		long splitVid = splitVariantWithBlackSample();
+
+		String noColor = """
+				{"variantId":%d,"paidPrice":810000,"purchasedAt":"2026-02-01T00:00:00Z"}""".formatted(splitVid);
+		mockMvc.perform(post("/api/v1/purchases").contentType(MediaType.APPLICATION_JSON).content(noColor))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("BM_DEMAND_AXIS_VALUE_REQUIRED"));
+
+		assertThat(purchases.findByVariantId(splitVid)).isEmpty(); // 저장 전에 막혔다
+	}
+
+	/** 성적은 <b>산 색의 분포</b>에 대고 낸다 — 화이트가 섞이면 as-of 기준가가 색과 무관해진다. */
+	@Test
+	void splitPurchaseScoresAgainstTheBoughtColorDistribution() throws Exception {
+		long splitVid = splitVariantWithBlackSample(); // 블랙 5건 median 860,000, 화이트 990,000 한 건
+
+		String blackBuy = """
+				{"variantId":%d,"demandAxisValue":"블랙","paidPrice":900000,"purchasedAt":"2026-02-01T00:00:00Z"}"""
+				.formatted(splitVid);
+		mockMvc.perform(post("/api/v1/purchases").contentType(MediaType.APPLICATION_JSON).content(blackBuy))
+				.andExpect(status().isCreated());
+
+		PurchaseEntity p = purchases.findByVariantId(splitVid).get(0);
+		assertThat(p.getSnapBenchmarkPrice()).as("블랙 분포의 median").isEqualTo(860_000L);
+		assertThat(p.getSnapPaidGap()).isEqualTo(40_000L); // 900k − 860k(화이트 섞였다면 기준가가 달랐다)
+	}
+
+	/** 블랙 5건(간격 30k > 병합 허용폭) + 화이트 1건. @return 그 SPLIT variantId. */
+	private long splitVariantWithBlackSample() {
+		ProductEntity product = products.save(new ProductEntity("갤럭시 25", "스마트폰", DemandAxisMode.SPLIT));
+		long vid = variants.save(new VariantEntity(product.getId(), "256GB", Map.of("용량", "256GB"))).getId();
+		long[] black = { 800_000, 830_000, 860_000, 890_000, 920_000 };
+		for (int i = 0; i < black.length; i++) {
+			insertColoredDeal(vid, black[i], Instant.parse("2026-01-0" + (i + 1) + "T00:00:00Z"), "블랙");
+		}
+		insertColoredDeal(vid, 990_000, Instant.parse("2026-01-06T00:00:00Z"), "화이트");
+		return vid;
+	}
+
+	private void insertColoredDeal(long vid, long price, Instant when, String color) {
+		RawDealPost r1 = rawPosts.save(new RawDealPost("ppomppu", "sp" + seq++, "https://p.test/" + seq,
+				"제목", when, "ACTIVE"));
+		RawDealPost r2 = rawPosts.save(new RawDealPost("ruliweb", "sr" + seq++, "https://r.test/" + seq,
+				"제목", when, "ACTIVE"));
+		DealEventEntity deal = dealEvents.save(new DealEventEntity(vid, false, null, price, price, price, price,
+				Origin.LIVE, true, OutlierFlag.NONE, false, DealStatus.VERIFIED, when, when, color));
+		sources.save(new DealEventSourceEntity(deal.getId(), r1.getId(), "ppomppu"));
+		sources.save(new DealEventSourceEntity(deal.getId(), r2.getId(), "ruliweb"));
+	}
 }

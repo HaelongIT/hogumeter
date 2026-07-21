@@ -7,7 +7,7 @@ const form = (over: Partial<PurchaseForm> = {}): PurchaseForm => ({
   paidPrice: '899,000',
   purchasedDate: '2026-07-01',
   observationDays: '',
-  demandAxisValue: '',
+  demandAxisValue: null,
   ...over,
 })
 
@@ -32,9 +32,10 @@ describe('buildPurchaseCommand', () => {
     expect(buildPurchaseCommand(form({ observationDays: '30' })).observationDays).toBe(30)
   })
 
-  it('수요축 값을 비우면 null (GROUPED에선 선택)', () => {
+  it('수요축 값은 판단 화면이 정한 값을 그대로 보낸다 (묶음=null, 분리=고른 값)', () => {
+    // 자유 입력이 아니다 — DecisionPage가 이미 null/값을 확정해 넘긴다(Q-66 ③).
     expect(buildPurchaseCommand(form()).demandAxisValue).toBeNull()
-    expect(buildPurchaseCommand(form({ demandAxisValue: '자급제' })).demandAxisValue).toBe('자급제')
+    expect(buildPurchaseCommand(form({ demandAxisValue: '블랙' })).demandAxisValue).toBe('블랙')
   })
 
   it('연결 딜은 지어내지 않는다 — 화면에 입력이 없으므로 항상 null', () => {

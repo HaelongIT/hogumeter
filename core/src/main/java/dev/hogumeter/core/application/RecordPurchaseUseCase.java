@@ -36,16 +36,18 @@ public class RecordPurchaseUseCase {
 	private final DealEventRepository dealEvents;
 	private final DealEventMapper mapper;
 	private final PurchaseRepository purchases;
+	private final VariantDemandScope demandScope;
 	private final Clock clock;
 	private final BenchmarkCalculator benchmark = new BenchmarkCalculator();
 	private final BenchmarkParams params = BenchmarkParams.defaults();
 
 	public RecordPurchaseUseCase(VariantRepository variants, DealEventRepository dealEvents, DealEventMapper mapper,
-			PurchaseRepository purchases, Clock clock) {
+			PurchaseRepository purchases, VariantDemandScope demandScope, Clock clock) {
 		this.variants = variants;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.purchases = purchases;
+		this.demandScope = demandScope;
 		this.clock = clock;
 	}
 
@@ -54,6 +56,9 @@ public class RecordPurchaseUseCase {
 		if (!variants.existsById(cmd.variantId())) {
 			throw new VariantNotFoundException(cmd.variantId());
 		}
+		// 분리 제품이면 어느 수요축 값을 산 것인지 지정해야 한다(Q-66 ③, 확정본 "SPLIT 필수"). 안 그러면
+		// 성적을 어느 색 분포에 대고 낼지 알 수 없다 — 저장 전에 막아 500 대신 400을 낸다(모드만 확인).
+		demandScope.requireValueWhenSplit(cmd.variantId(), cmd.demandAxisValue());
 		int observationDays = (cmd.observationDays() == null || cmd.observationDays() <= 0)
 				? DEFAULT_OBSERVATION_DAYS : cmd.observationDays();
 		Purchase purchase = new Purchase(cmd.variantId(), cmd.demandAxisValue(), cmd.paidPrice(),
@@ -65,7 +70,11 @@ public class RecordPurchaseUseCase {
 	}
 
 	private Snapshot freezeSnapshot(RecordPurchaseCommand cmd) {
-		List<DealEvent> deals = dealEvents.findByVariantId(cmd.variantId()).stream().map(mapper::toDomain).toList();
+		// 분리 제품이면 **산 값과 같은 수요축 값**의 분포로 성적을 낸다(Q-66 ①·③) — 블랙을 산 사람을
+		// 화이트가 섞인 기준가에 대면 성적이 색과 무관해진다. record()가 SPLIT일 때 값 존재를 이미 강제했다.
+		List<DealEvent> deals = demandScope.scope(cmd.variantId(),
+				dealEvents.findByVariantId(cmd.variantId()).stream().map(mapper::toDomain).toList(),
+				cmd.demandAxisValue());
 		String basis = "P=" + PERIOD_MONTHS + "mo,K=" + params.kDisplay();
 
 		Optional<Instant> observedFrom = deals.stream().map(DealEvent::firstSeen).min(Instant::compareTo);

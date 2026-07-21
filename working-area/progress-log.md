@@ -102,8 +102,15 @@
 뜻에 맞게 GROUPED(확정본 기본값)로 정정. docs/99에 교훈(죽은 열거형 값도 뜻으로 고른다 + 경로가 다르면
 같은 데이터가 다른 결과 — 스모크는 병합이 돌아 10k 간격이 한 딜로 합쳐졌다).
 
-**Q-66 잔여**: ③(SPLIT 구매 시 `demandAxisValue` 필수 검증 — 이제 ①이 살았으니 의미가 생겼다),
-E(값 미상 딜을 승격 큐에 올려 사람이 분류 — `review_queue_item.type` CHECK 마이그레이션 필요).
+**Q-66 ③ 해소(커밋)**: SPLIT 구매는 수요축 값 필수. `RecordPurchaseUseCase`가 저장 전 `requireValueWhenSplit`로
+막고(400, 저장 전이라 500 아님), as-of 스냅샷도 **산 색 분포**에 대고 낸다(`freezeSnapshot`이 `demandScope.scope`).
+web: 구매 패널이 판단 화면에서 고른 값을 그대로 받는다 — **자유 입력 제거**(판단과 다른 색 적을 위험). 산문
+javadoc("SPLIT 필수")이 이제 실행되는 계약. core GREEN·web **166**·build·**스모크 5-1i 종단**(구매 값 없으면
+400 · 값 주면 블랙 median 860,000 대비 +40,000).
+
+**Q-66 잔여(마지막 조각) = E**: 값 미상 딜을 승격 큐에 올려 사람이 분류(§41). 지금은 SPLIT에서 미상 딜이
+분포에서 빠지지만(정직), **큐에 뜨지 않아 사람이 볼 수 없다** — `review_queue_item.type`에 새 유형(DEMAND_UNKNOWN 등)
+CHECK 마이그레이션 + `IngestDealsUseCase`가 SPLIT 제품의 미상 confirmed 딜을 큐에 올리는 배선.
 
 ---
 

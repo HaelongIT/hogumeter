@@ -54,6 +54,23 @@ describe('PurchasePanel', () => {
     expect(api.listPurchases).toHaveBeenCalledTimes(2) // 초기 + 기록 후
   })
 
+  /**
+   * Q-66 ③: 분리 제품이면 판단 화면에서 고른 값을 그대로 기록에 싣는다 — 자유 입력을 다시 받으면 판단과
+   * 다른 색을 적을 수 있고, core는 400을 낸다. 그래서 입력이 아니라 <b>안내</b>로 보여준다.
+   */
+  it('분리 제품이면 고른 수요축 값으로 기록하고, 다시 입력받지 않는다', async () => {
+    render(<PurchasePanel variantId={11} demandAxisValue="블랙" />)
+    await fill()
+    await userEvent.click(screen.getByRole('button', { name: '기록' }))
+
+    await waitFor(() =>
+      expect(api.recordPurchase).toHaveBeenCalledWith(expect.objectContaining({ demandAxisValue: '블랙' })),
+    )
+    // 자유 입력 필드는 없다 — 판단 화면의 선택이 유일한 출처다.
+    expect(screen.queryByRole('textbox', { name: /수요축/ })).toBeNull()
+    expect(screen.getByLabelText('수요축 값')).toHaveTextContent('블랙')
+  })
+
   it('폼 검증 실패는 서버로 보내지 않고 그 자리에서 알린다', async () => {
     render(<PurchasePanel variantId={11} />)
     await userEvent.type(screen.getByLabelText('구매일'), '2026-07-01')

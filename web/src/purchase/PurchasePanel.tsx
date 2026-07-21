@@ -5,7 +5,7 @@ import { InvalidForm } from '../registration/buildCommand'
 import { buildPurchaseCommand, type PurchaseForm } from './buildPurchaseCommand'
 import { kstDate, observationLine, stateLabel } from './present'
 
-const EMPTY = { paidPrice: '', purchasedDate: '', observationDays: '', demandAxisValue: '' }
+const EMPTY = { paidPrice: '', purchasedDate: '', observationDays: '' }
 
 const describe = (failure: unknown) => {
   if (failure instanceof InvalidForm) return failure.message
@@ -29,8 +29,18 @@ function verdictOf(purchase: PurchaseObservation): 'over' | 'under' | 'even' | u
 /**
  * PUR — "지금 사도 되나" 바로 아래에 "샀다"를 놓는다. 판단과 기록이 같은 variant 문맥에 있어야
  * 사후에 "호구였나"를 물을 수 있다(docs/15 구매 이후 루프).
+ *
+ * <p>{@code demandAxisValue}: 분리(SPLIT) 제품이면 판단 화면에서 이미 고른 값을 그대로 받는다(Q-66 ③) —
+ * 여기서 자유 입력을 다시 받으면 판단과 다른 색을 적을 수 있고, core는 "SPLIT인데 값 없음"으로 400을 낸다.
+ * 묶음(GROUPED) 제품이면 {@code null}이고 이 손잡이 자체를 그리지 않는다.
  */
-export function PurchasePanel({ variantId }: { variantId: number }) {
+export function PurchasePanel({
+  variantId,
+  demandAxisValue = null,
+}: {
+  variantId: number
+  demandAxisValue?: string | null
+}) {
   const [form, setForm] = useState(EMPTY)
   const [purchases, setPurchases] = useState<PurchaseObservation[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -56,7 +66,7 @@ export function PurchasePanel({ variantId }: { variantId: number }) {
     setError(null)
     setBusy(true)
     try {
-      const command = buildPurchaseCommand({ ...form, variantId } satisfies PurchaseForm)
+      const command = buildPurchaseCommand({ ...form, variantId, demandAxisValue } satisfies PurchaseForm)
       await api.recordPurchase(command)
       setForm(EMPTY)
       await reload(variantId)
@@ -84,10 +94,12 @@ export function PurchasePanel({ variantId }: { variantId: number }) {
           관찰 기간 (일, 비우면 90)
           <input value={form.observationDays} onChange={set('observationDays')} placeholder="90" />
         </label>
-        <label>
-          수요축 값 (선택)
-          <input value={form.demandAxisValue} onChange={set('demandAxisValue')} placeholder="자급제" />
-        </label>
+        {/* 분리 제품이면 판단 화면에서 고른 값으로 기록한다 — 여기서 다시 입력받지 않는다(다른 색을 적을 위험). */}
+        {demandAxisValue !== null && (
+          <p className="purchase-demand" aria-label="수요축 값">
+            수요축 값 <strong>{demandAxisValue}</strong> 기준으로 기록합니다 (판단 화면에서 고른 값).
+          </p>
+        )}
         <button type="submit" disabled={busy}>
           기록
         </button>
