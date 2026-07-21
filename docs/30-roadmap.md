@@ -12,7 +12,13 @@
 범위: BM-01~07 + AL 전체 + REG(웹 최소 슬라이스: 등록·후보선택·축·정책 설정) + 텔레그램 봇(알림+인라인 버튼)
 완료 기준(= 1차 검증): **아이폰 17 일반 256GB 등록 → 백필 → 실 핫딜 유입 → 기준가가 운영자 체감과 부합 → 텔레그램 알림 수신 → 버튼으로 미상 분류 동작.** 오알림이 키워드 사후학습으로 수렴하는지 1~2주 관찰.
 
-### 진행 상태 (2026-07-10)
+### 진행 상태 (2026-07-10 표 · **2026-07-21 갱신 주석**)
+
+> **⚠️ 이 표는 2026-07-10 기준이라 낡았다. 2026-07-21 실제 상태**: **M1 알림 루프 코드가 통째로 완결**됐다 —
+> 등록→수집→기준가→판정→**실 발송**(딜·후속·관리, `TelegramAlertSender`/`AdminNotifier`)→**미상 큐 버튼**(승격·기각,
+> web+텔레그램 인바운드)→**무시→키워드 사후학습**(Q-22). 아래 표의 "승격·기각 없음"·"블로킹" 문구는 전부 해소됐다
+> (docs/91 Q-15·Q-27④·Q-20·Q-22가 정본). **1차 검증 turnkey**(`scripts/preflight.sh`+`working-area/first-validation-runbook.md`)까지 준비됨.
+> **남은 M1 = 전부 코드 밖**: 네이버 키(Q-3)·실 폴링 승인·백필 데이터(REG-04)·D-3 결정. 코드로 열리는 M1 증분은 없다.
 
 | 조각 | 상태 |
 |---|---|
@@ -24,7 +30,7 @@
 | **알림 정책 저장**(REG-03, `alert_policy` writer) | ✅ GREEN — `AlertPolicyController` + web `AlertPolicyPanel`. **2026-07-10까지 writer가 없었다.** `EvaluateAlertOnDealUseCase`가 읽기만 해서 확정본 §107의 "목표가 이하" 트리거와 방해금지(AL-04)가 발화할 수 없었다(Q-48). 저장되는 건 넷(목표가·판정 기간·방해금지 2개) — K_display·제외 키워드·⚠️라벨 토글은 엔티티 미매핑 |
 | REG 웹 최소 슬라이스(등록+목록+알림 정책) | ✅ GREEN |
 | web 판단 화면(신호등·기준가·갭·주기) + 구매 기록(PUR) | ✅ GREEN (M4·M5에서 앞당김, `decision-log` 2026-07-09) |
-| **미상 큐 조회**(`GET /api/v1/review-queue` + web 탭) | ✅ GREEN(읽기만) — 그전까지 `review_queue_item`은 **쓰이기만 하고 아무도 읽지 않았다.** 매칭이 무엇을 놓치는지 볼 방법이 없었다. 2026-07-10: 이상치가 **왜 싸 보이는지**(조건 태그)까지 낸다 — `배송비미상`이면 "실제 결제가는 더 높습니다"를 덧붙인다. **승격·기각(쓰기)은 없다**(Q-15) — M1 완료 기준의 "버튼으로 미상 분류"는 여전히 텔레그램(Q-20) 대기 |
+| **미상 큐 조회 + 승격·기각**(`GET`/`POST /api/v1/review-queue/{id}/{promote\|reject}` + web 탭 + 텔레그램 버튼) | ✅ GREEN — 조회는 이상치가 **왜 싸 보이는지**(조건 태그)까지 낸다(`배송비미상`이면 "실제 결제가는 더 높습니다"). **승격·기각(쓰기)도 산다**(Q-15 해소 2026-07-12): web 버튼·텔레그램 인라인 버튼(인바운드 콜백)이 짝. Q-27④(매 틱 재적재)는 `dedup_key`+`occurrences`로 해소돼 한 번 처리로 끝난다. **M1 "버튼으로 미상 분류" 기준 코드 충족**(토큰 뒤 동작) |
 | OBS-04 헬스체크(컴포넌트별) | ✅ GREEN — `GET /api/v1/health`, DB가 죽으면 503 + 어느 컴포넌트인지 지목. `scripts/smoke.sh` 0-1이 postgres만 죽여 확인 |
 | SEC-08 차단 신호 감지 | ✅ GREEN — **2026-07-10까지 죽어 있었다.** `urllib_opener`가 403/429를 예외로 던져 `classify_status`가 차단을 볼 수 없었다. 리허설: `scripts/check-robots-drill.sh` |
 | SEC-08 **`Crawl-delay` 준수** | ✅ GREEN — **2026-07-10까지 한 번도 지킨 적이 없었다.** `effective_interval_with_robots`는 존재했고 단위 테스트도 GREEN이었지만 **프로덕션 호출자가 0**이었다(`run_cycle`은 우리 하한만 봤다). 뽐뿌가 `Crawl-delay: 120`을 선언해도 60초마다 두드렸을 것이다. `__main__._interval_port`가 `run_cycle(interval_for=…)`로 주입한다 |
@@ -34,7 +40,7 @@
 
 0-2. **✅ 대부분 해소(2026-07-10~21) — `docs/91` Q-46**: 조건 태그(`카할`·`배송비미상` 등)가 `raw` jsonb에 갇혀 `deal_event`에 도달하지 않던 것을 고쳤다. "core 기존 파일이라 조율"이라는 봉인은 **거짓이었다**(Q-50·Q-48에 이어 세 번째) — 신규 `PreserveAppliedConditionsUseCase`(네이티브 SQL, 멱등)를 `PipelineScheduler`가 ingest 바로 뒤에 부른다. 소비자도 함께: `PipelineTickReport.conditionalTotal`. **① 표시**: `DealEvent.appliedConditions` → `BenchmarkView.DealRef.conditions` → web `conditionsSuffix`("조건부: 카할")·미상 큐 "실제 결제가는 더 높습니다"까지 종단으로 말한다. **② 하향 편향(실 폴링 전 필수)은 닫혔다**: `배송비미상`은 저장가가 하한이라 `DealSets.pricingSet`이 값 통계에서 뺀다(발생·신호엔 남긴다) — 컬럼→매퍼→계산기 종단을 `GetBenchmarkUseCaseTest.shippingUnknownDealIsExcludedFromBenchmarkThroughTheColumn`이 잠갔다. **남은 것**: 알림 본문의 조건 표시(텔레그램 어댑터 Q-20과 함께 — 발송이 스텁이라 지금 지어 넣으면 검증 못 하는 죽은 문구다).
 
-0-1. **⚠️ 코드 안의 블로커 — `docs/91` Q-27 ④(실측 2026-07-10)**: 매칭 실패 원문은 `deal_event_source` 링크를 만들지 않아 `findUnprocessed()`가 계속 미처리로 본다 → **매 틱 다시 리뷰 큐에 쌓인다**(운영 60초 주기면 원문 하나당 하루 1,440행). 조회는 접어서 `occurrences`로 세어 보여주지만(숨기지 않는다), **승격·기각은 이게 고쳐져야 가능하다** — 하나를 처리해도 나머지가 남는다. core 기존 파일 수정이라 상대와 조율.
+0-1. **✅ 해소(2026-07-12) — `docs/91` Q-27 ④**: 매칭 실패 원문이 `deal_event_source` 링크가 없어 매 틱 다시 리뷰 큐에 쌓이던 것(운영 60초면 원문당 하루 1,440행)을 `IngestDealsUseCase.upsertReviewItem`이 `dedup_key`(UNCLASSIFIED=`u:`+원문id, OUTLIER_LOWER=`o:`+딜id)로 **한 행에 접고** 재적재를 `occurrences`로 센다(V5/R5). 이로써 승격·기각이 한 번 처리로 끝난다(Q-15 선결 충족). "core 기존 파일이라 조율"이라는 봉인은 이번에도 거짓이었다 — core 소유권 조율로 우리가 수정.
 
 0. **✅ 해소(2026-07-11) — `docs/91` Q-27 ③**: 최초 수집 시 이미 품절인 원문에 "지금 사라" 알림이 나가던 결함. `candidateFrom`이 `DealStatus.fromRawPostStatus(post.getStatus())`로 초기 상태를 정하고(SOLD_OUT/DELETED→ENDED), `AlertEvaluator`가 ENDED 딜을 억제한다. 관통 테스트 `initiallySoldOutPostIsBornEndedAndNotAlerted`(스파이 sender로 send 0회). **core 소유권 조율로 우리가 수정**(이전엔 "상대와 조율"로 봉인).
 
