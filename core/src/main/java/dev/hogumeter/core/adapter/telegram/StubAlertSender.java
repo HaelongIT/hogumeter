@@ -26,7 +26,12 @@ public class StubAlertSender implements AlertSender {
 
 	@Override
 	public void send(AlertMessage message) {
-		// 여러 줄 본문을 한 로그 줄에 담아 형식이 콘솔 인코딩에 흔들리지 않게 한다(\n 이스케이프).
-		log.info("[STUB alert] {}", formatter.format(message).replace("\n", " ⏎ "));
+		// 안정된 기계 표식(intensity/followUp)을 사람용 본문 **옆에** 함께 낸다 — 본문의 이모지·문구를
+		// grep하면 형식이 굳고 콘솔 인코딩에 흔들린다. 마커는 종단 스모크가, 본문은 사람이 읽는다.
+		String marker = (message.followUpKind() != null)
+				? "followUp=" + message.followUpKind()
+				: "intensity=" + message.decision().intensity();
+		// 여러 줄 본문은 한 로그 줄로(\n 이스케이프) — 로그 파서가 줄바꿈에 걸려 넘어지지 않게.
+		log.info("[STUB alert] {} | {}", marker, formatter.format(message).replace("\n", " ⏎ "));
 	}
 }
