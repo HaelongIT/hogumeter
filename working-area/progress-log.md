@@ -120,6 +120,23 @@ OUTLIER_LOWER와 같은 조인(`dealEventId`)으로 잇는다. web: `reviewLine`
 VariantDemandScope·조회 400·알림 경로) → ③(구매 필수·성적 분포·web 패널) → E(미상 딜 승격 큐). 마이그레이션
 V6·V7 두 개, 예외 `BM_DEMAND_AXIS_VALUE_REQUIRED`, 스모크 5-1i가 전 사슬을 종단으로 잠근다.
 
+**Q-28 부분해소(2026-07-21, 커밋 대기)**: 소비처 0이던 순수 `ExcludeKeywordPolicy`를 살렸다 — **제외 키워드에
+걸리는 딜을 기준가·신호·알림·구매성적 전 표본에서 뺀다**(리퍼·중고가 신품 기준가를 끌어내리지 않게). 신규
+`VariantExcludeKeywords`가 **해석 정본 한 곳**: 매 조회에 `alert_policy.exclude_keywords`를 읽어 `DealEventSource→
+raw_deal_post.title`에 대고 판정, 걸리면 매핑 전에 뺀다. 네 유스케이스가 전부 `demandScope.scope` **앞**에 필터.
+- ⚠️자율결정(되돌리기 쉬움): **저장 시점 태그가 아니라 조회 시점 판정.** 제외 목록은 사용자 손잡이라 언제든
+  바뀐다 — ingest 때 deal_event에 굳히면 나중에 넣은 키워드가 이미 들어온 딜에 소급 안 된다(손잡이가 죽는다).
+  docs/91의 "V2 컬럼 보존" 잠정값을 안 따르고 **소스 조인**으로 제목에 닿음(보드의 구현수단은 추측이었다 — Q-50 부류).
+- 생산자: 정책 패널에 **제외 키워드 입력**(쉼표 한 줄). `AlertPolicyEntity`가 `exclude_keywords`(text[]) 매핑 →
+  `updatePreservesColumnsTheEntityDoesNotMap`의 미매핑 보존 대상이 이제 `demand_axis_filter` **하나**로 줄었다.
+  PUT은 전체 교체라 **항상 보낸다**(안 보내면 저장 때마다 목록이 사라진다 — K와 같은 함정).
+- 게이트: `domain-consumers-allowlist`에서 `ExcludeKeywordPolicy` 줄 **삭제**(이제 소비됨 — 남기면 게이트가
+  능동 차단). `table-wiring`의 `global_setting`은 Q-28 열림 인용 그대로(전역 제외키워드는 **생산자 화면 부재**로
+  여전히 미배선 — 부분해소라 한 Q가 두 배선을 덮는다). 세 소비처-0 게이트 PASS.
+- 남은 Q-28: ① global_setting(전역 설정 UI 부재) ② ⚠️LABEL 가시성(per-keyword mode 컬럼 부재 — 현재 전부 EXCLUDE).
+- 검증: core 전체 GREEN(신규 테스트 4 — 제외/거울상 무력화방지·정규화·null) · web **170**(166→170) · build ·
+  스모크에 미설정 `[]`·왕복 종단 단언 추가. **커밋 후 푸시는 사용자 지시 대기.**
+
 ---
 
 ## 2026-07-12 — 무중단 백로그 진행 (Q-46①·게이트 CI 수정 2건·Q-67 착수)

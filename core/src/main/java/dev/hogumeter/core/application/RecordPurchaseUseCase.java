@@ -37,17 +37,20 @@ public class RecordPurchaseUseCase {
 	private final DealEventMapper mapper;
 	private final PurchaseRepository purchases;
 	private final VariantDemandScope demandScope;
+	private final VariantExcludeKeywords excludeKeywords;
 	private final Clock clock;
 	private final BenchmarkCalculator benchmark = new BenchmarkCalculator();
 	private final BenchmarkParams params = BenchmarkParams.defaults();
 
 	public RecordPurchaseUseCase(VariantRepository variants, DealEventRepository dealEvents, DealEventMapper mapper,
-			PurchaseRepository purchases, VariantDemandScope demandScope, Clock clock) {
+			PurchaseRepository purchases, VariantDemandScope demandScope, VariantExcludeKeywords excludeKeywords,
+			Clock clock) {
 		this.variants = variants;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.purchases = purchases;
 		this.demandScope = demandScope;
+		this.excludeKeywords = excludeKeywords;
 		this.clock = clock;
 	}
 
@@ -70,10 +73,11 @@ public class RecordPurchaseUseCase {
 	}
 
 	private Snapshot freezeSnapshot(RecordPurchaseCommand cmd) {
-		// 분리 제품이면 **산 값과 같은 수요축 값**의 분포로 성적을 낸다(Q-66 ①·③) — 블랙을 산 사람을
-		// 화이트가 섞인 기준가에 대면 성적이 색과 무관해진다. record()가 SPLIT일 때 값 존재를 이미 강제했다.
+		// 제외 키워드(Q-28) → 수요축(Q-66) 순으로 표본을 좁힌다. 성적도 조회·알림과 같은 표본을 봐야
+		// 사후에 "호구였나"가 같은 기준으로 답된다 — 리퍼가 섞인 기준가에 성적을 대면 어긋난다.
 		List<DealEvent> deals = demandScope.scope(cmd.variantId(),
-				dealEvents.findByVariantId(cmd.variantId()).stream().map(mapper::toDomain).toList(),
+				excludeKeywords.filter(cmd.variantId(), dealEvents.findByVariantId(cmd.variantId())).stream()
+						.map(mapper::toDomain).toList(),
 				cmd.demandAxisValue());
 		String basis = "P=" + PERIOD_MONTHS + "mo,K=" + params.kDisplay();
 

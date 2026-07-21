@@ -25,18 +25,20 @@ public class GetBenchmarkUseCase {
 	private final CurrentPriceProvider currentPrice;
 	private final VariantBenchmarkParams params;
 	private final VariantDemandScope demandScope;
+	private final VariantExcludeKeywords excludeKeywords;
 	private final Clock clock;
 	private final BenchmarkCalculator calculator = new BenchmarkCalculator();
 
 	public GetBenchmarkUseCase(VariantRepository variants, DealEventRepository dealEvents, DealEventMapper mapper,
 			CurrentPriceProvider currentPrice, VariantBenchmarkParams params, VariantDemandScope demandScope,
-			Clock clock) {
+			VariantExcludeKeywords excludeKeywords, Clock clock) {
 		this.variants = variants;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.currentPrice = currentPrice;
 		this.params = params;
 		this.demandScope = demandScope;
+		this.excludeKeywords = excludeKeywords;
 		this.clock = clock;
 	}
 
@@ -53,7 +55,8 @@ public class GetBenchmarkUseCase {
 		if (!variants.existsById(variantId)) {
 			throw new VariantNotFoundException(variantId);
 		}
-		List<DealEvent> deals = dealEvents.findByVariantId(variantId).stream()
+		// 제외 키워드(리퍼·벌크 등)에 걸리는 딜은 매핑 전에 뺀다(Q-28) — 제목이 엔티티 쪽에 있어서.
+		List<DealEvent> deals = excludeKeywords.filter(variantId, dealEvents.findByVariantId(variantId)).stream()
 				.map(mapper::toDomain)
 				.toList();
 		// 분리 제품이면 그 축 값의 딜만 본다(값 미상 딜은 자동으로 빠진다 — 확정본 §41).

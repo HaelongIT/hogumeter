@@ -33,19 +33,21 @@ public class GetSignalUseCase {
 	private final CurrentPriceProvider currentPrice;
 	private final VariantBenchmarkParams params;
 	private final VariantDemandScope demandScope;
+	private final VariantExcludeKeywords excludeKeywords;
 	private final Clock clock;
 	private final BenchmarkCalculator benchmark = new BenchmarkCalculator();
 	private final SignalCalculator signal = new SignalCalculator();
 
 	public GetSignalUseCase(VariantRepository variants, DealEventRepository dealEvents, DealEventMapper mapper,
 			CurrentPriceProvider currentPrice, VariantBenchmarkParams params, VariantDemandScope demandScope,
-			Clock clock) {
+			VariantExcludeKeywords excludeKeywords, Clock clock) {
 		this.variants = variants;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.currentPrice = currentPrice;
 		this.params = params;
 		this.demandScope = demandScope;
+		this.excludeKeywords = excludeKeywords;
 		this.clock = clock;
 	}
 
@@ -61,7 +63,8 @@ public class GetSignalUseCase {
 		if (!variants.existsById(variantId)) {
 			throw new VariantNotFoundException(variantId);
 		}
-		List<DealEvent> deals = dealEvents.findByVariantId(variantId).stream().map(mapper::toDomain).toList();
+		List<DealEvent> deals = excludeKeywords.filter(variantId, dealEvents.findByVariantId(variantId)).stream()
+				.map(mapper::toDomain).toList();
 		deals = demandScope.scope(variantId, deals, demandAxisValue);
 		// 신호등의 tier도 K를 탄다 — 판단 화면과 같은 K를 써야 "기준가는 있는데 신호는 회색"이 안 생긴다.
 		BenchmarkView view = benchmark.compute(deals, currentPrice.currentPriceFor(variantId),

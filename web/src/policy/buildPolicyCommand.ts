@@ -8,6 +8,8 @@ export interface PolicyForm {
   quietHoursEnd: string
   /** 기준가 라벨 임계 K(3~10). 항상 보낸다 — PUT은 전체 교체라 빼면 core가 기본값으로 되돌린다. */
   kDisplay: string
+  /** 제외 키워드(Q-28). 쉼표로 구분한 한 줄 — 걸리는 딜은 기준가·신호·알림 표본에서 빠진다. 빈 칸이면 없음. */
+  excludeKeywords: string
 }
 
 const digits = /^\d+$/
@@ -48,7 +50,21 @@ export function buildPolicyCommand(form: PolicyForm): UpdateAlertPolicyCommand {
     quietHoursStart: start === '' ? null : hourOfDay(start, '방해금지 시작'),
     quietHoursEnd: end === '' ? null : hourOfDay(end, '방해금지 끝'),
     kDisplay: Number(k),
+    excludeKeywords: parseKeywords(form.excludeKeywords),
   }
+}
+
+/**
+ * 쉼표로 구분한 한 줄 → 키워드 배열. 공백 제거·빈 값 탈락·중복 접기 — core가 다시 정규화하지만
+ * 여기서도 접어 두면 사용자가 저장 직후 자기가 넣은 그대로를 본다. 검증이 아니라 편의다(빈 목록도 정상).
+ */
+function parseKeywords(raw: string): string[] {
+  const seen = new Set<string>()
+  for (const part of raw.split(',')) {
+    const keyword = part.trim()
+    if (keyword !== '') seen.add(keyword)
+  }
+  return [...seen]
 }
 
 function hourOfDay(value: string, field: string): number {

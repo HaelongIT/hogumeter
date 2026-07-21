@@ -10,6 +10,7 @@ const EMPTY: PolicyForm = {
   quietHoursStart: '',
   quietHoursEnd: '',
   kDisplay: '',
+  excludeKeywords: '',
 }
 
 /** K 후보(확정본: 3~10). 낮추면 적은 표본으로도 기준가를 말하고, 높이면 더 모일 때까지 사례만 낸다. */
@@ -35,15 +36,17 @@ function toForm(policy: AlertPolicyView): PolicyForm {
     quietHoursEnd: policy.quietHoursEnd === undefined ? '' : String(policy.quietHoursEnd),
     // K는 미설정이라도 core가 기본값을 숫자로 준다(정본이 core 상수 하나) — 빈 칸이 될 일이 없다.
     kDisplay: policy.kDisplay === undefined ? '' : String(policy.kDisplay),
+    // 제외 키워드는 항상 배열로 온다(없으면 []) — 쉼표로 이어 한 줄로 보여준다.
+    excludeKeywords: policy.excludeKeywords.join(', '),
   }
 }
 
 /**
  * REG-03 알림 정책 설정. 확정본 §7의 web 최소 슬라이스가 요구하는 "목표가 설정"이 여기다.
  *
- * <p>다루는 것은 다섯 — 목표가·기간 P·방해금지 2개 + <b>K_display</b>(Q-48 ① 해소). 제외 키워드·
- * ⚠️라벨 토글은 core 엔티티가 아직 매핑하지 않는다(Q-28·Q-66 — 소비 기능과 함께). 없는 손잡이를
- * 그려 두면 저장되는 줄 안다.
+ * <p>다루는 것은 여섯 — 목표가·기간 P·방해금지 2개 + <b>K_display</b>(Q-48 ①) + <b>제외 키워드</b>(Q-28).
+ * 제외 키워드에 걸리는 딜(리퍼·벌크 등)은 기준가·신호·알림 전 통계에서 빠진다 — 신품 기준가에 중고가
+ * 섞이지 않게. ⚠️라벨 모드 토글·수요축 필터는 아직 소비 기능과 함께 매핑을 기다린다(Q-66).
  */
 export function AlertPolicyPanel({ variantId }: { variantId: number }) {
   const [form, setForm] = useState<PolicyForm>(EMPTY)
@@ -149,6 +152,26 @@ export function AlertPolicyPanel({ variantId }: { variantId: number }) {
         <p role="note" aria-label="K 안내">
           낮추면 표본이 적어도 기준가를 말합니다(빨리 알지만 틀릴 위험이 큽니다). 높이면 더 모일 때까지 기준가
           대신 사례를 냅니다. 이 값은 <strong>표시 기준만</strong> 바꿉니다 — 산식과 수집은 그대로입니다.
+        </p>
+
+        {/*
+          제외 키워드(Q-28) — 데이터의 진실을 바꾸는 게 아니라 "무엇이 이 제품의 딜인가"를 사용자가 가른다.
+          걸리는 딜(리퍼·벌크·해외 등)은 기준가·신호·알림 표본에서 통째로 빠진다 — 신품 기준가가 중고에
+          끌려 내려가지 않게. 저장 시점에 굳히지 않고 조회할 때마다 지금 목록에 대고 판정하므로, 나중에
+          키워드를 고치면 이미 들어온 딜에도 소급 적용된다.
+        */}
+        <label>
+          제외 키워드 (쉼표로 구분 · 비우면 없음)
+          <input
+            aria-label="제외 키워드"
+            value={form.excludeKeywords}
+            onChange={set('excludeKeywords')}
+            placeholder="리퍼, 벌크, 해외"
+          />
+        </label>
+        <p role="note" aria-label="제외 키워드 안내">
+          제목에 이 단어가 든 딜은 <strong>기준가·신호·알림 표본에서 빠집니다</strong>(리퍼·중고·묶음이 신품
+          기준가를 끌어내리지 않게). 목록을 고치면 이미 수집된 딜에도 다시 적용됩니다.
         </p>
 
         {/* 🔥 대박딜은 방해금지를 관통한다(확정본 §102). 그 사실을 숨기면 "다 막았다"고 믿는다. */}

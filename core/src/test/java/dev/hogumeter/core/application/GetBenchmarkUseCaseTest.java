@@ -28,6 +28,7 @@ import dev.hogumeter.core.domain.product.DemandAxisMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,6 +65,8 @@ class GetBenchmarkUseCaseTest {
 	AlertPolicyRepository policies;
 	@Autowired
 	VariantDemandScope demandScope;
+	@Autowired
+	VariantExcludeKeywords excludeKeywords;
 
 	private GetBenchmarkUseCase useCase;
 	private long variantId;
@@ -77,7 +80,8 @@ class GetBenchmarkUseCaseTest {
 		VariantEntity variant = variants.save(new VariantEntity(product.getId(), "256GB", Map.of("용량", "256GB")));
 		variantId = variant.getId();
 
-		useCase = new GetBenchmarkUseCase(variants, dealEvents, mapper, vId -> 990_000L, params, demandScope, CLOCK);
+		useCase = new GetBenchmarkUseCase(variants, dealEvents, mapper, vId -> 990_000L, params, demandScope,
+				excludeKeywords, CLOCK);
 	}
 
 	private void insertCrossVerifiedDeal(long price, String dateIso) {
@@ -128,13 +132,68 @@ class GetBenchmarkUseCaseTest {
 		insertCrossVerifiedDeal(890_000, "2026-06-14");
 		insertCrossVerifiedDeal(920_000, "2026-06-16");
 		insertCrossVerifiedDeal(950_000, "2026-06-18");
-		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 10)); // 기본 5 → 10
+		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 10, List.of())); // 기본 5 → 10
 
 		BenchmarkView view = useCase.getBenchmark(variantId, 6, false);
 
 		assertThat(view.tier()).as("n=5 < K=10이라 기준가를 말할 때가 아니다").isEqualTo(Tier.SPARSE);
 		assertThat(view.benchmarkPrice()).isNull(); // 표본이 빈약하면 통계를 내지 않는다(절대 원칙 1)
 		assertThat(view.cases()).hasSize(5); // 대신 사례를 그대로 — 판단은 사람이 한다
+	}
+
+	private void insertTitledDeal(long price, String dateIso, String title) {
+		Instant when = Instant.parse(dateIso + "T00:00:00Z");
+		RawDealPost r1 = rawPosts.save(new RawDealPost("ppomppu", "p" + counter++,
+				"https://ppomppu.test/" + counter, title, when, "ACTIVE"));
+		RawDealPost r2 = rawPosts.save(new RawDealPost("ruliweb", "r" + counter++,
+				"https://ruliweb.test/" + counter, title, when, "ACTIVE"));
+		DealEventEntity deal = dealEvents.save(new DealEventEntity(variantId, false, null,
+				price, price, price, price, Origin.LIVE, true, OutlierFlag.NONE, false, DealStatus.VERIFIED, when, when,
+				null));
+		sources.save(new DealEventSourceEntity(deal.getId(), r1.getId(), "ppomppu"));
+		sources.save(new DealEventSourceEntity(deal.getId(), r2.getId(), "ruliweb"));
+	}
+
+	/**
+	 * Q-28: 제외 키워드에 걸리는 딜은 <b>기준가 표본에서 빠진다</b> — 리퍼·벌크가 신품 기준가를 아래로 끌면
+	 * "지금 사도 되나"가 거짓으로 초록이 된다. 판정은 조회 시점에 <b>지금</b>의 목록에 대고 하므로, 사용자가
+	 * 목록을 고치면 이미 들어온 딜에도 소급 반영된다. {@code ExcludeKeywordPolicy}는 여기 오기 전 소비처 0이었다.
+	 */
+	@Test
+	void excludeKeywordDropsMatchingDealFromSample() {
+		insertCrossVerifiedDeal(820_000, "2026-06-10");
+		insertCrossVerifiedDeal(850_000, "2026-06-12");
+		insertCrossVerifiedDeal(890_000, "2026-06-14");
+		insertCrossVerifiedDeal(920_000, "2026-06-16");
+		insertCrossVerifiedDeal(950_000, "2026-06-18");
+		insertTitledDeal(780_000, "2026-06-20", "리퍼 아이폰 17 256GB"); // 신품보다 싼 함정
+		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 5, List.of("리퍼")));
+
+		BenchmarkView view = useCase.getBenchmark(variantId, 6, false);
+
+		assertThat(view.n()).as("리퍼 딜이 빠져 6이 아니라 5").isEqualTo(5);
+		assertThat(view.periodLowest().price()).as("리퍼 780k가 최저가로 오르지 않는다").isEqualTo(820_000L);
+		assertThat(view.benchmarkPrice()).isEqualTo(890_000L);
+	}
+
+	/**
+	 * 거울상(무력화 방지): 같은 리퍼 딜이라도 제외 목록에 "리퍼"가 없으면 표본에 그대로 들어온다. 필터가
+	 * <b>정책으로 구동</b>됨을 증명한다 — 이 테스트가 없으면 filter가 항상-제외/항상-통과여도 위 테스트만으론 안 잡힌다.
+	 */
+	@Test
+	void keywordDealStaysWhenPolicyHasNoMatchingKeyword() {
+		insertCrossVerifiedDeal(820_000, "2026-06-10");
+		insertCrossVerifiedDeal(850_000, "2026-06-12");
+		insertCrossVerifiedDeal(890_000, "2026-06-14");
+		insertCrossVerifiedDeal(920_000, "2026-06-16");
+		insertCrossVerifiedDeal(950_000, "2026-06-18");
+		insertTitledDeal(780_000, "2026-06-20", "리퍼 아이폰 17 256GB");
+		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 5, List.of("벌크"))); // 안 걸리는 키워드
+
+		BenchmarkView view = useCase.getBenchmark(variantId, 6, false);
+
+		assertThat(view.n()).as("제외 목록에 안 걸리면 6건 그대로").isEqualTo(6);
+		assertThat(view.periodLowest().price()).isEqualTo(780_000L);
 	}
 
 	@Test

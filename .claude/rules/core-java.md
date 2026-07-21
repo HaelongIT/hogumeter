@@ -32,7 +32,7 @@ paths:
 
 ## JPA 쓰기
 
-- **미매핑 컬럼이 있는 테이블의 갱신을 delete+insert로 하지 않는다.** 엔티티가 모르는 컬럼(`alert_policy.k_display`·`exclude_keywords`)이 DB 기본값으로 조용히 되돌아간다 — 지금은 아무도 안 써서 아무도 모르고, 누군가 매핑을 붙이는 날 데이터가 사라진다. 벌크 UPDATE로 **아는 컬럼만** 건드리고 "미매핑 컬럼이 살아남는다"를 테스트로 못박는다. (99: 2026-07-10)
+- **미매핑 컬럼이 있는 테이블의 갱신을 delete+insert로 하지 않는다.** 엔티티가 모르는 컬럼(현재 `alert_policy.demand_axis_filter` — `k_display`·`exclude_keywords`는 소비 기능이 생겨 매핑됐다)이 DB 기본값으로 조용히 되돌아간다 — 지금은 아무도 안 써서 아무도 모르고, 누군가 매핑을 붙이는 날 데이터가 사라진다. 벌크 UPDATE로 **아는 컬럼만** 건드리고 "미매핑 컬럼이 살아남는다"를 테스트로 못박는다. (99: 2026-07-10)
 - **벌크 UPDATE는 영속성 컨텍스트를 우회한다** — 같은 트랜잭션에서 그 행을 다시 읽으면 캐시된 옛 값이 나온다. `EntityManager.clear()`는 남의 엔티티까지 날리므로 해당 엔티티만 `refresh()`한다.
 - **엔티티가 매핑하지 않는 컬럼은 네이티브 SQL로 다룬다** — 남의 엔티티를 고치지 않고 진실에 닿는 길이다. `GetReviewQueueUseCase`(읽기: `status`·`created_at`)와 `PreserveAppliedConditionsUseCase`(쓰기: `applied_conditions`)가 같은 수법이다. **"상대 소유라 막혔다"고 적기 전에 이 길을 먼저 시도한다** — Q-46·Q-48·Q-50이 전부 그렇게 잘못 봉인돼 있었다. (99: 2026-07-10)
 - **주기적으로 도는 UPDATE는 멱등해야 하고, 그 비교 키가 로케일을 타면 안 된다.** `array(... order by tag)`의 기본 정렬은 서버 로케일이 정한다(postgres:16 실측: 한글이 코드포인트 순서와 다르게 나온다). 배열을 `is distinct from`으로 비교하면 로케일이 다른 DB에서 매 틱 UPDATE가 돈다 — `collate "C"`로 바이트 순서를 못박는다. (99: 2026-07-10)

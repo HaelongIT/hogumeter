@@ -1,14 +1,15 @@
 package dev.hogumeter.core.domain.alert;
 
 import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
+import java.util.List;
 
 /**
  * REG-03 variant별 알림 정책 — 사용자가 설정하고 저장되는 값. 순수 검증만 한다.
  *
  * <p>{@link AlertPolicy}(판정용, targetPrice + quiet hours)와 다르다: 이쪽은 <b>기간 P를 포함한 저장 단위</b>다.
  *
- * <p>DB에는 {@code exclude_keywords}·{@code demand_axis_filter} 컬럼도 있지만 {@code AlertPolicyEntity}가
- * 매핑하지 않아 여기서 다루지 않는다(docs/91 Q-28·Q-66 — 각 소비 기능과 함께 매핑한다).
+ * <p>DB에는 {@code demand_axis_filter} 컬럼도 있지만 {@code AlertPolicyEntity}가 매핑하지 않아 여기서
+ * 다루지 않는다(docs/91 Q-66 — 소비 기능과 함께 매핑한다).
  *
  * @param targetPrice 선택. {@code null}이면 목표가 트리거 없음. <b>0은 "미설정"이 아니라 "공짜여야 알림"</b>이라
  *     허용하지 않는다 — 둘을 섞으면 알림이 조용히 죽는다.
@@ -17,14 +18,18 @@ import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
  * @param quietHoursEnd 방해금지 끝 시(0~23), 끝 시각 제외. 시작과 같으면 방해금지 없음({@link QuietHours}).
  * @param kDisplay 기준가 라벨 임계 K(3~10). {@code n ≥ K}면 기준가를, 아니면 사례를 낸다(BM-06).
  *     <b>표시를 바꾸는 설정이라 사용자 손잡이다</b>(확정본 §217, 원칙 4) — 산식 자체는 시스템이 고정한다.
+ * @param excludeKeywords 제목이 걸리면 그 딜을 <b>전 통계에서 제외</b>하는 키워드(리퍼·벌크 등, Q-28·C-5).
+ *     빈 목록 = 제외 없음. 공백은 걸러 저장한다(빈 키워드는 모든 제목에 걸린다).
  */
 public record AlertPolicySettings(Long targetPrice, int periodMonths, Integer quietHoursStart,
-		Integer quietHoursEnd, int kDisplay) {
+		Integer quietHoursEnd, int kDisplay, List<String> excludeKeywords) {
 
 	/** 확정본 §217 기본값. 미설정 variant는 이 값으로 판정한다 — 정본은 여기 하나다(사본 금지). */
 	public static final int DEFAULT_K_DISPLAY = 5;
 
 	public AlertPolicySettings {
+		excludeKeywords = excludeKeywords == null ? List.of()
+				: excludeKeywords.stream().map(String::trim).filter(k -> !k.isEmpty()).distinct().toList();
 		if (periodMonths <= 0) {
 			throw new InvalidBenchmarkPeriodException(periodMonths);
 		}

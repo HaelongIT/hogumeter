@@ -38,12 +38,14 @@ public class EvaluateAlertOnDealUseCase {
 	private final AlertDispatcher dispatcher;
 	private final DealAlertRepository alerts;
 	private final VariantDemandScope demandScope;
+	private final VariantExcludeKeywords excludeKeywords;
 	private final Clock clock;
 	private final BenchmarkCalculator calculator = new BenchmarkCalculator();
 
 	public EvaluateAlertOnDealUseCase(DealEventRepository dealEvents, DealEventMapper mapper,
 			AlertPolicyRepository policies, PurchaseRepository purchases, CurrentPriceProvider currentPrice,
-			AlertDispatcher dispatcher, DealAlertRepository alerts, VariantDemandScope demandScope, Clock clock) {
+			AlertDispatcher dispatcher, DealAlertRepository alerts, VariantDemandScope demandScope,
+			VariantExcludeKeywords excludeKeywords, Clock clock) {
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.policies = policies;
@@ -52,6 +54,7 @@ public class EvaluateAlertOnDealUseCase {
 		this.dispatcher = dispatcher;
 		this.alerts = alerts;
 		this.demandScope = demandScope;
+		this.excludeKeywords = excludeKeywords;
 		this.clock = clock;
 	}
 
@@ -70,9 +73,12 @@ public class EvaluateAlertOnDealUseCase {
 		if (demandScope.modeOf(variantId) == DemandAxisMode.SPLIT && deal.demandAxisValue() == null) {
 			return DispatchOutcome.NO_ALERT;
 		}
-		List<DealEvent> deals = demandScope.scope(variantId, dealEvents.findByVariantId(variantId).stream()
-				.map(mapper::toDomain)
-				.toList(), deal.demandAxisValue());
+		// 제외 키워드에 걸리는 딜은 기준가 표본에서 뺀다(Q-28) — 리퍼가 섞인 기준가로 알림을 내면 안 된다.
+		List<DealEvent> deals = demandScope.scope(variantId,
+				excludeKeywords.filter(variantId, dealEvents.findByVariantId(variantId)).stream()
+						.map(mapper::toDomain)
+						.toList(),
+				deal.demandAxisValue());
 		Long current = currentPrice.currentPriceFor(variantId); // 미확립이면 null(Q-53)
 		BenchmarkView view = calculator.compute(deals, current, periodMonths, params, clock);
 

@@ -47,7 +47,7 @@ describe('DecisionPage', () => {
     vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([]) // 패널이 같은 화면에 있다
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false }) // 알림 정책 패널도
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [] }) // 알림 정책 패널도
   })
 
   it('variant를 고르면 신호등·기준가·갭·주기를 한 화면에 낸다', async () => {
@@ -166,7 +166,7 @@ describe('DecisionPage — 수요축 분리 제품', () => {
     vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([])
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5 })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [] })
   })
 
   it('값을 고르기 전엔 묻지 않고, 왜 골라야 하는지 말한다', async () => {
@@ -196,7 +196,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([]) // 패널이 같은 화면에 있다
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false }) // 알림 정책 패널도
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [] }) // 알림 정책 패널도
   })
 
   it('기본은 6개월이고, 기준가·주기를 그 기간으로 부른다', async () => {

@@ -368,17 +368,23 @@ echo "$unset_policy" | grep -q '"configured":false' || fail "미설정 정책이
 # (기간 P는 그 정본이 없어 여전히 부재다 — Q-48 ②.)
 echo "$unset_policy" | grep -q '"kDisplay":5' ||
 	fail "미설정 정책이 기본 K를 숫자로 내지 않는다 (Q-48 ①): $unset_policy"
+# Q-28: 제외 키워드는 미설정이라도 **빈 배열로** 온다(null이 아님 — core가 List.of()를 낸다).
+echo "$unset_policy" | grep -q '"excludeKeywords":\[\]' ||
+	fail "미설정 정책이 빈 제외 키워드 배열을 내지 않는다 (Q-28): $unset_policy"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "${WEB}/api/v1/variants/999999/alert-policy")" = 404 ] ||
 	fail "없는 variant의 정책 조회가 404가 아니다"
 
 policy=$(mktemp)
-echo '{"targetPrice":1000000,"periodMonths":6,"kDisplay":8}' >"$policy"
+echo '{"targetPrice":1000000,"periodMonths":6,"kDisplay":8,"excludeKeywords":["리퍼","벌크"]}' >"$policy"
 curl -fsS -X PUT "${WEB}/api/v1/variants/${alert_vid}/alert-policy" \
 	-H 'Content-Type: application/json' -d @"$policy" | grep -q '"targetPrice":1000000' ||
 	fail "정책 PUT이 저장값을 되돌려주지 않는다"
 # 사용자 손잡이는 **왕복해야** 손잡이다 — 저장한 K가 그대로 돌아오지 않으면 조용히 기본값이 된다.
-curl -fsS "${WEB}/api/v1/variants/${alert_vid}/alert-policy" | grep -q '"kDisplay":8' ||
-	fail "저장한 K가 왕복하지 않는다 (Q-48 ①)"
+saved_policy=$(curl -fsS "${WEB}/api/v1/variants/${alert_vid}/alert-policy")
+echo "$saved_policy" | grep -q '"kDisplay":8' || fail "저장한 K가 왕복하지 않는다 (Q-48 ①)"
+# Q-28: 제외 키워드도 왕복해야 손잡이다 — text[] 컬럼이 PUT→저장→GET 종단으로 살아 있는지 본다.
+echo "$saved_policy" | grep -q '"excludeKeywords":\["리퍼","벌크"\]' ||
+	fail "저장한 제외 키워드가 왕복하지 않는다 (Q-28): $saved_policy"
 # 범위 밖(3~10)은 DB CHECK로 500이 아니라 도메인 코드 400이어야 한다.
 echo '{"targetPrice":1000000,"periodMonths":6,"kDisplay":99}' >"$policy"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${WEB}/api/v1/variants/${alert_vid}/alert-policy" \
