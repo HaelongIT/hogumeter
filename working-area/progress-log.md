@@ -1,3 +1,28 @@
+## 2026-07-21 — PUR-04 성적표 발급: 죽어 있던 ReportCardCalculator를 살려 구매-이후 루프를 닫다 (토큰 무관 추천 ①, 무중단)
+
+사용자 "추천해주는 순서대로 무중단으로 쭉 가"(토큰 없이 갈 수 있는 것) → 추천 ① **PUR 성적표 완성** 착수. `ReportCardCalculator`
+(순수 도메인)는 성적을 계산할 줄 알고 테스트도 GREEN이었지만 **프로덕션 호출자 0**(Q-68 confidence의 거울상)이라,
+관찰이 끝난 구매는 REPORT_PENDING에서 영원히 멈춰 있었다. 발급을 종단으로 배선해 살렸다.
+- **저장소**: `report_card`(V10/R10) + `ReportCardEntity`/`Repository`. 재발급 없음=purchase_id 유니크(ReportIssueGate).
+- **발급 유스케이스**: `IssuePendingReportCardsUseCase` — REPORT_PENDING마다 계산→저장→`close()`(벌크 UPDATE state만,
+  멱등·크래시 안전). 표본은 record와 동일 스코프(제외키워드→수요축→pricingSet), 기준가는 구매 시점 **동결값**(PUR-02).
+  발급은 **quiet(관통 알림 없음)**라 텔레그램 토큰과 무관 — 자율로 지었다.
+- **배선**: `PipelineScheduler`가 만료 바로 뒤·ingest 앞에 부른다(같은 틱에 CLOSED로 닫아 뒤 ingest의 "산 뒤 알림"에서 뺌).
+- **읽기 소비처(write-only 방지)**: `PurchaseObservation.reportCard`(CLOSED만) — `GetPurchaseObservationsUseCase`가
+  `findByPurchaseId`로 읽어 `GET /api/v1/variants/{id}/purchases`로 낸다. 없으면 report_card는 "쌓이는데 못 읽는"
+  review_queue_item의 거울상이 될 뻔했다.
+- **관측성(카운터 오염 정면돌파)**: 발급이 REPORT_PENDING을 드레인하므로 `purchasesExpired=Δ(REPORT_PENDING)`가
+  "만료−발급"으로 오염돼 음수가 될 수 있었다. 발급 수를 스텝 반환(`Supplier<Integer>`)으로 직접 세어
+  `PipelineTickReport.reportCardsIssued`로 싣고, `purchasesExpired=Δ+발급`으로 재구성(스냅샷 필드 불변). → docs/99 규칙 정련.
+- ⚠️자율 결정(보수적 seam): 발급 게이트의 미배선 외부 조건(백필 배치·48h 유예)은 하드코딩 아니라 게이트 **통과**
+  (대기할 상태가 없음) — 생기면 canIssue에 주입. observedFrom·capturedAt는 record와 같은 잠정(Q-34·Q-32). ARCHIVED
+  전이·삭제 3행 매트릭스(Q-30)는 발급과 직교라 뒤로.
+- **게이트**: domain-consumers allowlist에서 `ReportCardCalculator`·`ReportIssueGate` 삭제(이제 소비, 게이트가 낡은 면제
+  능동 차단). 소비 26. smoke 5-2b를 REPORT_PENDING 폴링→CLOSED+성적표+`reportCardsIssued=1`로 갱신(발급 종단 커버리지).
+- 검증: **core 전체 GREEN(37s)** — 신규 IssuePendingReportCardsUseCaseTest(발급·멱등·OBSERVING제외) + 배선
+  PipelineSchedulerTest.issuesReportCardsAfterExpireAndFlowsCountIntoReport(순서+카운트흐름+재구성) + 기존 리플 정리.
+  소비처-0 게이트 3종 GREEN. docs/91 Q-62 부분해소(ARCHIVED만 남음). smoke는 CI가 검증.
+
 ## 2026-07-21 — 1차 검증 turnkey: 배포 전 설정 점검 preflight + M1 검증 런북 (사용자 추천 채택, 무중단)
 
 사용자 "푸쉬하고 다음으로 뭘하면 좋을지 추천해주고 추천안대로 순서대로 무중단 ㄱㄱ" → 푸시(`96c8ab5..e5837df`) 후

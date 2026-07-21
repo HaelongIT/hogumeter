@@ -270,12 +270,18 @@ _(Q-40. REL-06 파싱 드리프트 감지 — **해소됨 2026-07-09**: `schedul
 
 _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildCommand`가 데카르트 곱을 만든다(용량 2 × 색상 2 → variant 4). 축 이름 중복은 거부(맵에서 덮어쓰기), 빈 축 행은 무시, 화면이 "생성될 variant N개"를 미리 보여준다. 여기서 제거.)_
 
-## [열림] Q-62. PUR 상태기계 — 만료는 배선했다. **CLOSED·ARCHIVED로 가는 길이 없다**
+## [부분해소] Q-62. PUR 상태기계 — 만료·**성적표 발급(CLOSED)**까지 배선. ARCHIVED만 남음
 - **맥락**: `PurchaseState`는 `OBSERVING → REPORT_PENDING → CLOSED → ARCHIVED → OBSERVING`을 정의하고 `Purchase.expire()/close()/archive()/reactivate()`가 다 있다. 그런데 **프로덕션에서 상태를 쓰는 곳은 `RecordPurchaseUseCase`(항상 OBSERVING) 하나뿐이었다.** 상태기계에 전이가 있어도 부르는 사람이 없으면 그 전이는 존재하지 않는다.
 - **해소된 부분(2026-07-10)**: `ExpirePurchaseObservationsUseCase`(신규 파일) — 관찰 기간이 끝난 구매를 `REPORT_PENDING`으로. `PipelineScheduler`가 **ingest보다 먼저** 부른다(ingest가 알림을 태우는데 PUR-03 "산 뒤 알림"은 OBSERVING에만 발화하므로). 스모크 5-2b가 종단 증명. 그전까지 ① "관찰 N일차"가 무한히 커지고 ② **3년 전 구매에도 계속 알림이 나갔을 것**이며 ③ 성적 집계 대기로 넘어가지 않았다.
-- **남은 것**: `REPORT_PENDING → CLOSED`는 **성적표 발급(PUR-04)**이 선행한다 — 성적표를 담을 테이블도, 발급 유스케이스도 없다(`ReportCardCalculator`는 순수 도메인만). `CLOSED → ARCHIVED`(PUR-06)와 `ARCHIVED → OBSERVING`(재활성) 역시 호출자가 없다. 즉 **구매는 REPORT_PENDING에서 영원히 멈춘다.** 그 상태의 관찰 문맥은 "성적 집계 중"이라 화면은 정직하지만, 집계는 아무도 하지 않는다.
-- **잠정값**: REPORT_PENDING까지만. 만료된 구매는 알림 트리거에서 빠진다(의도). **화면 문구는 "성적 집계 중"이 아니라 "관찰 종료 · 성적표는 아직 발급되지 않습니다"다**(2026-07-10) — "집계 중"은 **진행 중**이라는 뜻인데 집계하는 코드가 없다. 기다리면 나온다고 믿게 두는 것이 과대약속이다(절대 원칙 6). `docs/15` PUR-05의 문구와 다르지만, 그 문구는 **집계가 실제로 일어난다는 전제** 위에 있다. 발급이 배선되면 되돌린다(seam = `purchase/present.ts` 두 줄).
-- **재개 트리거**(무엇이 참이 되어야 하는가): ① 성적표를 담을 저장소가 있어야 한다(마이그레이션 — core 소유) ② 발급 시점 규약이 정해져야 한다(Q-32: `DealEvent.capturedAt` 부재로 "capturedAt ≤ 발급" 검증 불가) ③ 아카이브 조건("다른 활성 관찰 없을 때")을 판정할 곳이 정해져야 한다. ④ 삭제 3행 매트릭스(Q-30)와 정합.
+- **✅ 성적표 발급 해소(2026-07-21) — `REPORT_PENDING → CLOSED`가 산다.** 그전까지 `ReportCardCalculator`(순수 도메인)는 성적을 계산할 줄 알고 테스트도 GREEN이었지만 **프로덕션 호출자가 0**이었다(Q-68의 거울상 — "호출자 0인 순수 함수"). 이제:
+  - **저장소**: `report_card` 테이블(V10/R10) + `ReportCardEntity`/`ReportCardRepository`. 재발급 없음 = `purchase_id` 유니크(ReportIssueGate).
+  - **발급 유스케이스**: 신규 `IssuePendingReportCardsUseCase` — REPORT_PENDING 구매마다 `ReportCardCalculator`로 성적표를 계산해 저장하고 `Purchase.close()`로 CLOSED 전이(벌크 UPDATE, state만 — expire와 같은 수법). 멱등·크래시 안전(발급 후 전이 직전에 죽어도 다음 틱에 전이만 마저). **표본은 record와 동일 스코프**(제외키워드→수요축→pricingSet), **기준가는 구매 시점 동결값**(PUR-02 `snap_benchmark_price`). 발급은 **quiet**(관통 알림 없음)라 텔레그램 토큰과 무관.
+  - **배선**: `PipelineScheduler`가 **만료 바로 뒤·ingest 앞**에 부른다 — 방금 만료된 것까지 같은 틱에 닫아 뒤의 ingest가 CLOSED로 보아 "산 뒤 알림"에서 뺀다. 발급 수를 `PipelineTickReport.reportCardsIssued`로 싣고, 발급이 REPORT_PENDING을 드레인하므로 `purchasesExpired`를 `Δ(REPORT_PENDING)+발급`으로 재구성한다(카운터 오염 방지, docs/99).
+  - **읽기 소비처**: `PurchaseObservation.reportCard`(CLOSED만 채움, 그 외 null) — `GetPurchaseObservationsUseCase`가 `findByPurchaseId`로 읽어 `GET /api/v1/variants/{id}/purchases`로 낸다. 없으면 report_card가 **write-only 테이블**(쌓이는데 볼 수 없던 review_queue_item의 거울상)이 될 뻔했다.
+  - 관통 테스트 `IssuePendingReportCardsUseCaseTest`(발급→CLOSED·멱등·OBSERVING 제외), 배선 `PipelineSchedulerTest.issuesReportCardsAfterExpireAndFlowsCountIntoReport`(순서 + 카운트 흐름 + 재구성). domain-consumers allowlist에서 `ReportCardCalculator`·`ReportIssueGate` 삭제(이제 소비됨, 게이트가 낡은 면제를 잡았다).
+- **남은 것**: ① **web 성적표 표시** — API는 `reportCard`를 내지만 web은 아직 안 그린다(별도 프론트 증분). REPORT_PENDING은 이제 매 틱 드레인돼 순간이지만, 그 순간의 문구는 여전히 "관찰 종료 · 성적표는 아직 발급되지 않습니다"가 옳다. ② `CLOSED → ARCHIVED`(PUR-06)·`ARCHIVED → OBSERVING`(재활성)은 호출자 0 — 아카이브 조건("다른 활성 관찰 없을 때") 판정처가 정해져야 한다. ③ 발급 게이트의 두 외부 조건(백필 배치 C-4·미분류 48h 유예)은 지금 보수적으로 true(대기할 상태가 없다) — 그 상태가 생기면 `canIssue`에 주입(seam은 유스케이스 한 줄).
+- **잠정값(발급 규약)**: observedFrom = 최초 딜 firstSeen(Q-34와 동일), capturedAt ≤ 발급 검증은 `DealEvent.capturedAt` 부재로 미적용(Q-32) — 둘 다 record와 같은 잠정이라 성적이 구매 시점 판단과 일관된다. 삭제 3행 매트릭스(Q-30)는 발급과 직교(삭제 REST 착수 시).
+- **재개 트리거**(남은 ARCHIVED): 아카이브 조건 판정처(다른 활성 관찰 집합)가 정해지고, 삭제 3행 매트릭스(Q-30)와 정합될 때.
 
 ## [열림] Q-61. SEC-03·SEC-04·SEC-07이 어느 보드에도 없었다 (Q-58과 같은 실패 모드)
 - **맥락**: `docs/20`의 NFR ID 26개를 코드·테스트·스크립트·compose·CI에서 전수 grep했더니 **SEC-03·SEC-04·SEC-07이 참조 0**이었고, `docs/91`·`working-area` 어디에도 없었다. 보드에 없는 요구는 없는 일이 된다 — PERF·OPS에서 이미 한 번 겪었다(Q-58).

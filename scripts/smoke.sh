@@ -786,9 +786,10 @@ for field in mode activeLowestPriceLast overpaidWon overpaidPct observationDay c
 		fail "web ObservationContext가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $observations"
 done
 
-echo "--- 5-2b) 관찰 만료: OBSERVING → REPORT_PENDING (PUR-01) ---"
-# `Purchase.expire()`·`isExpired()`는 순수 도메인에 있었지만 **부르는 사람이 없었다.**
-# 관찰이 영원히 끝나지 않아 "산 뒤 알림"(PUR-03)이 3년 전 구매에도 계속 발화했을 것이다.
+echo "--- 5-2b) 관찰 만료 → 성적표 발급 → CLOSED (PUR-01·04) ---"
+# `Purchase.expire()`·`isExpired()`·`ReportCardCalculator`는 순수 도메인에 있었지만 **부르는 사람이 없었다.**
+# 관찰이 영원히 끝나지 않아 "산 뒤 알림"(PUR-03)이 3년 전 구매에도 발화했을 것이고, 성적표는 발급되지 않아
+# 구매는 REPORT_PENDING에서 멈췄다. 이제 만료 바로 뒤에 발급이 돌아 같은 틱에 CLOSED로 닫는다(REPORT_PENDING은 순간).
 # 90일을 기다릴 수 없으니 purchased_at을 과거로 밀어 넣는다(REST엔 그 손잡이가 없다 — 없어야 맞다).
 compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
 	-v ON_ERROR_STOP=1 >/dev/null <<SQL || fail "만료 대상 구매 삽입 실패"
@@ -799,18 +800,23 @@ SQL
 for _ in $(seq 20); do
 	observations=$(curl -fsS "${WEB}/api/v1/variants/${variant_id}/purchases" || true)
 	case "$observations" in
-	*'"state":"REPORT_PENDING"'*) expired=1 && break ;;
+	*'"state":"CLOSED"'*) closed=1 && break ;;
 	esac
 	sleep 2
 done
-[ "${expired:-0}" = 1 ] || fail "관찰 기간이 끝났는데 REPORT_PENDING으로 넘어가지 않는다: $observations"
-echo "$observations" | grep -q '"mode":"REPORT_PENDING"' || fail "만료된 관찰의 문맥이 REPORT_PENDING이 아니다"
-# 아직 관찰 중인 구매(5-2에서 만든 것)는 건드리지 않는다 — 만료는 기간이 끝난 것만 옮긴다.
-echo "$observations" | grep -q '"state":"OBSERVING"' || fail "관찰 중인 구매까지 만료시켰다: $observations"
+[ "${closed:-0}" = 1 ] || fail "관찰 기간이 끝났는데 발급·CLOSED로 넘어가지 않는다: $observations"
+# 성적표가 발급돼 응답에 실린다(PUR-04). 없으면 report_card는 쓰기만 하고 못 읽는 write-only 테이블이다 —
+# 발급을 읽을 수 있어야 "호구였나"에 답한다. reportCard는 CLOSED만 채운다(그 외 null).
+echo "$observations" | grep -q '"reportCard":{' || fail "CLOSED 구매에 성적표가 없다(발급 미배선?): $observations"
+# 아직 관찰 중인 구매(5-2에서 만든 것)는 건드리지 않는다 — 만료·발급은 기간이 끝난 것만 옮긴다.
+echo "$observations" | grep -q '"state":"OBSERVING"' || fail "관찰 중인 구매까지 닫았다: $observations"
 
-# OBS-02: 조용히 도는 만료는 안 도는 만료와 구별되지 않는다.
+# OBS-02: 조용히 도는 만료·발급은 안 도는 것과 구별되지 않는다. 발급이 REPORT_PENDING을 드레인하므로
+# purchasesExpired는 Δ+발급으로 재구성된다 — 같은 틱에 만료+발급이면 둘 다 1이다.
 compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep -q 'purchasesExpired=1' ||
 	fail "틱 카운터에 purchasesExpired=1이 없다"
+compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep -q 'reportCardsIssued=1' ||
+	fail "틱 카운터에 reportCardsIssued=1이 없다 (성적표 발급 미배선)"
 
 echo "--- 5-3) 최초부터 품절인 원문은 같은 틱에 ENDED로 닫힌다 (Q-27 ③ 자가치유) ---"
 # ⚠️ `IngestDealsUseCase:137`은 원문 상태와 무관하게 딜을 ACTIVE로 만들고 :110에서 곧바로

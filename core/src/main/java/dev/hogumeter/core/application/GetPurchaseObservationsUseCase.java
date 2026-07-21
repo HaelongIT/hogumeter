@@ -3,11 +3,14 @@ package dev.hogumeter.core.application;
 import dev.hogumeter.core.adapter.persistence.DealEventMapper;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.adapter.persistence.PurchaseRepository;
+import dev.hogumeter.core.adapter.persistence.ReportCardEntity;
+import dev.hogumeter.core.adapter.persistence.ReportCardRepository;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
 import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.purchase.ObservationContextCalculator;
 import dev.hogumeter.core.domain.purchase.Purchase;
+import dev.hogumeter.core.domain.purchase.ReportCard;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -22,15 +25,17 @@ public class GetPurchaseObservationsUseCase {
 
 	private final VariantRepository variants;
 	private final PurchaseRepository purchases;
+	private final ReportCardRepository reportCards;
 	private final DealEventRepository dealEvents;
 	private final DealEventMapper mapper;
 	private final Clock clock;
 	private final ObservationContextCalculator calculator = new ObservationContextCalculator();
 
 	public GetPurchaseObservationsUseCase(VariantRepository variants, PurchaseRepository purchases,
-			DealEventRepository dealEvents, DealEventMapper mapper, Clock clock) {
+			ReportCardRepository reportCards, DealEventRepository dealEvents, DealEventMapper mapper, Clock clock) {
 		this.variants = variants;
 		this.purchases = purchases;
+		this.reportCards = reportCards;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.clock = clock;
@@ -45,8 +50,12 @@ public class GetPurchaseObservationsUseCase {
 		return purchases.findByVariantId(variantId).stream()
 				.map(entity -> {
 					Purchase purchase = entity.toDomain();
+					// 발급된 성적표(CLOSED만). 없으면 null — "아직 발급 안 됨"을 그대로 노출한다(정직성).
+					ReportCard reportCard = reportCards.findByPurchaseId(entity.getId())
+							.map(ReportCardEntity::toDomain)
+							.orElse(null);
 					return new PurchaseObservation(entity.getId(), purchase.state(), purchase.paidPrice(),
-							purchase.purchasedAt(), calculator.compute(purchase, deals, now));
+							purchase.purchasedAt(), calculator.compute(purchase, deals, now), reportCard);
 				})
 				.toList();
 	}

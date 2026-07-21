@@ -157,11 +157,42 @@ class PipelineSchedulerTest {
 	@DisplayName("방해금지 플러시 결과가 틱 리포트에 흐른다 (Q-20 ②)")
 	void heldAlertFlushCountsFlowIntoReport() {
 		// 플러시가 (발송 2, 드롭 1)을 내면 리포트에 그대로 실려야 한다 — 배선이 끊기면 0이라 이 테스트가 잡는다.
-		new PipelineScheduler(expire, ingest, conditions, prices, status, followUp,
+		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
 				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), healthy -> { }, () -> EMPTY, reported::set).tick();
 
 		assertThat(reported.get().heldAlertsFlushed()).isEqualTo(2);
 		assertThat(reported.get().heldAlertsDropped()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("성적표 발급은 만료 뒤·ingest 앞에서 돌고, 발급 수가 리포트로 흘러 purchasesExpired를 재구성한다 (PUR-04)")
+	void issuesReportCardsAfterExpireAndFlowsCountIntoReport() {
+		Supplier<Integer> issue = () -> {
+			calls.add("issue");
+			return 2; // 이번 틱 2건 발급
+		};
+		// REPORT_PENDING 5→4. 발급이 2건이면 만료는 (4-5)+2 = 1건이다 — 발급 수를 더해 "만료 − 발급" 오염을 되돌린다.
+		PipelineSnapshot before = new PipelineSnapshot(0, 0, 0, 0, 0, 0, 5, 0, 0);
+		PipelineSnapshot after = new PipelineSnapshot(0, 0, 0, 0, 0, 0, 4, 0, 0);
+		Supplier<PipelineSnapshot> probe = new Supplier<>() {
+			private boolean first = true;
+
+			@Override
+			public PipelineSnapshot get() {
+				if (first) {
+					first = false;
+					return before;
+				}
+				return after;
+			}
+		};
+
+		new PipelineScheduler(expire, issue, ingest, conditions, prices, status, followUp,
+				FlushHeldAlertsUseCase.FlushReport::empty, healthy -> { }, probe, reported::set).tick();
+
+		assertThat(calls).as("발급은 만료 뒤·ingest 앞").containsSubsequence("expire", "issue", "ingest");
+		assertThat(reported.get().reportCardsIssued()).isEqualTo(2);
+		assertThat(reported.get().purchasesExpired()).as("만료 = Δ(REPORT_PENDING) + 발급").isEqualTo(1);
 	}
 
 	@Test
@@ -180,7 +211,7 @@ class PipelineSchedulerTest {
 
 	private PipelineScheduler schedulerWithHealth(Supplier<IngestReport> ingest, Supplier<PipelineSnapshot> probe,
 			List<Boolean> health) {
-		return new PipelineScheduler(expire, ingest, conditions, prices, status, followUp,
+		return new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
 				FlushHeldAlertsUseCase.FlushReport::empty, health::add, probe, reported::set);
 	}
 

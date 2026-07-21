@@ -11,6 +11,7 @@ import dev.hogumeter.core.application.FlushHeldAlertsUseCase.FlushReport;
 import dev.hogumeter.core.application.FollowUpAlertUseCase;
 import dev.hogumeter.core.application.IngestDealsUseCase;
 import dev.hogumeter.core.application.IngestReport;
+import dev.hogumeter.core.application.IssuePendingReportCardsUseCase;
 import dev.hogumeter.core.application.PipelineHealthMonitor;
 import dev.hogumeter.core.application.PreserveAppliedConditionsUseCase;
 import dev.hogumeter.core.application.ReprocessDealPricesUseCase;
@@ -38,11 +39,14 @@ import org.springframework.stereotype.Component;
  * {@link IngestDealsUseCase#ingestPending()}을 부르는 사람이 없으면 {@code deal_event}가 생기지 않고,
  * 기준가 표본은 영원히 0이며 알림도 오지 않는다(2026-07-10까지 실제로 그랬다 — docs/91 Q-27 ⑤).
  *
- * <p>순서는 <b>관찰만료 → ingest → 조건태그 → 가격 → 종료 → 후속알림</b>이다.
+ * <p>순서는 <b>관찰만료 → 성적표발급 → ingest → 조건태그 → 가격 → 종료 → 후속알림</b>이다.
  * <ol>
  * <li>관찰만료: 관찰 기간이 끝난 구매를 REPORT_PENDING으로(PUR-01). <b>ingest보다 먼저</b> 온다 —
  * ingest는 새 딜마다 알림을 태우는데 PUR-03의 "산 뒤 알림"은 OBSERVING 관찰에만 발화한다.
  * 나중에 돌리면 이미 끝난 관찰이 이번 틱의 딜에 대해 한 번 더 알림을 낸다.</li>
+ * <li>성적표발급: REPORT_PENDING 구매에 성적표(PUR-04)를 발급하고 CLOSED로 닫는다. <b>만료 바로 뒤</b>에 와서
+ * 방금 만료된 것까지 같은 틱에 닫는다 — 그러면 뒤의 ingest가 CLOSED로 보아 "산 뒤 알림"에서 자연히 뺀다.
+ * 발급은 quiet(관통 알림 없음)라 텔레그램 토큰과 무관하다. 관찰창은 과거라 이번 틱의 새 딜은 성적에 안 섞인다.</li>
  * <li>ingest: 새 원문을 딜로 만든다. 이번 주기에 링크된 것까지 아래 단계들이 보게 한다.</li>
  * <li>조건 태그: 원문의 조건부 가격 태그를 딜로 끌어올린다(BM-02 AC-2). <b>ingest 바로 뒤</b>에 온다 —
  * 방금 링크된 원문의 태그가 같은 틱에 보존된다. 이게 없어 표본의 약 1할이 무조건 가격 행세를 했다.</li>
@@ -66,6 +70,7 @@ public class PipelineScheduler {
 	private static final Logger log = LoggerFactory.getLogger(PipelineScheduler.class);
 
 	private final Runnable expireObservations;
+	private final Supplier<Integer> issueReportCards; // 성적표 발급(PUR-04) — 발급 수를 붙잡아 리포트에 싣는다
 	private final Supplier<IngestReport> ingest;
 	private final Runnable preserveConditions;
 	private final Supplier<List<Long>> reprocessPrices;
@@ -81,13 +86,15 @@ public class PipelineScheduler {
 	private int stepFailures;
 
 	@Autowired
-	PipelineScheduler(ExpirePurchaseObservationsUseCase expireObservations, IngestDealsUseCase ingest,
+	PipelineScheduler(ExpirePurchaseObservationsUseCase expireObservations,
+			IssuePendingReportCardsUseCase issueReportCards, IngestDealsUseCase ingest,
 			PreserveAppliedConditionsUseCase conditions, ReprocessDealPricesUseCase prices,
 			ReprocessDealStatusUseCase status, FollowUpAlertUseCase followUp, FlushHeldAlertsUseCase flushHeld,
 			PipelineHealthMonitor healthMonitor, RawDealPostRepository rawPosts, DealEventRepository dealEvents,
 			DealEventSourceRepository sources, ReviewQueueItemRepository reviewQueue, PurchaseRepository purchases,
 			JdbcTemplate jdbc) {
-		this(expireObservations::expireDueObservations, ingest::ingestPending, conditions::preserveTags,
+		this(expireObservations::expireDueObservations, issueReportCards::issuePendingReportCards,
+				ingest::ingestPending, conditions::preserveTags,
 				prices::reprocessPriceChanges, status::reprocessEndedDeals, followUp::sendFollowUps, flushHeld::flush,
 				healthMonitor::onTick,
 				() -> new PipelineSnapshot(
@@ -112,11 +119,12 @@ public class PipelineScheduler {
 	}
 
 	/** 테스트 seam(플러시·건강 포함) — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
-	PipelineScheduler(Runnable expireObservations, Supplier<IngestReport> ingest, Runnable preserveConditions,
-			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
+	PipelineScheduler(Runnable expireObservations, Supplier<Integer> issueReportCards, Supplier<IngestReport> ingest,
+			Runnable preserveConditions, Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
 			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<FlushReport> flushHeld,
 			Consumer<Boolean> healthTick, Supplier<PipelineSnapshot> probe, Consumer<PipelineTickReport> report) {
 		this.expireObservations = expireObservations;
+		this.issueReportCards = issueReportCards;
 		this.ingest = ingest;
 		this.preserveConditions = preserveConditions;
 		this.reprocessPrices = reprocessPrices;
@@ -128,12 +136,12 @@ public class PipelineScheduler {
 		this.report = report;
 	}
 
-	/** 플러시·건강 없는 테스트 seam(기존 호출부 호환) — 둘 다 no-op으로 둔다. */
+	/** 플러시·건강 없는 테스트 seam(기존 호출부 호환) — 발급·플러시·건강을 no-op/0으로 둔다. */
 	PipelineScheduler(Runnable expireObservations, Supplier<IngestReport> ingest, Runnable preserveConditions,
 			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
 			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<PipelineSnapshot> probe,
 			Consumer<PipelineTickReport> report) {
-		this(expireObservations, ingest, preserveConditions, reprocessPrices, reprocessStatus, followUp,
+		this(expireObservations, () -> 0, ingest, preserveConditions, reprocessPrices, reprocessStatus, followUp,
 				FlushReport::empty, healthy -> { }, probe, report);
 	}
 
@@ -143,6 +151,10 @@ public class PipelineScheduler {
 		stepFailures = 0; // 이 틱의 단계 실패만 센다(틱은 겹치지 않는다)
 		PipelineSnapshot before = snapshot();
 		runStep("expire-observations", expireObservations);
+		// 성적표 발급(PUR-04) — 만료 직후에 온다(REPORT_PENDING을 드레인). 발급은 quiet(관통 알림 없음).
+		// 발급 수를 붙잡아 리포트에 싣는다 — 안 그러면 REPORT_PENDING 델타가 "만료 − 발급"으로 오염돼
+		// purchasesExpired가 음수가 될 수 있다("카운터는 오염되지 않는 쪽을 센다").
+		int reportCardsIssued = runStepReturning("issue-report-cards", issueReportCards, 0);
 		IngestReport ingestReport = runStepReturning("ingest", ingest, IngestReport.empty());
 		runStep("preserve-conditions", preserveConditions);
 		List<Long> priceChanged = runStepReturning("reprocess-prices", reprocessPrices, List.of());
@@ -161,8 +173,8 @@ public class PipelineScheduler {
 		boolean healthy = before != null && after != null && stepFailures == 0;
 		if (before != null && after != null) {
 			// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다. stepsFailed로 그 사실도 싣는다.
-			report.accept(PipelineTickReport.between(before, after, ingestReport, followUpPrice, followUpEnded,
-					stepFailures, flush.flushed(), flush.dropped()));
+			report.accept(PipelineTickReport.between(before, after, ingestReport, reportCardsIssued, followUpPrice,
+					followUpEnded, stepFailures, flush.flushed(), flush.dropped()));
 		}
 		healthTick.accept(healthy); // 연속 실패면 관리 알림(PipelineHealthMonitor)
 	}

@@ -27,6 +27,12 @@ import dev.hogumeter.core.application.IngestReport;
  * 발송 수는 스냅샷에 흔적이 없어(전송은 상태 변화가 아니다) 스케줄러가 세어 넘긴다 — 안 그러면 {@code
  * sendFollowUps}가 낸 값이 조용히 버려진다("첫 알림은 세는데 후속은 안 세는" 절반 카운터).
  *
+ * <p>{@code reportCardsIssued}는 이번 틱에 발급한 성적표 수다(PUR-04). 발급은 REPORT_PENDING을 CLOSED로
+ * 드레인하므로, 그냥 두면 {@code purchasesExpired}(= REPORT_PENDING 증가분)가 <b>"만료 − 발급"으로 오염</b>돼
+ * 음수가 될 수 있다("카운터는 오염되지 않는 쪽을 센다"). 그래서 발급 수를 스케줄러가 직접 세어 넘기고,
+ * {@code purchasesExpired}를 {@code Δ(REPORT_PENDING) + reportCardsIssued}로 <b>재구성</b>한다 — 두 카운터가
+ * 서로 독립으로 정직해진다(발급 0이면 예전과 같다). 발급은 quiet(관통 알림 없음)라 텔레그램 토큰과 무관하다.
+ *
  * <p>{@code stepsFailed}는 이번 틱에 예외를 던진 단계 수다(OBS-02, Q-56). {@code runStep}이 한 단계의 실패를
  * 격리하지만(다른 단계·다음 주기를 살린다), 격리는 <b>침묵</b>이기도 하다 — DB 스키마 불일치·락 충돌 같은
  * 지속 실패가 나면 파이프라인은 <b>도는 척하며 아무것도 처리하지 않는다.</b> 이 값이 매 틱 0이 아니면 그
@@ -40,6 +46,7 @@ public record PipelineTickReport(
 		long queued,
 		long ended,
 		long purchasesExpired,
+		long reportCardsIssued,
 		long conditionsTagged,
 		long conditionalTotal,
 		long shippingUnknownTotal,
@@ -53,17 +60,20 @@ public record PipelineTickReport(
 		int heldAlertsDropped) {
 
 	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest,
-			int followUpPriceChangedSent, int followUpEndedSent, int stepsFailed, int heldAlertsFlushed,
-			int heldAlertsDropped) {
+			int reportCardsIssued, int followUpPriceChangedSent, int followUpEndedSent, int stepsFailed,
+			int heldAlertsFlushed, int heldAlertsDropped) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
+		// 발급이 REPORT_PENDING을 드레인하므로 Δ만으로는 만료 수가 아니다 — 발급 수를 더해 재구성한다.
+		long purchasesExpired = (after.reportPendingPurchases() - before.reportPendingPurchases()) + reportCardsIssued;
 		return new PipelineTickReport(
 				postsLinked,
 				dealsCreated,
 				postsLinked - dealsCreated,
 				after.reviewQueue() - before.reviewQueue(),
 				after.endedDeals() - before.endedDeals(),
-				after.reportPendingPurchases() - before.reportPendingPurchases(),
+				purchasesExpired,
+				reportCardsIssued,
 				after.conditionalDeals() - before.conditionalDeals(),
 				after.conditionalDeals(),
 				after.shippingUnknownDeals(),
@@ -86,6 +96,7 @@ public record PipelineTickReport(
 				+ " queued=" + queued
 				+ " ended=" + ended
 				+ " purchasesExpired=" + purchasesExpired
+				+ " reportCardsIssued=" + reportCardsIssued
 				+ " conditionsTagged=" + conditionsTagged
 				+ " conditionalTotal=" + conditionalTotal
 				+ " shippingUnknownTotal=" + shippingUnknownTotal
