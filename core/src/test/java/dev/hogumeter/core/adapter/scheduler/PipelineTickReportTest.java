@@ -19,9 +19,9 @@ class PipelineTickReportTest {
 		return new PipelineSnapshot(raw, sources, deals, queue, ended, unprocessed, reportPending, 0, 0);
 	}
 
-	/** 매칭 카운터를 안 보는 스냅샷 산술 테스트용 — 수집 리포트·후속 알림 수는 0으로 둔다. */
+	/** 매칭 카운터를 안 보는 스냅샷 산술 테스트용 — 수집 리포트·후속 알림·단계 실패 수는 0으로 둔다. */
 	private static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after) {
-		return PipelineTickReport.between(before, after, IngestReport.empty(), 0, 0);
+		return PipelineTickReport.between(before, after, IngestReport.empty(), 0, 0, 0);
 	}
 
 	@Test
@@ -124,7 +124,7 @@ class PipelineTickReportTest {
 		IngestReport ingest = new IngestReport(3, 1, 2, 5, 4, 2);
 
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				ingest, 0, 0);
+				ingest, 0, 0, 0);
 
 		assertThat(report.ingest()).isEqualTo(ingest);
 		assertThat(report.toString()).contains(
@@ -139,10 +139,24 @@ class PipelineTickReportTest {
 	@DisplayName("후속 알림 발송 수가 종류별로 요약에 실린다 (priceChanged·ended)")
 	void reportsFollowUpSendCountsByKind() {
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				IngestReport.empty(), 4, 2);
+				IngestReport.empty(), 4, 2, 0);
 
 		assertThat(report.followUpPriceChangedSent()).isEqualTo(4);
 		assertThat(report.followUpEndedSent()).isEqualTo(2);
 		assertThat(report.toString()).contains("followUpsSent[priceChanged=4 ended=2]");
+	}
+
+	/**
+	 * OBS-02 단계 실패 수(Q-56): runStep이 실패를 삼키므로 이 카운터가 없으면 "도는 척하며 아무것도 처리
+	 * 안 하는" 틱이 정상 틱과 구별되지 않는다. 0을 생략하지 않는다 — 건강한 틱은 0이라 비-0이 대비로 보인다.
+	 */
+	@Test
+	@DisplayName("단계 실패 수가 요약에 실린다 (stepsFailed)")
+	void reportsStepFailureCount() {
+		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
+				IngestReport.empty(), 0, 0, 2);
+
+		assertThat(report.stepsFailed()).isEqualTo(2);
+		assertThat(report.toString()).contains("stepsFailed=2");
 	}
 }

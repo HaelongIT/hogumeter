@@ -71,6 +71,10 @@ public class PipelineScheduler {
 	private final Supplier<PipelineSnapshot> probe;
 	private final Consumer<PipelineTickReport> report;
 
+	// 이번 틱에 예외를 던진 단계 수(Q-56). runStep이 실패를 삼키므로 여기서 세지 않으면 침묵한다.
+	// @Scheduled(fixedDelay)는 틱이 겹치지 않으므로(이전 틱 완료 후에야 다음이 시작) 필드 하나로 안전하다.
+	private int stepFailures;
+
 	@Autowired
 	PipelineScheduler(ExpirePurchaseObservationsUseCase expireObservations, IngestDealsUseCase ingest,
 			PreserveAppliedConditionsUseCase conditions, ReprocessDealPricesUseCase prices,
@@ -118,6 +122,7 @@ public class PipelineScheduler {
 	@Scheduled(fixedDelayString = "${core.pipeline.interval-ms:60000}",
 			initialDelayString = "${core.pipeline.interval-ms:60000}")
 	public void tick() {
+		stepFailures = 0; // 이 틱의 단계 실패만 센다(틱은 겹치지 않는다)
 		PipelineSnapshot before = snapshot();
 		runStep("expire-observations", expireObservations);
 		IngestReport ingestReport = runStepReturning("ingest", ingest, IngestReport.empty());
@@ -134,8 +139,8 @@ public class PipelineScheduler {
 		if (before == null || after == null) {
 			return; // DB가 닿지 않는다. snapshot()이 이미 남겼고, 0으로 채운 리포트는 거짓말이다.
 		}
-		// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다.
-		report.accept(PipelineTickReport.between(before, after, ingestReport, followUpPrice, followUpEnded));
+		// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다. stepsFailed로 그 사실도 싣는다.
+		report.accept(PipelineTickReport.between(before, after, ingestReport, followUpPrice, followUpEnded, stepFailures));
 	}
 
 	/**
@@ -166,6 +171,7 @@ public class PipelineScheduler {
 			step.run();
 		}
 		catch (RuntimeException failure) {
+			stepFailures++;
 			log.error("pipeline step failed: {}", name, failure);
 		}
 	}
@@ -180,6 +186,7 @@ public class PipelineScheduler {
 			return step.get();
 		}
 		catch (RuntimeException failure) {
+			stepFailures++;
 			log.error("pipeline step failed: {}", name, failure);
 			return onFailure;
 		}

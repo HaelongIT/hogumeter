@@ -149,6 +149,19 @@ class PipelineSchedulerTest {
 
 		assertThat(reported.get()).isNotNull();
 		assertThat(reported.get().dealsCreated()).isZero();
+		assertThat(reported.get().stepsFailed()).as("건강한 틱은 단계 실패 0").isZero();
+	}
+
+	@Test
+	@DisplayName("단계가 터지면 stepsFailed로 센다 — 격리는 침묵이기도 하다 (Q-56)")
+	void failedStepIsCountedInReport() {
+		// ingest가 터진다. runStep이 격리해 뒤 단계·보고는 살지만, 그 실패가 리포트에 보여야 한다 —
+		// 안 그러면 파이프라인이 '도는 척하며 아무것도 처리 안 하는' 틱이 정상 틱과 구별되지 않는다.
+		new PipelineScheduler(expire, boomIngest("스키마 불일치"), conditions, prices, status, followUp,
+				() -> EMPTY, reported::set).tick();
+
+		assertThat(reported.get()).as("격리 덕에 보고는 산다").isNotNull();
+		assertThat(reported.get().stepsFailed()).isEqualTo(1);
 	}
 
 	/**

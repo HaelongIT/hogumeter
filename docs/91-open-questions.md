@@ -77,7 +77,7 @@ _(Q-5. 뽐뿌 golden fixture 재채취 — **해소됨 2026-07-09**: 재채취 *
 - **잠정값**: `absurdityRatio` = 0.5(±50%). `OutlierDetector.isAbsurdVsCurrent`에 **주입**(테스트/앱 레이어). BenchmarkParams(승인 seam)엔 아직 미편입 — 승인값과 미승인값을 섞지 않기 위함.
 - **재개 트리거**: 운영자 승인 요청(docs/31에 7번째 행) → 승인 시 `BenchmarkParams`로 이관 + `defaults()` 편입 + decision-log. 1차 검증에서 오염 사례 관측해 폭 재조정.
 
-## [열림] Q-15. 리뷰 큐 — 읽기는 생겼다. **승격·기각(쓰기)이 없다**
+## [부분해소] Q-15. 리뷰 큐 — 읽기·쓰기(승격·기각)·web 버튼 완료. UNCLASSIFIED 승격만 후속
 - **맥락**: AC-2 "🔥 최우선 알림", AC-3 승격/기각 UI는 알림·큐 처리 영역. BM-05(순수)는 outlierFlag 판정 + `ReviewQueueItem` 값 생성 + DealEvent 전이(promote/reject)까지만.
 - **읽기 해소(2026-07-10)**: `GetReviewQueueUseCase` + `ReviewQueueController`(`GET /api/v1/review-queue`) + web `미상 큐` 탭 — **전부 신규 파일**, core 기존 파일 무수정. 그전까지 `review_queue_item`은 **쓰이기만 하고 아무도 읽지 않았다**(`IngestDealsUseCase`가 넣고 `PipelineScheduler`가 세기만 함). 매칭이 무엇을 놓치는지 볼 방법이 없었다 — 놓침을 허용하는 시스템(원칙 3)에서 놓친 것을 못 보면 그건 유실이다. `status`·`created_at`을 엔티티가 매핑하지 않아 JPA 대신 **읽기 전용 SQL**로 읽는다.
 - **잠정값(쓰기 없음)**: `DealEvent.promoteFromOutlier()`·`reject()`는 순수 도메인에만 있고 **프로덕션 호출자가 없다.** 화면에 승격·기각 버튼을 그리지 않는다 — 못 하는 일을 버튼으로 그리면 눌러 보고 나서야 안다(과대약속 금지). 🔥 우선순위 발화는 AL 모듈(Q-20)이 OUTLIER_LOWER로 처리.
@@ -318,11 +318,10 @@ _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildComm
 - **잠정값**: 텍스트 로그 + 틱 단위 카운터. `docker logs`로 읽는다.
 - **재개 트리거**: ①은 로그 수집기(운영 배포)를 붙일 때 — core 전체 로그 형식을 바꾸는 일이라 상대와 조율. ②③은 use case 반환값 변경이 필요하니 **core 기존 파일 수정**이라 조율 대상. ④는 Q-3.
 
-## [열림] Q-56. 파이프라인 단계 실패가 로그에만 남는다
-- **맥락**: `PipelineScheduler.runStep`은 한 단계(ingest·reprocess)가 던져도 다른 단계와 다음 주기를 살리려고 예외를 잡는다. 잡은 뒤에는 `log.error`로 단계 이름과 함께 남긴다 — 그게 전부다.
-- **왜 위험한가**: DB 스키마 불일치·낙관적 락 충돌 같은 지속적 실패가 나면 **파이프라인은 도는 척하면서 아무것도 처리하지 않는다.** `docker logs`를 보지 않으면 모른다. collector의 `giving_up`(연속 실패 시 프로세스 종료)과 달리 core는 스스로 내려오지도 않는다.
-- **잠정값**: `log.error`만. 연속 실패 카운터도, 관리 알림도 없다. 1인용이고 실 폴링 전이라 지금은 수용.
-- **재개 트리거**: 텔레그램 봇 토큰 발급(Q-20) → 관리 알림 chat(OBS-03)이 생기면 collector의 `giving_up`·`sink_error`와 **함께** 흘린다. 그때 연속 실패 임계도 같이 정한다(collector의 `SINK_FAILURE_LIMIT=3`과 정합). seam = `PipelineScheduler.runStep` 1곳.
+## [부분해소] Q-56. 단계 실패가 이제 틱 카운터에 보인다 — 관리 알림(텔레그램)만 후속
+- **맥락**: `PipelineScheduler.runStep`은 한 단계(ingest·reprocess)가 던져도 다른 단계와 다음 주기를 살리려고 예외를 잡는다. 잡은 뒤에는 `log.error`로 단계 이름과 함께 남기고 계속한다. **격리는 침묵이기도 하다** — DB 스키마 불일치·락 충돌 같은 지속 실패가 나면 파이프라인은 도는 척하며 아무것도 처리하지 않는데, `docker logs`의 `log.error` 한 줄을 grep하지 않으면 모른다.
+- **✅ 카운터 해소(2026-07-21)**: `stepFailures`를 `runStep`·`runStepReturning`의 catch에서 세어 `PipelineTickReport.stepsFailed`로 매 틱 로그에 싣는다(`stepsFailed=N`). 건강한 틱은 `stepsFailed=0`이라 **비-0이 대비로 드러난다** — 이제 틱 요약 한 줄만 봐도 "도는 척" 틱이 정상 틱과 구별된다. 필드 하나로 세는 게 안전한 이유: `@Scheduled(fixedDelay)`는 틱이 겹치지 않는다(이전 틱 완료 후 다음 시작). 매 틱 0으로 리셋. 테스트: `PipelineSchedulerTest.{failedStepIsCountedInReport, idleTickStillReports(=0)}`, `PipelineTickReportTest.reportsStepFailureCount`, 스모크가 `stepsFailed=0` 종단 마커.
+- **남은 것(텔레그램 대기)**: **관리 알림**(OBS-03) — 임계를 넘는 연속 실패 시 사람에게 push. 텔레그램 봇 토큰(Q-20)이 있어야 collector의 `giving_up`·`sink_error`와 **같은 chat**으로 흘린다. 그때 연속 실패 임계도 같이 정한다(collector의 `SINK_FAILURE_LIMIT=3`과 정합). 카운터가 그 선결이었다 — 이제 셀 수 있으니 알림만 붙이면 된다.
 
 _(Q-55. SEC-05 크기 상한 — **해소됨 2026-07-10**: `pipeline/ingest.py`에 상한 4종(title 300자 · url 2000자 · post_id 64자 · raw 256KiB, **바이트**로 잼). **자르지 않고 거절**한다 — 잘린 제목은 정상 제목의 얼굴을 한 거짓말이라 매칭(BM-03)을 조용히 망친다. 한 건이 비대해도 배치 전체를 버리지 않는다(원칙 3). 무엇을 왜 버렸는지 `oversized` 이벤트로 남기고 `cycle.skipped` 카운터에 0도 센다. 상한값 근거: golden 89건 실측 최대(title 62 · url 75 · post_id 11 · raw 57B)의 수 배 — 전수 대조로 오차단 0건 확인. 잠정값이며 seam은 그 상수 4개. 여기서 제거.)_
 

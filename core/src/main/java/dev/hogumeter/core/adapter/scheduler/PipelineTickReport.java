@@ -26,6 +26,12 @@ import dev.hogumeter.core.application.IngestReport;
  * 가른다</b> — ENDED가 몰리면 딜이 대거 종료된 것이고 PRICE_CHANGED가 몰리면 가격이 움직인 것이라 뜻이 다르다.
  * 발송 수는 스냅샷에 흔적이 없어(전송은 상태 변화가 아니다) 스케줄러가 세어 넘긴다 — 안 그러면 {@code
  * sendFollowUps}가 낸 값이 조용히 버려진다("첫 알림은 세는데 후속은 안 세는" 절반 카운터).
+ *
+ * <p>{@code stepsFailed}는 이번 틱에 예외를 던진 단계 수다(OBS-02, Q-56). {@code runStep}이 한 단계의 실패를
+ * 격리하지만(다른 단계·다음 주기를 살린다), 격리는 <b>침묵</b>이기도 하다 — DB 스키마 불일치·락 충돌 같은
+ * 지속 실패가 나면 파이프라인은 <b>도는 척하며 아무것도 처리하지 않는다.</b> 이 값이 매 틱 0이 아니면 그
+ * 사실이 틱 로그 한 줄에 보인다(따로 `log.error`를 grep하지 않아도). 0을 생략하지 않는다 — 건강한 틱은
+ * {@code stepsFailed=0}이라 비-0이 대비로 드러난다. 관리 알림(OBS-03)은 텔레그램 대기(Q-20)라 아직 카운터뿐이다.
  */
 public record PipelineTickReport(
 		long postsLinked,
@@ -41,10 +47,11 @@ public record PipelineTickReport(
 		long rawTotal,
 		IngestReport ingest,
 		int followUpPriceChangedSent,
-		int followUpEndedSent) {
+		int followUpEndedSent,
+		int stepsFailed) {
 
 	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest,
-			int followUpPriceChangedSent, int followUpEndedSent) {
+			int followUpPriceChangedSent, int followUpEndedSent, int stepsFailed) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
 		return new PipelineTickReport(
@@ -61,7 +68,8 @@ public record PipelineTickReport(
 				after.rawPosts(),
 				ingest,
 				followUpPriceChangedSent,
-				followUpEndedSent);
+				followUpEndedSent,
+				stepsFailed);
 	}
 
 	/** 한 줄 요약. 0을 생략하지 않는다 — "성공했는데 0건"이 사라지면 드리프트를 못 본다. */
@@ -85,6 +93,7 @@ public record PipelineTickReport(
 				+ " skippedNoPrice=" + ingest.skippedNoPrice() + "]"
 				+ " firstAlertsSent=" + ingest.firstAlertsSent()
 				+ " followUpsSent[priceChanged=" + followUpPriceChangedSent
-				+ " ended=" + followUpEndedSent + "]";
+				+ " ended=" + followUpEndedSent + "]"
+				+ " stepsFailed=" + stepsFailed;
 	}
 }
