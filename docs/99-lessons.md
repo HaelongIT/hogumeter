@@ -907,3 +907,20 @@
 - **교훈 ③**: **허용집합을 "지금 폴링하는 곳"으로 좁히지 않는다.** 루리웹·펨코는 robots로 폴링이 꺼져 있지만 허용집합엔 남긴다 — 이 집합은 "폴링하는 곳"이 아니라 "신품으로 해석해도 되는 곳"이고 그 성격은 robots와 무관하다. 좁혀 뒀다면 되살리는 날 딜이 조용히 버려진다.
 - **기계화**: 거울(core 허용집합 ↔ collector 파서 목록)은 드리프트하므로 `scripts/check-source-vocabulary.sh`가 **각 파서의 분류를 강제**한다 — 신품 허용집합이거나 `scripts/used-sources.txt` 선언이거나, 둘 다 아니면 FAIL, 둘 다여도 FAIL. 파서가 없는 허용 이름(죽은 어휘)도 FAIL. 계약 테스트 8케이스(주석 속 `Set.of` 미포함 포함).
 - **관련 테스트**: `NewProductSourcesTest`, `IngestDealsUseCaseTest#usedMarketplacePostNeverBecomesANewProductDeal` / `#unknownSourceIsSkippedAndCountedRatherThanTrusted`, `scripts/check-source-vocabulary.test.sh`.
+
+## 2026-07-22 — 카운터를 하나 더했더니 종단 스모크가 깨졌다 (문구를 grep하면 문구가 굳는다)
+
+- **맥락**: `IngestReport`에 `skippedForeignSource`를 더하고 틱 요약에 노출했다.
+- **증상**: 값은 전부 옳은데 스모크가 실패했다 — `matched[confirmed=1 candidate=0 unknown=0 rejected=0 skippedNoPrice=0]` **괄호 전체**를 한 문자열로 grep하고 있었기 때문이다.
+- **교훈(규칙화)**: **관측 출력을 검사할 때 "한 덩어리 문구"를 grep하지 않는다 — 있어야 할 값을 하나씩 단언한다.** 덩어리 grep은 "이 줄의 모양을 바꾸지 마라"와 같은 뜻이 되고, 그건 **카운터를 늘리지 말라는 뜻**이다. 관측을 개선할 때마다 검사가 깨지면 사람은 검사를 지우거나 관측을 포기한다. (이미 적어 둔 "관측 출력은 산문이 아니라 이벤트로 낸다"의 소비자 쪽 짝이다 — core 로그는 아직 문자열이라 JSON 파싱을 못 쓴다.)
+- **거울상**: 같은 커밋에서 core 단위 테스트도 같은 이유로 깨졌다(`PipelineTickReportTest`의 toString 단언). 거기서 깨진 걸 보고 "스모크에도 같은 게 있나"를 물었어야 했는데 안 물어서 종단에서 다시 만났다. **한 층에서 굳은 문구를 발견하면 다른 층에도 같은 문구가 있는지 즉시 찾는다.**
+- **관련**: `scripts/smoke.sh` 5-1b(개별 카운터 루프로 변경), `PipelineTickReportTest`.
+
+## 2026-07-22 — 확인 도구를 폴링 대상에 묶으면 "확인해야 할 것"을 영영 못 본다
+
+- **맥락**: robots 실측으로 폴링을 뽐뿌 1사로 좁혔다(`hotdeal_boards()`).
+- **증상**: 없음. `robots_report`가 `hotdeal_boards()`를 쓰므로 조용히 뽐뿌만 확인하게 됐다.
+- **원인**: **"확인해야 하는 곳"과 "지금 켠 곳"을 같은 목록으로 표현했다.** 그래서 루리웹·펨코를 되살릴지 판단할 근거를 다시 얻을 방법이 사라졌다 — 확인 도구가 "우리가 이미 켠 것만" 보면 아무것도 확인하지 못한다.
+- **교훈(규칙화)**: **판정·검증 도구의 대상 목록을 운영 대상 목록에서 파생시키지 않는다.** 둘은 성격이 다르다(core의 `NewProductSources` 허용집합을 "지금 폴링하는 곳"으로 좁히지 않은 것과 같은 이유). 운영 목록이 좁아질 때 검증 목록도 좁아지면, **좁힌 이유를 재검토할 수단**이 함께 사라진다.
+- **덤으로 드러난 것**: 번개장터는 파서·fixture·프라이버시 테스트·적재 경로까지 다 있는데 **robots만 한 번도 확인된 적이 없었다.** 루리웹에서 정확히 그 가정 때문에 금지된 URL을 크롤링했다. 확인 대상에 넣었다.
+- **관련 테스트**: `test_robots_report.py::test_robots_check_targets_covers_sites_we_do_not_poll` 외 2.
