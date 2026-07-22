@@ -57,11 +57,12 @@ public record PipelineTickReport(
 		int followUpEndedSent,
 		int stepsFailed,
 		int heldAlertsFlushed,
-		int heldAlertsDropped) {
+		int heldAlertsDropped,
+		int usedListingBatchesFolded) {
 
 	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest,
 			int reportCardsIssued, int followUpPriceChangedSent, int followUpEndedSent, int stepsFailed,
-			int heldAlertsFlushed, int heldAlertsDropped) {
+			int heldAlertsFlushed, int heldAlertsDropped, int usedListingBatchesFolded) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
 		// 발급이 REPORT_PENDING을 드레인하므로 Δ만으로는 만료 수가 아니다 — 발급 수를 더해 재구성한다.
@@ -84,7 +85,8 @@ public record PipelineTickReport(
 				followUpEndedSent,
 				stepsFailed,
 				heldAlertsFlushed,
-				heldAlertsDropped);
+				heldAlertsDropped,
+				usedListingBatchesFolded);
 	}
 
 	/** 한 줄 요약. 0을 생략하지 않는다 — "성공했는데 0건"이 사라지면 드리프트를 못 본다. */
@@ -106,12 +108,14 @@ public record PipelineTickReport(
 				+ " candidate=" + ingest.candidate()
 				+ " unknown=" + ingest.unknown()
 				+ " rejected=" + ingest.rejected()
-				+ " skippedNoPrice=" + ingest.skippedNoPrice() + "]"
+				+ " skippedNoPrice=" + ingest.skippedNoPrice()
+				+ " skippedForeignSource=" + ingest.skippedForeignSource() + "]"
 				+ " firstAlertsSent=" + ingest.firstAlertsSent()
 				+ " heldAlerts=" + ingest.heldAlerts()
 				+ " followUpsSent[priceChanged=" + followUpPriceChangedSent
 				+ " ended=" + followUpEndedSent + "]"
 				+ " heldFlushed[sent=" + heldAlertsFlushed + " dropped=" + heldAlertsDropped + "]"
+				+ " usedBatchesFolded=" + usedListingBatchesFolded
 				+ " stepsFailed=" + stepsFailed;
 	}
 }

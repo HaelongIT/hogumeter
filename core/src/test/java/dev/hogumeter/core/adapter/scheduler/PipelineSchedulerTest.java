@@ -158,10 +158,23 @@ class PipelineSchedulerTest {
 	void heldAlertFlushCountsFlowIntoReport() {
 		// 플러시가 (발송 2, 드롭 1)을 내면 리포트에 그대로 실려야 한다 — 배선이 끊기면 0이라 이 테스트가 잡는다.
 		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
-				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), healthy -> { }, () -> EMPTY, reported::set).tick();
+				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), () -> 0, healthy -> { }, () -> EMPTY,
+				reported::set).tick();
 
 		assertThat(reported.get().heldAlertsFlushed()).isEqualTo(2);
 		assertThat(reported.get().heldAlertsDropped()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("중고 목록 접기 결과가 틱 리포트에 흐른다 (USED-02)")
+	void usedListingFoldCountFlowsIntoReport() {
+		// 포트의 계산이 아니라 **주입**을 시험한다 — 배선을 지우면 0이 되어 이 테스트가 RED가 된다.
+		// 그 확인 없이 유스케이스 단위 테스트만 두면 "GREEN인데 죽어 있다"를 한 층 위에 다시 만든다.
+		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
+				FlushHeldAlertsUseCase.FlushReport::empty, () -> 3, healthy -> { }, () -> EMPTY,
+				reported::set).tick();
+
+		assertThat(reported.get().usedListingBatchesFolded()).isEqualTo(3);
 	}
 
 	@Test
@@ -188,7 +201,7 @@ class PipelineSchedulerTest {
 		};
 
 		new PipelineScheduler(expire, issue, ingest, conditions, prices, status, followUp,
-				FlushHeldAlertsUseCase.FlushReport::empty, healthy -> { }, probe, reported::set).tick();
+				FlushHeldAlertsUseCase.FlushReport::empty, () -> 0, healthy -> { }, probe, reported::set).tick();
 
 		assertThat(calls).as("발급은 만료 뒤·ingest 앞").containsSubsequence("expire", "issue", "ingest");
 		assertThat(reported.get().reportCardsIssued()).isEqualTo(2);
@@ -212,7 +225,7 @@ class PipelineSchedulerTest {
 	private PipelineScheduler schedulerWithHealth(Supplier<IngestReport> ingest, Supplier<PipelineSnapshot> probe,
 			List<Boolean> health) {
 		return new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
-				FlushHeldAlertsUseCase.FlushReport::empty, health::add, probe, reported::set);
+				FlushHeldAlertsUseCase.FlushReport::empty, () -> 0, health::add, probe, reported::set);
 	}
 
 	@Test
