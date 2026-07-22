@@ -13,6 +13,7 @@ import dev.hogumeter.core.domain.signal.SignalView;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -63,12 +64,29 @@ public class GetSignalUseCase {
 		if (!variants.existsById(variantId)) {
 			throw new VariantNotFoundException(variantId);
 		}
-		List<DealEvent> deals = excludeKeywords.filter(variantId, dealEvents.findByVariantId(variantId)).stream()
-				.map(mapper::toDomain).toList();
+		VariantExcludeKeywords.Filtered filtered = excludeKeywords.filterCounting(variantId,
+				dealEvents.findByVariantId(variantId));
+		List<DealEvent> deals = filtered.kept().stream().map(mapper::toDomain).toList();
 		deals = demandScope.scope(variantId, deals, demandAxisValue);
 		// 신호등의 tier도 K를 탄다 — 판단 화면과 같은 K를 써야 "기준가는 있는데 신호는 회색"이 안 생긴다.
 		BenchmarkView view = benchmark.compute(deals, currentPrice.currentPriceFor(variantId),
 				PERIOD_MONTHS, params.of(variantId), clock);
-		return signal.compute(deals, view, clock.instant(), FRESHNESS_LIMIT, QUALIFY_LIMIT);
+		SignalView signalView = signal.compute(deals, view, clock.instant(), FRESHNESS_LIMIT, QUALIFY_LIMIT);
+		return withExclusionNote(signalView, filtered.excluded());
+	}
+
+	/**
+	 * 제외 키워드가 실제로 뺀 건수를 <b>딱지로 노출</b>한다 — 제외는 조용해서, 세어 보여주지 않으면
+	 * "원래 딜이 없었다"와 구별되지 않는다. 특히 <b>전역</b> 키워드(Q-28 ①)가 너무 넓으면 모든 제품의
+	 * 표본을 한꺼번에 갉아먹는데 이 딱지가 없으면 아무도 모른다. <b>0이면 딱지를 달지 않는다</b> —
+	 * 아무것도 안 걸렀다는 사실까지 화면을 어지럽힐 이유는 없다(로그·카운터와 달리 여긴 사람의 눈이다).
+	 */
+	private static SignalView withExclusionNote(SignalView view, int excluded) {
+		if (excluded <= 0) {
+			return view;
+		}
+		List<String> notes = new ArrayList<>(view.notes());
+		notes.add("제외 키워드로 " + excluded + "건 제외");
+		return new SignalView(view.color(), view.goodDealLineEstablished(), notes);
 	}
 }

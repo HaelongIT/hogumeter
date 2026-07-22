@@ -49,11 +49,28 @@ public class VariantExcludeKeywords {
 	 * 제외 키워드에 걸리는 딜을 뺀 목록을 돌려준다. 키워드가 없으면(대부분) 원본을 그대로 — 제목 조회조차 하지 않는다.
 	 */
 	public List<DealEventEntity> filter(long variantId, List<DealEventEntity> deals) {
+		return filterCounting(variantId, deals).kept();
+	}
+
+	/**
+	 * {@link #filter}와 같되 <b>몇 건을 뺐는지</b>도 돌려준다.
+	 *
+	 * <p><b>왜 세는가</b>: 제외는 조용하다 — 걸러진 딜은 화면에서 흔적 없이 사라진다. 특히 <b>전역</b>
+	 * 키워드(Q-28 ①)는 너무 넓게 잡으면 <b>모든 제품</b>의 표본을 한꺼번에 갉아먹는데, 세지 않으면
+	 * "원래 딜이 없었다"와 구별되지 않는다("접기만 하고 세지 않으면 결함이 사라진 것처럼 보인다").
+	 * 신호등 딱지로 노출해 사람이 "내 키워드가 과한가"를 볼 수 있게 한다.
+	 */
+	public Filtered filterCounting(long variantId, List<DealEventEntity> deals) {
 		Set<String> keywords = keywordsFor(variantId);
 		if (keywords.isEmpty() || deals.isEmpty()) {
-			return deals;
+			return new Filtered(deals, 0);
 		}
-		return deals.stream().filter(deal -> !hitsAnyKeyword(deal, keywords)).toList();
+		List<DealEventEntity> kept = deals.stream().filter(deal -> !hitsAnyKeyword(deal, keywords)).toList();
+		return new Filtered(kept, deals.size() - kept.size());
+	}
+
+	/** @param excluded 제외 키워드에 걸려 빠진 딜 수. 0도 뜻이 있다(키워드가 아무것도 안 걸렀다). */
+	public record Filtered(List<DealEventEntity> kept, int excluded) {
 	}
 
 	/**
