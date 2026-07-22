@@ -51,8 +51,8 @@ class TelegramInboundPollerTest {
 		}
 
 		@Override
-		public void answerCallbackQuery(String callbackQueryId, String text) {
-			answered.add(callbackQueryId + "|" + text);
+		public void answerCallbackQuery(String callbackQueryId, String text, boolean showAlert) {
+			answered.add(callbackQueryId + "|" + text + "|alert=" + showAlert);
 		}
 	}
 
@@ -80,7 +80,8 @@ class TelegramInboundPollerTest {
 
 		assertThat(resolve.calls).containsExactly("promote:42:TELEGRAM");
 		assertThat(api.answered).hasSize(1);
-		assertThat(api.answered.get(0)).startsWith("q1|");
+		// 결과를 모달(show_alert=true)로 답한다 — 일시 토스트는 놓치기 쉽다(Q-73 ①)
+		assertThat(api.answered.get(0)).startsWith("q1|").endsWith("|alert=true");
 
 		// 다음 폴은 처리한 것 다음(101)부터 — 재수신 방지
 		api.next = List.of();

@@ -15,8 +15,13 @@ public interface TelegramInboundApi {
 	 */
 	List<CallbackUpdate> getUpdates(long offset);
 
-	/** 버튼 누른 사람에게 짧은 확인(토스트)을 답한다 — 텔레그램의 로딩 스피너를 끈다. */
-	void answerCallbackQuery(String callbackQueryId, String text);
+	/**
+	 * 버튼 누른 사람에게 처리 결과를 답한다 — 텔레그램의 로딩 스피너를 끈다.
+	 *
+	 * @param showAlert true면 <b>모달</b>(눌러서 닫는 알림)로, false면 화면 상단 일시 토스트로 보여준다.
+	 *     결과를 놓치지 않게 인바운드 폴러는 모달을 쓴다 — 일시 토스트는 잠깐 떴다 사라져 놓치기 쉽다(docs/91 Q-73).
+	 */
+	void answerCallbackQuery(String callbackQueryId, String text, boolean showAlert);
 
 	/**
 	 * @param updateId 확인(offset) 계산용 — 처리하면 {@code updateId+1}부터 다시 폴한다.

@@ -100,8 +100,12 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 	}
 
 	@Override
-	public void answerCallbackQuery(String callbackQueryId, String text) {
-		post(baseUrl + "/answerCallbackQuery", "callback_query_id=" + enc(callbackQueryId) + "&text=" + enc(text));
+	public void answerCallbackQuery(String callbackQueryId, String text, boolean showAlert) {
+		String body = "callback_query_id=" + enc(callbackQueryId) + "&text=" + enc(text);
+		if (showAlert) {
+			body += "&show_alert=true"; // 일시 토스트 대신 모달 — 눌러 닫아야 하니 놓치기 어렵다(Q-73)
+		}
+		post(baseUrl + "/answerCallbackQuery", body);
 	}
 
 	/**
