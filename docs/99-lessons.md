@@ -890,3 +890,9 @@
 - **또 하나(테스트가 개발자 환경을 물려받으면 안 된다)**: 스모크가 `.env`를 그대로 상속해, 텔레그램이 켜진 개발자 머신에서는 ① `delivering:false` 단언이 깨지고 ② **합성 딜이 실제 텔레그램으로 발송돼 사람 폰이 울렸다.** 스모크는 이미 `COLLECTOR_ALLOW_NETWORK=0`을 못박고 있었는데 `TELEGRAM_ENABLED`는 빠져 있었다 — **외부로 나가는 스위치는 하나도 빠짐없이 못박는다.**
 - **또 하나(단언의 드리프트)**: 스텁이 formatter 기반으로 바뀐 날(2026-07-21) `intensity=TARGET` 마커는 복구했는데 **같은 로그를 보는 다른 단언(`price=950000`)은 놓쳤다.** 한 출력에 여러 단언이 걸려 있으면 형식을 바꿀 때 **전수로 찾는다**(`grep`으로 그 로그를 보는 곳 전부).
 - **관련**: `docker-compose.yml`(`:-false`) · `scripts/preflight.sh`(값 검증) + `preflight.test.sh`(11케이스) · `scripts/smoke.sh`(`TELEGRAM_ENABLED=false` 고정 · 가격 단언 · UTF-8 페이로드는 파일로) · `backup-drill`·`smoke` 로컬 재현 PASS.
+
+## 2026-07-22 — 빠른 루프(`-m "not integration"`)로 검증하고 커밋해 CI를 깼다
+- **맥락**: 폴링 대상을 뽐뿌 1사로 좁히며 3사를 전제하던 테스트들을 고쳤다. `uv run pytest -q -m "not integration"`으로 **286 통과**를 보고 커밋했는데, 그 플래그가 **통합 18건을 건너뛰었고** 그중 4건이 같은 3사 전제였다(`test_end_to_end_ingest`: 골든 3사가 실 DB 스키마를 통과하는가·`SOLD_OUT`과 `배송비미상`이 DB까지 가는가·사이트별 카운터가 `cycle` 이벤트에 실리는가). CI에서 터졌다.
+- **교훈(규칙화)**: **빠른 루프는 반복용이고, 커밋 게이트는 전체다.** CLAUDE.md도 `uv run pytest`를 기본으로 적어 두고 `-m "not integration"`은 "빠른 루프"라고 단서를 달았는데, 내가 그 단서를 기본으로 바꿔 썼다. **선택적으로 건너뛰는 플래그를 쓴 뒤에는 "무엇을 건너뛰었는가"를 세어 본다** — pytest는 친절하게 `18 deselected`라고 말해 주고 있었고 나는 그 숫자를 읽지 않았다. GREEN 숫자만 보고 커밋하면 **건너뛴 것이 곧 안 보는 것**이 된다.
+- **또 하나(사본이 셋이 되기 전에 모은다)**: 같은 "3사 스펙"을 `test_pipeline_smoke`·`test_main`에 각각 만들어 두 사본이 됐고, 세 번째가 필요해지자 드리프트가 확정적이었다. `tests/boards.py` 하나로 모았다 — **두 번째 사본을 만들 때가 모을 때다.**
+- **관련**: `collector/tests/boards.py`(공용 3사 스펙 + golden 경로) · `test_end_to_end_ingest`·`test_main`·`test_pipeline_smoke`(레지스트리 분리) · `main(boards=…)` 주입 seam · 전체 304 통과.

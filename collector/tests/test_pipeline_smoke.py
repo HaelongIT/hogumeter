@@ -14,11 +14,7 @@ from collector.pipeline.ingest import to_raw_records
 from collector.scheduler.fetcher import HttpFetcher, RobotsGate
 from collector.scheduler.loop import run_cycle
 from collector.scheduler.policy import BackoffPolicy
-from collector.parsers.fmkorea import parse_fmkorea
-from collector.parsers.ppomppu import parse_ppomppu
-from collector.parsers.ruliweb import parse_ruliweb
-from collector.scheduler.loop import SiteSpec
-from collector.scheduler.policy import SiteKind
+from boards import all_board_specs
 
 FIXTURES = Path(__file__).parent / "fixtures"
 # 2026-07-09 23:00 KST. fixture의 최신 글(21:10 KST)보다 뒤여야 postedAt이 과거로 해석된다.
@@ -28,27 +24,6 @@ BACKOFF = BackoffPolicy(base=timedelta(seconds=60), factor=2, cap=timedelta(minu
 # 파서 골든이 단언한 건수. 종단에서도 같은 수가 나와야 한다.
 EXPECTED = {"ppomppu": 21, "ruliweb": 28, "fmkorea": 20}
 TOTAL = sum(EXPECTED.values())
-
-def _all_board_specs() -> list[SiteSpec]:
-    """세 게시판 스펙 — **프로덕션 레지스트리에 기대지 않는다.**
-
-    지금 실제로 폴링하는 곳은 robots 실측에 따라 달라진다(2026-07-22 현재 뽐뿌 1사). 그래도
-    루리웹·펨코 **파서는 살아 있어야** 하고 되살릴 때 바로 써야 한다 — 이 종단 계약이 그걸 지킨다.
-    루프의 멀티사이트 의미(한 사이트 실패가 다른 사이트를 안 죽인다 등)도 여기서만 검증할 수 있다.
-    """
-    board = SiteKind.BOARD
-    every = timedelta(seconds=60)
-    return [
-        SiteSpec(name="ppomppu", kind=board, interval=every,
-                 url="https://www.ppomppu.co.kr/zboard/zboard.php?id=ppomppu",
-                 encoding="cp949", parse=parse_ppomppu),
-        SiteSpec(name="ruliweb", kind=board, interval=every,
-                 url="https://bbs.ruliweb.com/market/board/1020?view=thumbnail&page=1",
-                 encoding="utf-8", parse=parse_ruliweb),
-        SiteSpec(name="fmkorea", kind=board, interval=every,
-                 url="https://www.fmkorea.com/hotdeal", encoding="utf-8", parse=parse_fmkorea),
-    ]
-
 
 _FIXTURE_OF = {
     "ppomppu": "ppomppu/list_normal.html",
@@ -65,7 +40,7 @@ class FakeOpener:
         self._overrides = overrides or {}
         self._by_url = {
             spec.url: FIXTURES.joinpath(_FIXTURE_OF[spec.name]).read_bytes()
-            for spec in _all_board_specs()
+            for spec in all_board_specs()
         }
 
     def __call__(self, url: str):
@@ -79,7 +54,7 @@ class FakeOpener:
 
 def _run(opener: FakeOpener, states=None, now=NOW):
     fetcher = HttpFetcher(opener=opener, robots=RobotsGate(opener=opener))
-    return run_cycle(_all_board_specs(), states or {}, now, fetcher, BACKOFF)
+    return run_cycle(all_board_specs(), states or {}, now, fetcher, BACKOFF)
 
 
 def test_end_to_end_produces_raw_deal_records():
@@ -148,7 +123,7 @@ def test_repeated_cycle_yields_identical_records():
 
 def test_one_site_failing_does_not_stop_the_others():
     """REL-02 격리 — 펨코가 500을 줘도 뽐뿌·루리웹은 정상 수집된다."""
-    fmkorea = next(s for s in _all_board_specs() if s.name == "fmkorea")
+    fmkorea = next(s for s in all_board_specs() if s.name == "fmkorea")
     opener = FakeOpener(overrides={fmkorea.url: (500, b"")})
 
     result = _run(opener)
@@ -161,7 +136,7 @@ def test_one_site_failing_does_not_stop_the_others():
 
 def test_robots_disallow_stops_only_that_site():
     """뽐뿌만 금지 → 뽐뿌만 중지 + Alert 1건. 나머지는 계속 돈다."""
-    ppomppu = next(s for s in _all_board_specs() if s.name == "ppomppu")
+    ppomppu = next(s for s in all_board_specs() if s.name == "ppomppu")
     robots_url = "https://www.ppomppu.co.kr/robots.txt"
     opener = FakeOpener(overrides={robots_url: (200, b"User-agent: *\nDisallow: /zboard\n")})
 

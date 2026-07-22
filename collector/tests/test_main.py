@@ -10,6 +10,7 @@ from collector.__main__ import ALLOW_NETWORK_ENV, SINK_FAILURE_LIMIT, _interval_
 from collector.scheduler.fetcher import RobotsGate
 from collector.scheduler.loop import SiteSpec
 from collector.scheduler.policy import SiteKind
+from boards import all_board_specs
 from collector.scheduler.sites import hotdeal_boards
 
 
@@ -522,31 +523,6 @@ class _PricelessFmkoreaOpener:
         return (200, row.encode("utf-8"))
 
 
-def _three_boards():
-    """게시판 세 곳 스펙 — **프로덕션 레지스트리와 무관하게** 루프의 멀티사이트 계약을 시험한다.
-
-    실제 폴링 대상은 robots 실측에 따라 바뀐다(2026-07-22: 뽐뿌 1사). 그래도 "영향받은 사이트만
-    알림을 낸다"·"한 사이트 실패가 다른 사이트를 안 죽인다" 같은 계약은 사이트 수와 무관하게
-    성립해야 한다 — 그래서 여기서 직접 만든다.
-    """
-    from collector.parsers.fmkorea import parse_fmkorea
-    from collector.parsers.ppomppu import parse_ppomppu
-    from collector.parsers.ruliweb import parse_ruliweb
-    from collector.scheduler.loop import SiteSpec
-    from collector.scheduler.policy import SiteKind
-
-    every = timedelta(seconds=60)
-    return [
-        SiteSpec(name="ppomppu", kind=SiteKind.BOARD, interval=every,
-                 url="https://www.ppomppu.co.kr/zboard/zboard.php?id=ppomppu",
-                 encoding="cp949", parse=parse_ppomppu),
-        SiteSpec(name="ruliweb", kind=SiteKind.BOARD, interval=every,
-                 url="https://bbs.ruliweb.com/market/board/1020?view=thumbnail&page=1",
-                 encoding="utf-8", parse=parse_ruliweb),
-        SiteSpec(name="fmkorea", kind=SiteKind.BOARD, interval=every,
-                 url="https://www.fmkorea.com/hotdeal", encoding="utf-8", parse=parse_fmkorea),
-    ]
-
 
 def test_priceless_deals_raise_a_drift_alert_only_for_the_affected_site(monkeypatch, capsys):
     """REL-06: 제목 셀렉터만 끊기면 딜 수는 그대로인데 가격이 전부 사라진다.
@@ -561,7 +537,7 @@ def test_priceless_deals_raise_a_drift_alert_only_for_the_affected_site(monkeypa
     # 폴링 대상은 robots에 따라 바뀐다(현재 뽐뿌 1사) — 이 테스트가 보는 건 "영향받은 사이트만
     # 알림"이라는 루프의 계약이므로 세 사이트를 직접 주입한다(레지스트리와 무관하게 성립해야 한다).
     main(opener=_PricelessFmkoreaOpener(), sleep=lambda _: None, clock=lambda: next(ticks),
-         max_cycles=3, boards=_three_boards())
+         max_cycles=3, boards=all_board_specs())
 
     out = capsys.readouterr().out
     drift = [e for e in _events(out) if e["event"] == "alert" and e["kind"] == "drift"]

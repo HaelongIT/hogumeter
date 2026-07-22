@@ -19,7 +19,7 @@ import pytest
 
 from collector.__main__ import ALLOW_NETWORK_ENV, main
 from collector.db.raw_deal_sink import RawDealSink
-from collector.scheduler.sites import hotdeal_boards
+from boards import all_board_specs
 
 FIXTURES = Path(__file__).parent / "fixtures"
 NOW = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)
@@ -41,7 +41,7 @@ class GoldenOpener:
 
     def __init__(self):
         self._pages = {
-            spec.url: (FIXTURES / _GOLDEN[spec.name]).read_bytes() for spec in hotdeal_boards()
+            spec.url: (FIXTURES / _GOLDEN[spec.name]).read_bytes() for spec in all_board_specs()
         }
 
     def __call__(self, url: str):
@@ -61,7 +61,7 @@ def test_every_golden_deal_survives_the_real_schema(monkeypatch, connection, gol
     monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
     sink = RawDealSink(connection)
 
-    exit_code = main(opener=golden_opener, sink=sink, sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
+    exit_code = main(opener=golden_opener, boards=all_board_specs(), sink=sink, sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
 
     assert exit_code == 0
     cycle = next(e for e in _events(capsys.readouterr().out) if e["event"] == "cycle")
@@ -97,7 +97,7 @@ def test_reingesting_the_same_golden_cycle_changes_nothing(monkeypatch, connecti
 def test_korean_titles_and_derived_json_round_trip(monkeypatch, connection, golden_opener):
     """cp949로 디코딩한 뽐뿌 제목이 DB를 왕복해도 온전하고, 조건 태그가 jsonb에 남는다."""
     monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
-    main(opener=golden_opener, sink=RawDealSink(connection), sleep=lambda _: None,
+    main(opener=golden_opener, boards=all_board_specs(), sink=RawDealSink(connection), sleep=lambda _: None,
          clock=lambda: NOW, max_cycles=1)
 
     with connection.cursor() as cursor:
@@ -134,7 +134,7 @@ def test_sold_out_deals_reach_the_database_as_sold_out(monkeypatch, connection, 
     개수를 상수로 못박는 이유: "0이 아니다"는 마커가 하나만 걸려도 통과한다. golden의 실제 분포를 잠근다.
     """
     monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
-    main(opener=golden_opener, sink=RawDealSink(connection), sleep=lambda _: None,
+    main(opener=golden_opener, boards=all_board_specs(), sink=RawDealSink(connection), sleep=lambda _: None,
          clock=lambda: NOW, max_cycles=1)
 
     with connection.cursor() as cursor:
@@ -160,7 +160,7 @@ def test_shipping_unknown_tags_reach_the_database(monkeypatch, connection, golde
     web이 "실제 결제가는 더 높습니다"를 그린다. 여기서 끊기면 세 모듈이 조용히 0을 본다.
     """
     monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
-    main(opener=golden_opener, sink=RawDealSink(connection), sleep=lambda _: None,
+    main(opener=golden_opener, boards=all_board_specs(), sink=RawDealSink(connection), sleep=lambda _: None,
          clock=lambda: NOW, max_cycles=1)
 
     with connection.cursor() as cursor:
@@ -182,7 +182,7 @@ def test_the_cycle_event_reports_the_real_bias_per_site(monkeypatch, connection,
     카운터가 순수 함수로 GREEN이어도, 엔트리포인트가 그것을 이벤트에 싣지 않으면 아무도 못 본다.
     """
     monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
-    main(opener=golden_opener, sink=RawDealSink(connection), sleep=lambda _: None,
+    main(opener=golden_opener, boards=all_board_specs(), sink=RawDealSink(connection), sleep=lambda _: None,
          clock=lambda: NOW, max_cycles=1)
 
     cycle = next(e for e in _events(capsys.readouterr().out) if e["event"] == "cycle")
