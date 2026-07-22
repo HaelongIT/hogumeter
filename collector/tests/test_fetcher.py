@@ -163,10 +163,16 @@ def test_user_agent_is_not_disguised():
 # ── 레지스트리 ──────────────────────────────────────────────────────────
 
 
-def test_registry_is_the_three_hotdeal_boards():
+def test_registry_holds_only_boards_whose_robots_allow_us():
+    """폴링 대상은 **robots가 허용한 곳만**이다(2026-07-22 실측: 루리웹·펨코는 Disallow).
+
+    레지스트리에서 뺐다고 게이트가 사라지는 게 아니다 — `HttpFetcher`가 요청 전에 막는 2차
+    방어선은 그대로다. 뺀 이유는 따로다: 금지된 걸 스케줄에 두면 켤 때마다 SEC-08이
+    "차단 감지 -> 자동 중지 + 관리 알림"을 낸다(이미 아는 사실로 알림을 울릴 이유가 없다).
+    """
     specs = hotdeal_boards()
 
-    assert [s.name for s in specs] == ["ppomppu", "ruliweb", "fmkorea"]
+    assert [s.name for s in specs] == ["ppomppu"]
     assert all(s.kind is SiteKind.BOARD for s in specs)
     assert all(s.url.startswith("https://") for s in specs)
     assert all(s.interval == timedelta(seconds=60) for s in specs)  # PERF-05

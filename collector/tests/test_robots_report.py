@@ -10,6 +10,7 @@ import pytest
 
 from collector.scheduler.loop import SiteSpec
 from collector.scheduler.policy import SiteKind
+from collector.scheduler.sites import hotdeal_boards
 from collector.tools.robots_report import RobotsFinding, format_field_notes, report
 
 NOW = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
@@ -157,8 +158,9 @@ def test_entrypoint_with_optin_reports_every_board(monkeypatch, capsys):
     assert main(opener=opener, clock=lambda: NOW) == 0
 
     out = capsys.readouterr().out
-    for site in ("ppomppu", "ruliweb", "fmkorea"):
-        assert f"- {site}: ALLOW" in out
+    # 레지스트리가 정본이다 — 폴링 대상은 robots 실측에 따라 바뀐다(2026-07-22: 뽐뿌 1사).
+    for spec in hotdeal_boards():
+        assert f"- {spec.name}: ALLOW" in out
     assert all(url.endswith("/robots.txt") for url in opener.calls)
 
 

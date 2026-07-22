@@ -71,6 +71,7 @@ def main(
     clock=lambda: datetime.now(timezone.utc),
     should_stop=_never,
     max_cycles: int | None = None,
+    boards=None,
 ) -> int:
     now = clock()
     if os.environ.get(ALLOW_NETWORK_ENV) != "1":
@@ -83,7 +84,9 @@ def main(
     fetch = _build_fetcher(opener or urllib_opener, robots)
     interval_for = _interval_port(robots)
     sink = sink or _build_sink()
-    specs = hotdeal_boards()
+    # 기본은 레지스트리(robots가 허용한 곳만). 테스트는 여기에 자기 스펙을 주입해 **루프의
+    # 멀티사이트 의미**(영향받은 사이트만 알림 등)를 폴링 대상과 무관하게 검증한다.
+    specs = hotdeal_boards() if boards is None else list(boards)
     states: dict = {}
     drift = DriftHistory()
     cycles = 0
