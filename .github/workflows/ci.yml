@@ -99,6 +99,13 @@ jobs:
       - name: preflight 설정 점검 계약 테스트
         run: bash scripts/preflight.test.sh
 
+      # 2026-07-22 실사고: compose가 `TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-}`로 **빈 문자열**을 넘겨
+      # @ConditionalOnProperty의 두 갈래(스텁/실발송)가 둘 다 탈락 → AlertSender 빈이 사라져 core 기동
+      # 실패 → smoke·backup-drill이 통째로 죽었다. `.env`가 없는 CI에서만 터져 로컬에선 안 보였다.
+      # 더 나쁜 변종(`core.pipeline.enabled`)은 대안 빈이 없어 **조용히** 파이프라인이 안 뜬다.
+      - name: 조건부 빈 설정 게이트 계약 테스트
+        run: bash scripts/check-conditional-props.test.sh
+
       # REL-04: cron은 조용히 실패한다. `pre-deploy`는 cron 등록을 [필수]로 적어 뒀지만
       # **도는지 확인하는 법이 없었다** — 백업이 3일째 없어도 복구가 필요한 날에야 드러난다.
       - name: 백업 신선도 게이트 계약 테스트
