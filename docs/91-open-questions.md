@@ -197,8 +197,13 @@ _(이하 2026-07-08 2차 기획 통합에서 등장한 위임 항목. 출처: `w
   - **정규화 정본 하나**: `ExcludeKeywordPolicy.normalize`로 추출 — per-product(`AlertPolicySettings`)와 전역이 같은 규칙을 써야 합칠 때 공백·중복으로 안 어긋난다(사본 금지).
   - **정직한 기본값**: 미설정→빈 목록(부재를 "전부 제외"로 안 읽음), 저장값 깨짐→빈 목록(전 표면이 이 조회를 타므로 통째로 안 죽인다).
   - 관통 테스트: 전역 키워드만으로(정책 없이) 기준가 표본에서 빠지는지 — 끊기면 "저장은 되는데 효과 없는 죽은 손잡이". + 왕복·정규화·부재·깨진값 4케이스, web 5케이스, 스모크 5-2c(왕복+정규화 종단). 게이트: 두 allowlist에서 global_setting 면제 삭제(낡은 면제를 게이트가 차단했다).
-- **남은 것(여전히 열림)**: ② **⚠️LABEL 가시성** — C-5는 LABEL도 통계 제외하되 ⚠️로 노출하라지만, `alert_policy`에 per-keyword mode 컬럼이 없어 현재 전 키워드를 EXCLUDE로 다룬다(숨김). LABEL 노출은 mode 저장 + 표시 UI가 선행.
-- **재개 트리거**: ② per-keyword mode 컬럼과 ⚠️ 표시가 필요할 때 LABEL 분기.
+- **남은 것(여전히 열림)**: ② **⚠️LABEL 가시성** — C-5는 LABEL도 통계 제외하되 ⚠️로 노출하라지만, 현재 전 키워드를 EXCLUDE로 다룬다(숨김).
+- **② 설계 실측(2026-07-22, 착수 전 조사)** — **저장보다 표본 흐름이 진짜 비용이다**:
+  - **저장은 싸다**: per-keyword mode를 문자열에 인코딩(`"label:리퍼"`)하면 한 필드가 값과 분류를 겸해 굳는다(금지). 대신 **평행 목록**(`alert_policy.label_keywords text[]` + global_setting의 `label_keywords` 키)이 보수적·가역적(V/R 한 쌍).
+  - **🔴 비싼 쪽**: LABEL은 "**통계에서만** 빼고 **화면엔 남긴다**"이다. 그런데 지금 구조는 `VariantExcludeKeywords.filter`가 **기준가 계산 전에** 딜을 통째로 제거한다 — 제거된 딜은 `BenchmarkView.cases`(사례 목록)에도 없다. LABEL 딜을 ⚠️로 보여주려면 표본이 **두 갈래**여야 한다: 통계용(clean만) / 표시용(clean + labeled). 즉 `BenchmarkCalculator.compute`가 두 목록을 받아야 하고, 그 호출부(GetBenchmark·GetSignal·RecordPurchase·IssueReportCards + 테스트 다수)가 함께 바뀐다.
+  - **싸게 흉내 내면 가치가 없다**: 딱지로 "LABEL로 N건 뺐다"만 내는 건 이미 있는 제외 건수 딱지와 사실상 같다(딜을 **볼 수** 없으면 ⚠️의 뜻이 없다). 미상 큐로 돌리는 것도 안 맞는다 — 제외 판정은 **조회 시점**인데 큐 항목은 ingest 시점 생성이라 설계가 어긋난다.
+  - **결론**: ②는 "컬럼 하나 추가"가 아니라 **표본 흐름을 두 갈래로 여는 변경**이다. 되돌리기 어렵진 않으나(계산기 시그니처는 seam) 리플이 넓어 **의도적으로 착수할 것**.
+- **재개 트리거**: 실 데이터에서 "제외 키워드가 뭘 먹었는지 눈으로 봐야겠다"가 실제로 필요해질 때(제외 건수 딱지가 그 신호를 준다 — 딱지가 자주 크게 뜨면 그때가 그때다). 착수하면 위 두 갈래 설계로.
 
 ## [열림] Q-29. 세 집합 predicate의 미완 components (keyword-miss·선택축값·배치유보·신선도)
 - **맥락**: docs/03 3-1 세 집합 자격 술어 중 DealEvent 필드로 도출 가능한 부분(classified·outlier 3상태·status)만 `DealSets`에 구현. 나머지 components는 상태/데이터 부재로 미포함.
