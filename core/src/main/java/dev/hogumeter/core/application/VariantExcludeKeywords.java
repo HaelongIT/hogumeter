@@ -9,6 +9,7 @@ import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.domain.deal.ExcludeKeywordPolicy;
 import dev.hogumeter.core.domain.deal.ExcludeKeywordPolicy.Mode;
 import dev.hogumeter.core.domain.deal.ExcludeKeywordPolicy.Verdict;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Service;
@@ -31,13 +32,15 @@ import org.springframework.stereotype.Service;
 public class VariantExcludeKeywords {
 
 	private final AlertPolicyRepository policies;
+	private final GlobalExcludeKeywords globalKeywords;
 	private final DealEventSourceRepository sources;
 	private final RawDealPostRepository rawPosts;
 	private final ExcludeKeywordPolicy policy = new ExcludeKeywordPolicy();
 
-	public VariantExcludeKeywords(AlertPolicyRepository policies, DealEventSourceRepository sources,
-			RawDealPostRepository rawPosts) {
+	public VariantExcludeKeywords(AlertPolicyRepository policies, GlobalExcludeKeywords globalKeywords,
+			DealEventSourceRepository sources, RawDealPostRepository rawPosts) {
 		this.policies = policies;
+		this.globalKeywords = globalKeywords;
 		this.sources = sources;
 		this.rawPosts = rawPosts;
 	}
@@ -53,10 +56,15 @@ public class VariantExcludeKeywords {
 		return deals.stream().filter(deal -> !hitsAnyKeyword(deal, keywords)).toList();
 	}
 
+	/**
+	 * 이 variant에 적용할 제외 키워드 = <b>전역(Q-28 ①) ∪ 제품별</b>. 전역은 어느 제품에나 같은 뜻인 노이즈
+	 * (리퍼·중고 등)를 한 번만 적게 해 준다 — 제품마다 옮겨 적다 한 곳을 빠뜨리면 그 제품만 조용히 오염된다.
+	 * 합집합이라 <b>둘 중 하나만 걸려도 제외</b>된다(신품 기준가를 지키는 쪽으로 보수적).
+	 */
 	private Set<String> keywordsFor(long variantId) {
-		return policies.findByVariantId(variantId)
-				.map(p -> Set.copyOf(p.getExcludeKeywords()))
-				.orElseGet(Set::of);
+		Set<String> merged = new LinkedHashSet<>(globalKeywords.keywords());
+		policies.findByVariantId(variantId).ifPresent(p -> merged.addAll(p.getExcludeKeywords()));
+		return merged;
 	}
 
 	/** 이 딜의 <b>어느 원문 제목</b>이라도 제외 키워드에 걸리면 제외한다 — 신품 기준가를 지키는 쪽으로 보수적으로. */

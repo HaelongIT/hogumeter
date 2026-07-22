@@ -71,6 +71,8 @@ class GetBenchmarkUseCaseTest {
 	@Autowired
 	VariantExcludeKeywords excludeKeywords;
 	@Autowired
+	GlobalExcludeKeywords globalKeywords;
+	@Autowired
 	JdbcTemplate jdbc;
 	@Autowired
 	EntityManager em;
@@ -218,6 +220,27 @@ class GetBenchmarkUseCaseTest {
 
 		assertThat(view.n()).as("제외 목록에 안 걸리면 6건 그대로").isEqualTo(6);
 		assertThat(view.periodLowest().price()).isEqualTo(780_000L);
+	}
+
+	/**
+	 * Q-28 ①: <b>전역</b> 제외 키워드는 per-product 정책이 <b>없어도</b> 표본에서 뺀다 —
+	 * {@code global_setting} → {@code GlobalExcludeKeywords} → {@code VariantExcludeKeywords} → 기준가까지 관통.
+	 * 이 배선이 끊기면 전역 목록이 저장은 되는데 아무 효과가 없는 <b>죽은 손잡이</b>가 된다(저장되는 줄 알고 있는데).
+	 */
+	@Test
+	void globalExcludeKeywordDropsDealEvenWithoutPerProductPolicy() {
+		insertCrossVerifiedDeal(820_000, "2026-06-10");
+		insertCrossVerifiedDeal(850_000, "2026-06-12");
+		insertCrossVerifiedDeal(890_000, "2026-06-14");
+		insertCrossVerifiedDeal(920_000, "2026-06-16");
+		insertCrossVerifiedDeal(950_000, "2026-06-18");
+		insertTitledDeal(780_000, "2026-06-20", "리퍼 아이폰 17 256GB");
+		globalKeywords.replace(List.of("리퍼")); // 전역에만 설정 — 이 variant엔 alert_policy가 아예 없다
+
+		BenchmarkView view = useCase.getBenchmark(variantId, 6, false);
+
+		assertThat(view.n()).as("전역 키워드만으로도 리퍼 딜이 빠진다").isEqualTo(5);
+		assertThat(view.periodLowest().price()).as("리퍼 780k가 최저가로 오르지 않는다").isEqualTo(820_000L);
 	}
 
 	/**

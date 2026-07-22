@@ -1,6 +1,7 @@
 package dev.hogumeter.core.domain.alert;
 
 import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
+import dev.hogumeter.core.domain.deal.ExcludeKeywordPolicy;
 import java.util.List;
 
 /**
@@ -28,8 +29,9 @@ public record AlertPolicySettings(Long targetPrice, int periodMonths, Integer qu
 	public static final int DEFAULT_K_DISPLAY = 5;
 
 	public AlertPolicySettings {
-		excludeKeywords = excludeKeywords == null ? List.of()
-				: excludeKeywords.stream().map(String::trim).filter(k -> !k.isEmpty()).distinct().toList();
+		// 정규화 정본은 ExcludeKeywordPolicy.normalize 하나다 — 전역 설정(Q-28 ①)과 같은 규칙을 써야
+		// 두 출처를 합칠 때 공백·중복으로 어긋나지 않는다(사본을 두면 한쪽이 조용히 다른 목록을 만든다).
+		excludeKeywords = ExcludeKeywordPolicy.normalize(excludeKeywords);
 		if (periodMonths <= 0) {
 			throw new InvalidBenchmarkPeriodException(periodMonths);
 		}

@@ -1,5 +1,6 @@
 package dev.hogumeter.core.domain.deal;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -19,6 +20,17 @@ public class ExcludeKeywordPolicy {
 		EXCLUDED,
 		LABELED,
 		CLEAN
+	}
+
+	/**
+	 * 제외 키워드 목록 정규화의 <b>정본</b> — 공백 다듬기·빈 값 탈락·중복 접기.
+	 *
+	 * <p>per-product 정책({@code AlertPolicySettings})과 <b>전역 설정</b>(Q-28 ①)이 반드시 같은 규칙을 써야 한다 —
+	 * 두 곳이 각자 정규화하면 한쪽이 조용히 다른 목록을 만들고, 합쳐질 때 중복·공백 차이로 어긋난다.
+	 */
+	public static List<String> normalize(List<String> keywords) {
+		return keywords == null ? List.of()
+				: keywords.stream().map(String::trim).filter(k -> !k.isEmpty()).distinct().toList();
 	}
 
 	public Verdict evaluate(String title, Set<String> excludeKeywords, Mode mode) {

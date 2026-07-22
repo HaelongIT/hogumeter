@@ -8,7 +8,6 @@
 #   - 배선된 테이블을 여기 남겨 두면 차단된다(낡은 면제는 다음 결함을 숨긴다).
 
 price_history   Q-3    네이버 쇼핑 API 키 미발급 - 현재가 수집기가 없다(StubCurrentPriceProvider가 0을 반환)
-global_setting  Q-28   전역 제외키워드는 미배선 - per-product(alert_policy.exclude_keywords)는 배선됐으나 global_setting은 생산자 화면(전역 설정 UI)이 없다
 used_listing_observation  Q-72  collector 번개 폴링 미배선(실 네트워크·검색어 소스 read = 정지조건)
 listing                   Q-72  목록 diff 유스케이스 미배선(observation 소비가 선행)
 listing_note              Q-72  메모 REST(USED-05) 미배선 - 다음 증분(막히지 않음)
