@@ -12,11 +12,17 @@ package dev.hogumeter.core.application;
  * <p>{@code heldAlerts}는 이번 틱에 방해금지(quiet hours)로 <b>새로 보류된</b> 첫 알림 수다 — 발송과 부류가
  * 다르다. 보류분은 {@code held_alert} 큐에 적혀 방해금지가 끝난 틱에 재평가·발송된다(Q-20 ②,
  * {@code FlushHeldAlertsUseCase}). 그 종료분 처리 결과는 틱 리포트의 {@code heldAlertsFlushed/Dropped}가 낸다.
+ *
+ * <p>{@code skippedForeignSource}는 <b>신품으로 해석하지 않기로 한 소스</b>의 게시물 수다
+ * ({@link dev.hogumeter.core.domain.deal.NewProductSources}). 중고 마켓(번개장터)과 모르는 소스가 여기
+ * 들어간다 — {@code rejected}(신품 게시판의 글인데 우리 카탈로그와 무관)와 <b>부류가 다르다.</b> 전자는
+ * "우리가 안 읽기로 한 곳"이고 후자는 "읽었는데 내 물건이 아님"이다. 합쳐 세면 아무것도 말하지 않는다.
+ * 이 수가 오르면 collector 레지스트리와 core 허용집합이 어긋났다는 신호이기도 하다.
  */
 public record IngestReport(int confirmed, int candidate, int unknown, int rejected,
-		int skippedNoPrice, int firstAlertsSent, int heldAlerts) {
+		int skippedNoPrice, int firstAlertsSent, int heldAlerts, int skippedForeignSource) {
 
 	public static IngestReport empty() {
-		return new IngestReport(0, 0, 0, 0, 0, 0, 0);
+		return new IngestReport(0, 0, 0, 0, 0, 0, 0, 0);
 	}
 }

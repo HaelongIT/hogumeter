@@ -15,6 +15,7 @@ import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealMergePolicy;
 import dev.hogumeter.core.domain.deal.DealStatus;
+import dev.hogumeter.core.domain.deal.NewProductSources;
 import dev.hogumeter.core.domain.deal.OutlierDetector;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.deal.Origin;
@@ -85,6 +86,10 @@ public class IngestDealsUseCase {
 
 	private void ingestOne(RawDealPost post, List<ProductMatchSpec> catalogSpecs, AliasDictionary dictionary,
 			Tally tally) {
+		if (!NewProductSources.acceptsAsNewProduct(post.getSite())) {
+			tally.skippedForeignSource++;
+			return; // 중고 마켓·모르는 소스는 신품 기준가에 넣지 않는다 — 가격 유무보다 먼저 가른다
+		}
 		if (post.getHeadlinePrice() == null) {
 			tally.skippedNoPrice++;
 			return; // BM-02 AC-3: 가격 없음 → 스킵(deal_event 미생성)
@@ -232,10 +237,11 @@ public class IngestDealsUseCase {
 		int skippedNoPrice;
 		int firstAlertsSent;
 		int heldAlerts;
+		int skippedForeignSource;
 
 		IngestReport toReport() {
 			return new IngestReport(confirmed, candidate, unknown, rejected, skippedNoPrice, firstAlertsSent,
-					heldAlerts);
+					heldAlerts, skippedForeignSource);
 		}
 	}
 }

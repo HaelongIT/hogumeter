@@ -144,6 +144,36 @@ class IngestDealsUseCaseTest {
 		assertThat(dealEvents.findByVariantId(variantId)).isEmpty();
 	}
 
+	/**
+	 * 중고 매물은 <b>신품 기준가에 절대 섞이지 않는다</b>. 번개장터 파서는 이미 있고(collector) 같은
+	 * {@code raw_deal_post}에 {@code site='bunjang'}으로 적재된다 — 켜는 순간 700,000원짜리 중고
+	 * 아이폰이 신품 딜이 되어 기준가를 끌어내린다. M2를 시작하기 <b>전에</b> 잠근다.
+	 */
+	@Test
+	void usedMarketplacePostNeverBecomesANewProductDeal() {
+		savePost("bunjang", "아이폰 17 256기가 자급제 급처", 700_000L, T);
+
+		IngestReport report = useCase.ingestPending();
+
+		assertThat(dealEvents.findByVariantId(variantId)).isEmpty();
+		assertThat(report.skippedForeignSource()).isEqualTo(1); // 조용히 버리지 않는다 — 세어서 보인다
+	}
+
+	/**
+	 * 모르는 소스는 <b>실패해도 안전한 쪽</b>으로 떨어진다(허용집합 방식). 중고 사이트 목록을 차단하는
+	 * 방식이면 새로 생긴 중고 사이트가 규칙을 통과해 조용히 기준가를 오염시킨다 — 반대로 간다.
+	 * 대신 놓친 사실을 카운터로 실어 보낸다(모르는 게시판을 추가하면 이 수가 오른다).
+	 */
+	@Test
+	void unknownSourceIsSkippedAndCountedRatherThanTrusted() {
+		savePost("junggonara", "아이폰 17 256기가 89만", 890_000L, T);
+
+		IngestReport report = useCase.ingestPending();
+
+		assertThat(dealEvents.findByVariantId(variantId)).isEmpty();
+		assertThat(report.skippedForeignSource()).isEqualTo(1);
+	}
+
 	@Test
 	void ambiguousMatchEnqueuesReviewItem() {
 		savePost("ppomppu", "애플 아이폰 신형 256기가", 800_000L, T); // "17" 없음 → CANDIDATE

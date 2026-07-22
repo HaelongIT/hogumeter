@@ -121,7 +121,7 @@ class PipelineTickReportTest {
 	@Test
 	@DisplayName("매칭 tier 분포·첫 알림 발송 수가 요약에 실린다 — 스냅샷 차이로는 못 보는 것")
 	void reportsMatchingTierCountsAndFirstAlerts() {
-		IngestReport ingest = new IngestReport(3, 1, 2, 5, 4, 2, 1);
+		IngestReport ingest = new IngestReport(3, 1, 2, 5, 4, 2, 1, 0);
 
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
 				ingest, 0, 0, 0, 0, 0, 0);
