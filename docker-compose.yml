@@ -33,7 +33,12 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?}
       # 텔레그램 실 발송(AL-05). enabled=true일 때만 실 어댑터가 뜬다(기본 미설정 = 스텁 = 실발송 없음).
       # Spring 완화 바인딩: TELEGRAM_ENABLED -> telegram.enabled, TELEGRAM_CHAT_ID -> telegram.chat-id.
-      TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-}
+      # **빈 문자열을 넘기지 않는다.** `""`는 "false"도 "true"도 아니라 @ConditionalOnProperty의
+      # 두 갈래(스텁/실발송)가 **둘 다 안 뜨고** AlertSender 빈이 사라져 기동이 통째로 실패한다
+      # (matchIfMissing은 "부재"일 때만 적용된다 — 빈 값은 "존재"다). .env가 없는 CI에서만 터져
+      # 로컬에선 안 보였다: smoke·backup-drill이 그래서 죽었다(2026-07-22). `:-`는 미설정과
+      # 빈 값 모두에 기본값을 주므로 `.env`에 `TELEGRAM_ENABLED=`만 있어도 안전하다.
+      TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       # SEC-03 인바운드: 인라인 버튼 명령을 받아들일 chat_id 화이트리스트. 비면 TELEGRAM_CHAT_ID로 폴백.

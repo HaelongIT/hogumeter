@@ -880,3 +880,13 @@
 - **또 하나(더 일반적)**: **stdlib이 그 표준을 다 구현했다고 가정하지 않는다.** `robotparser`는 1994년 초안만 구현하고 널리 쓰이는 `*`·`$` 확장을 지원하지 않는다 — 이름이 맞다고 계약이 같지 않다. 외부 표준을 stdlib에 위임할 땐 **우리가 의존하는 문법을 한 줄이라도 실제 값으로 시험**한다(이 게이트에는 그 시험이 없었다: fake opener의 robots는 전부 단순 접두사 규칙이었다 — **fixture가 쉬운 케이스만 담고 있었다**).
 - **또 하나(리허설의 한계)**: `check-robots-drill.sh`(로컬 서버 리허설)도 이걸 못 잡았다 — 드릴이 쓰는 robots.txt를 우리가 썼기 때문이다. **리허설의 입력을 우리가 만들면 우리가 아는 것만 시험한다.** 실 대조 리포트가 ALLOW를 줬을 때 그 근거(어떤 규칙에 왜 안 걸렸는지)를 한 번도 안 봤다.
 - **관련**: `collector/src/collector/scheduler/fetcher.py`(`_compile_pattern`·`_rules_for`·`_path_allows`) · `tests/test_fetcher.py`(회귀 8) · `docs/98` 2026-07-22 robots 대조 · `scripts/check-robots.sh`(같은 게이트를 쓰므로 함께 고쳐짐).
+
+## 2026-07-22 — 빈 문자열이 조건부 빈 두 갈래를 **동시에** 탈락시켜 앱이 즉사했다 (CI smoke·backup 붕괴)
+- **증상**: CI의 `smoke`·`backup-drill`이 둘 다 `core가 120초 안에 준비되지 않았다`로 죽었다. core 로그: `Parameter 0 of method alertDispatcher required a bean of type 'AlertSender' that could not be found.` **로컬에선 재현되지 않았다.**
+- **원인**: `docker-compose.yml`이 `TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-}`로 **빈 문자열**을 넘겼다. 두 구현이 `@ConditionalOnProperty(name="telegram.enabled", …)`로 갈리는데 — 스텁은 `havingValue="false", matchIfMissing=true`, 실발송은 `havingValue="true"` — **`""`는 "false"도 "true"도 아니다.** `matchIfMissing`은 속성이 **부재**할 때만 적용되고 빈 값은 **존재**다. 그래서 **양쪽 다 안 뜨고** 빈이 사라져 컨텍스트가 통째로 실패했다(AlertSender·AdminNotifier·ReviewNotifier 세 쌍 전부 같은 구멍).
+- **왜 로컬에서 안 보였나**: 개발자 `.env`엔 값이 있다. **`.env`가 없는 CI에서만** 빈 문자열이 만들어진다. 그리고 그 전까지 로컬 스택은 텔레그램 어댑터가 없던 **옛 이미지**로 돌고 있어 조건부 빈 자체가 없었다 — 이 분기는 **한 번도 실행된 적이 없었다.**
+- **교훈(규칙화)**: **"값 없음을 값으로 표현하지 않는다"는 모듈 경계에서 가장 위험하다.** compose의 `${VAR:-}`는 "미설정"을 **빈 문자열**로 바꿔 하류(Spring)에 넘기는데, 하류는 그걸 "설정됨"으로 읽는다. 두 계층의 "없음" 표현이 다르면 그 틈에서 **기본값이 통째로 사라진다.** compose에서 넘기는 값은 **항상 유효한 값**이어야 한다(`${VAR:-false}`) — `:-`는 미설정과 빈 값 모두에 기본값을 준다.
+- **또 하나(조건부 빈의 사각)**: `@ConditionalOnProperty`로 두 구현을 가를 때 **"둘 다 안 뜨는 값"이 존재한다**는 걸 잊지 말 것. 셋 이상의 값(빈 값·오타)이 들어오면 앱이 즉사한다. 방어는 두 겹으로 — ① 상류가 유효값만 넘기고 ② **preflight이 값 자체를 검증**한다(`true|false|빈값`만 허용, 그 외 FAIL).
+- **또 하나(테스트가 개발자 환경을 물려받으면 안 된다)**: 스모크가 `.env`를 그대로 상속해, 텔레그램이 켜진 개발자 머신에서는 ① `delivering:false` 단언이 깨지고 ② **합성 딜이 실제 텔레그램으로 발송돼 사람 폰이 울렸다.** 스모크는 이미 `COLLECTOR_ALLOW_NETWORK=0`을 못박고 있었는데 `TELEGRAM_ENABLED`는 빠져 있었다 — **외부로 나가는 스위치는 하나도 빠짐없이 못박는다.**
+- **또 하나(단언의 드리프트)**: 스텁이 formatter 기반으로 바뀐 날(2026-07-21) `intensity=TARGET` 마커는 복구했는데 **같은 로그를 보는 다른 단언(`price=950000`)은 놓쳤다.** 한 출력에 여러 단언이 걸려 있으면 형식을 바꿀 때 **전수로 찾는다**(`grep`으로 그 로그를 보는 곳 전부).
+- **관련**: `docker-compose.yml`(`:-false`) · `scripts/preflight.sh`(값 검증) + `preflight.test.sh`(11케이스) · `scripts/smoke.sh`(`TELEGRAM_ENABLED=false` 고정 · 가격 단언 · UTF-8 페이로드는 파일로) · `backup-drill`·`smoke` 로컬 재현 PASS.

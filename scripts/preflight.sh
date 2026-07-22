@@ -36,8 +36,20 @@ else
 	say OK "DB_PASSWORD"
 fi
 
+# TELEGRAM_ENABLED는 true/false만 허용한다. 그 외 값(오타·`yes`)은 @ConditionalOnProperty의 두 갈래가
+# **둘 다 안 떠** AlertSender 빈이 사라지고 core가 통째로 기동 실패한다 — 조용한 오작동이 아니라 즉사인데,
+# 배포 후에야 드러난다. 빈 값은 허용한다(compose가 `:-false`로 기본값을 준다). 2026-07-22 CI 사고.
+telegram_enabled="$(get TELEGRAM_ENABLED)"
+case "$telegram_enabled" in
+"" | true | false) ;;
+*)
+	say FAIL "TELEGRAM_ENABLED는 true/false만 허용합니다(받은 값: '$telegram_enabled') — 다른 값이면 스텁도 실발송도 안 떠 core 기동이 실패합니다"
+	fail=1
+	;;
+esac
+
 # 텔레그램 — enabled면 토큰·chat 필수(아니면 core가 기동에서 실패하거나 알림이 갈 곳이 없다).
-if [ "$(get TELEGRAM_ENABLED)" = "true" ]; then
+if [ "$telegram_enabled" = "true" ]; then
 	if [ -z "$(get TELEGRAM_BOT_TOKEN)" ]; then
 		say FAIL "TELEGRAM_ENABLED=true인데 BOT_TOKEN 없음 — core 기동 실패"
 		fail=1

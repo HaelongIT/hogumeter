@@ -30,6 +30,11 @@ check "prod + web 인증 없음 → FAIL(SEC-02 노출)" prod 1 "DB_PASSWORD=x"
 check "prod + web 인증 있음 → OK" prod 0 "$(printf 'DB_PASSWORD=x\nWEB_BASIC_AUTH_HTPASSWD=hogu:hash')"
 check "텔레그램 켰는데 토큰 없음 → FAIL" dev 1 "$(printf 'DB_PASSWORD=x\nTELEGRAM_ENABLED=true')"
 check "텔레그램 켜고 토큰+chat → OK" dev 0 "$(printf 'DB_PASSWORD=x\nTELEGRAM_ENABLED=true\nTELEGRAM_BOT_TOKEN=t\nTELEGRAM_CHAT_ID=555')"
+# 2026-07-22 CI 사고: 빈 값이 @ConditionalOnProperty의 두 갈래를 **둘 다** 탈락시켜 AlertSender 빈이
+# 사라지고 core가 기동 실패했다. 오타(`yes`)도 같은 즉사를 부르므로 배포 전에 잡는다.
+check "TELEGRAM_ENABLED=yes(오타) → FAIL(기동 즉사 예방)" dev 1 "$(printf 'DB_PASSWORD=x\nTELEGRAM_ENABLED=yes')"
+check "TELEGRAM_ENABLED 빈 값 → OK(compose가 false로 기본값)" dev 0 "$(printf 'DB_PASSWORD=x\nTELEGRAM_ENABLED=')"
+check "TELEGRAM_ENABLED=false → OK" dev 0 "$(printf 'DB_PASSWORD=x\nTELEGRAM_ENABLED=false')"
 check "잘못된 mode → FAIL" bogus 1 "DB_PASSWORD=x"
 
 # 없는 .env 경로 → FAIL (스택을 못 띄운다). 종료코드를 $?로 보지 않고 명령을 직접 if로 검사(SC2181).

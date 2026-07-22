@@ -21,6 +21,11 @@ export CORE_PORT="${CORE_PORT:-58080}"
 export WEB_PORT="${WEB_PORT:-53000}"
 # 스모크에서 실 사이트를 긁지 않는다(정지조건). collector는 안내만 출력하고 종료한다.
 export COLLECTOR_ALLOW_NETWORK=0
+# 스모크는 **기본(스텁) 경로**를 검증한다 — 5-1d가 `delivering:false`를 단언한다. 개발자 `.env`에
+# 텔레그램이 켜져 있으면 그 단언이 깨질 뿐 아니라, 스모크가 만든 **합성 딜이 실제 텔레그램으로
+# 발송된다**(2026-07-22 실측: 로컬 스모크가 폰을 울렸다). 테스트가 사람 폰을 울리면 안 된다 —
+# `COLLECTOR_ALLOW_NETWORK=0`과 같은 이유로 못박는다. 실 발송 경로는 수동 스파이크로 검증한다.
+export TELEGRAM_ENABLED=false
 # 파이프라인 트리거를 촘촘히 — 스모크가 60초를 기다릴 수는 없다(운영 기본은 60000).
 export CORE_PIPELINE_INTERVAL_MS=2000
 
@@ -432,7 +437,10 @@ for _ in $(seq 20); do
 	sleep 2
 done
 [ "${alerted:-0}" = 1 ] || fail "목표가를 저장했는데 TARGET 알림이 발화하지 않았다 (정책이 판정에 닿지 않는다). 최근 알림: $(compose logs --no-log-prefix core 2>&1 | grep 'STUB alert' | tail -3 || true)"
-echo "$alert_log" | grep -q 'price=950000' || fail "알림이 딜 가격을 싣지 않았다: $alert_log"
+# 스텁이 formatter 기반으로 바뀌며(2026-07-21) `price=950000` 마커가 사라졌는데 이 단언만 남아 있었다.
+# 이제 **사람이 실제로 보는 형식**(`950,000원`)을 단언한다 — "알림이 가격을 싣는다"의 뜻이 그것이고,
+# 숫자 형식은 산문이 아니라 계약이다(web 테스트도 같은 형식을 단언한다).
+echo "$alert_log" | grep -q '950,000원' || fail "알림이 딜 가격을 싣지 않았다: $alert_log"
 
 echo "--- 5-1i) 수요축 분리(Q-66 ①): 값별로 기준가가 갈리고, 값 미상 딜은 빠진다 ---"
 # 확정본 §40·41. SPLIT은 V1부터 저장만 되고 아무 동작도 바꾸지 못했다 — 모든 색이 한 분포에 섞였다.
@@ -793,8 +801,14 @@ echo "--- 5-2c) 전역 제외 키워드 왕복 (Q-28 ①, global_setting) ---"
 global_before=$(curl -fsS "${WEB}/api/v1/settings/exclude-keywords") || fail "전역 제외 키워드 조회 실패"
 echo "$global_before" | grep -q '"excludeKeywords"' ||
 	fail "web GlobalExcludeKeywordsView가 기대하는 필드 'excludeKeywords'가 없다 (계약 드리프트): $global_before"
+# 페이로드를 **파일로** 보낸다(4단계와 같은 이유). Windows curl.exe는 argv의 한글을 cp949로 넘겨
+# core가 `Invalid UTF-8 start byte`로 400을 낸다 — 이 규칙을 어겨 실제로 스모크가 죽었다(2026-07-22).
+global_payload=$(mktemp)
+cat >"$global_payload" <<'JSON'
+{"excludeKeywords":[" 리퍼 ","리퍼","  "]}
+JSON
 global_saved=$(curl -fsS -X PUT "${WEB}/api/v1/settings/exclude-keywords" \
-	-H 'Content-Type: application/json' -d '{"excludeKeywords":[" 리퍼 ","리퍼","  "]}') ||
+	-H 'Content-Type: application/json' -d @"$global_payload") ||
 	fail "전역 제외 키워드 저장 실패"
 # core가 정규화(공백 다듬기·빈 값 탈락·중복 접기)해서 돌려준다 — per-product와 같은 정본 규칙.
 echo "$global_saved" | grep -q '"리퍼"' || fail "저장된 전역 키워드가 안 돌아온다: $global_saved"
