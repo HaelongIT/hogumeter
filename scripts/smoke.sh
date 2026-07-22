@@ -787,6 +787,23 @@ for field in mode activeLowestPriceLast overpaidWon overpaidPct observationDay c
 		fail "web ObservationContext가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $observations"
 done
 
+echo "--- 5-2c) 전역 제외 키워드 왕복 (Q-28 ①, global_setting) ---"
+# global_setting은 V1부터 있었으나 엔티티도 REST도 없어 죽은 테이블이었다. 생산자(PUT)·소비처(GET)가
+# 실제로 종단으로 도는지, 그리고 미설정이 빈 배열로 오는지(부재를 "전부 제외"로 안 읽는지) 본다.
+global_before=$(curl -fsS "${WEB}/api/v1/settings/exclude-keywords") || fail "전역 제외 키워드 조회 실패"
+echo "$global_before" | grep -q '"excludeKeywords"' ||
+	fail "web GlobalExcludeKeywordsView가 기대하는 필드 'excludeKeywords'가 없다 (계약 드리프트): $global_before"
+global_saved=$(curl -fsS -X PUT "${WEB}/api/v1/settings/exclude-keywords" \
+	-H 'Content-Type: application/json' -d '{"excludeKeywords":[" 리퍼 ","리퍼","  "]}') ||
+	fail "전역 제외 키워드 저장 실패"
+# core가 정규화(공백 다듬기·빈 값 탈락·중복 접기)해서 돌려준다 — per-product와 같은 정본 규칙.
+echo "$global_saved" | grep -q '"리퍼"' || fail "저장된 전역 키워드가 안 돌아온다: $global_saved"
+echo "$global_saved" | grep -qE '"excludeKeywords":\["리퍼"\]' ||
+	fail "전역 키워드가 정규화되지 않았다(중복·공백이 남음): $global_saved"
+# 원상복구 — 이후 단계의 기준가 표본을 이 키워드가 흔들지 않게.
+curl -fsS -X PUT "${WEB}/api/v1/settings/exclude-keywords" \
+	-H 'Content-Type: application/json' -d '{"excludeKeywords":[]}' >/dev/null || fail "전역 키워드 원복 실패"
+
 echo "--- 5-2b) 관찰 만료 → 성적표 발급 → CLOSED (PUR-01·04) ---"
 # `Purchase.expire()`·`isExpired()`·`ReportCardCalculator`는 순수 도메인에 있었지만 **부르는 사람이 없었다.**
 # 관찰이 영원히 끝나지 않아 "산 뒤 알림"(PUR-03)이 3년 전 구매에도 발화했을 것이고, 성적표는 발급되지 않아

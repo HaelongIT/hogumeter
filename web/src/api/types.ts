@@ -279,3 +279,11 @@ export interface UpdateAlertPolicyCommand {
   kDisplay: number
   excludeKeywords: string[]
 }
+
+/**
+ * GET/PUT /api/v1/settings/exclude-keywords — **전역** 제외 키워드(Q-28 ①).
+ * 모든 variant에 함께 적용된다(제품별 목록과 합집합). 미설정이면 빈 배열이다.
+ */
+export interface GlobalExcludeKeywordsView {
+  excludeKeywords: string[]
+}

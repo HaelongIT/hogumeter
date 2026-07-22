@@ -4,6 +4,7 @@ import type {
   ApiError,
   BenchmarkView,
   CadenceView,
+  GlobalExcludeKeywordsView,
   ProductCreated,
   ProductSummary,
   PurchaseObservation,
@@ -120,4 +121,13 @@ export const api = {
 
   /** 기각 — 사기·낚시로 영구 제외(재수집돼도 표본 복귀 없음). 미상 항목은 큐에서 내리기만 한다. */
   rejectReviewItem: (id: number) => command(`/api/v1/review-queue/${id}/reject`, { method: 'POST' }),
+
+  /** 전역 제외 키워드(Q-28 ①) — 모든 variant에 함께 적용. PUT은 전체 교체(제품별 패널과 같은 계약). */
+  getGlobalExcludeKeywords: () => request<GlobalExcludeKeywordsView>('/api/v1/settings/exclude-keywords'),
+
+  updateGlobalExcludeKeywords: (excludeKeywords: string[]) =>
+    request<GlobalExcludeKeywordsView>('/api/v1/settings/exclude-keywords', {
+      method: 'PUT',
+      body: JSON.stringify({ excludeKeywords }),
+    }),
 }
