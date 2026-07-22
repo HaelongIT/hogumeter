@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.List;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -39,6 +40,13 @@ public class UsedSearchEntity {
 	@Column(name = "poll_interval_min", nullable = false)
 	private int pollIntervalMin;
 
+	/**
+	 * 이 검색의 목록 스냅샷을 이 시각(포함)까지 {@code listing}에 접었다(V11, USED-02).
+	 * {@code null} = 아직 한 배치도 접지 않았다 — 진짜 상태이므로 기본값을 두지 않는다.
+	 */
+	@Column(name = "listings_folded_through")
+	private Instant listingsFoldedThrough;
+
 	protected UsedSearchEntity() {
 	}
 
@@ -54,6 +62,15 @@ public class UsedSearchEntity {
 
 	public Long getId() {
 		return id;
+	}
+
+	public Instant getListingsFoldedThrough() {
+		return listingsFoldedThrough;
+	}
+
+	/** 배치를 접은 뒤 그 시각을 적는다 — 파생값으로 추측하지 않는다(소실만 있는 배치는 파생값을 못 민다). */
+	public void foldedThrough(Instant observedAt) {
+		this.listingsFoldedThrough = observedAt;
 	}
 
 	public Long getProductId() {
