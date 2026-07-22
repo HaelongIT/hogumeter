@@ -13,6 +13,9 @@
 #
 # 검증: ① opt-in 없이는 한 번도 나가지 않는다 ② Disallow를 실제로 읽어 차단으로 판정
 #       ③ Crawl-delay를 초 단위로 읽는다 ④ robots.txt가 없으면(404) 허용
+#       ⑤ **와일드카드**(`Disallow: /*view=`)를 실제로 막는다 + 안 걸리는 주소는 통과(오차단 방지)
+#          — 2026-07-22에 이 문법을 못 막아 금지 URL을 긁었다. 드릴 입력을 우리가 쓰는 한
+#            우리가 아는 문법만 시험하므로, 실제로 당한 문법을 박아 둔다(docs/99).
 
 set -euo pipefail
 
@@ -46,9 +49,15 @@ from collector.tools.robots_report import report
 root = Path(tempfile.mkdtemp())
 with_robots = root / "with"
 without_robots = root / "without"
+wildcard_robots = root / "wildcard"
 with_robots.mkdir()
 without_robots.mkdir()
+wildcard_robots.mkdir()
 (with_robots / "robots.txt").write_text("User-agent: *\nDisallow: /zboard/\nCrawl-delay: 120\n", encoding="utf-8")
+# 와일드카드 규칙 — 2026-07-22에 실제로 우리를 물었다. urllib.robotparser가 이걸 무시해
+# 루리웹이 금지한 `?view=` URL을 긁고 있었다. 드릴의 robots를 우리가 쓰는 한, 우리가 아는
+# 문법만 시험하게 된다 — 그래서 실제로 당한 문법을 여기 박아 둔다(docs/99 2026-07-22).
+(wildcard_robots / "robots.txt").write_text("User-agent: *\nDisallow: /*view=\n", encoding="utf-8")
 
 
 def check(label, condition, detail):
@@ -58,7 +67,7 @@ def check(label, condition, detail):
     print(f"    ok  {label}")
 
 
-def probe(directory):
+def probe(directory, path="/zboard/list.php"):
     """디렉토리 하나를 서빙하는 서버를 띄우고 운영과 같은 경로로 한 번 조회한다.
 
     파일을 지우지 않고 **디렉토리를 갈아끼운다** — Windows는 서버가 잡고 있는 파일을 못 지운다.
@@ -77,7 +86,7 @@ def probe(directory):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         spec = SiteSpec(name="local", kind=SiteKind.BOARD, interval=timedelta(seconds=60),
-                        url=f"http://127.0.0.1:{port}/zboard/list.php", encoding="utf-8",
+                        url=f"http://127.0.0.1:{port}{path}", encoding="utf-8",
                         parse=lambda body, now: [])
         (finding,) = report([spec], urllib_opener)
         return finding
@@ -92,10 +101,16 @@ check("surfaces robots.txt status to the human", found.robots_status == 200, fou
 check("reads Crawl-delay in seconds", found.crawl_delay_seconds == 120.0, found)
 check("no error on a successful fetch", found.error is None, found)
 
+# 와일드카드: 실제로 우리를 문 문법. 차단과 **오차단 방지**를 함께 본다.
+blocked = probe(wildcard_robots, "/market/board/1020?view=thumbnail&page=1")
+check("wildcard Disallow /*view= over a real socket -> blocked", blocked.allowed is False, blocked)
+allowed = probe(wildcard_robots, "/market/board/1020?page=1")
+check("same host without the disallowed param -> allowed (no over-block)", allowed.allowed is True, allowed)
+
 missing = probe(without_robots)
 check("missing robots.txt (404) -> allowed", missing.allowed is True, missing)
 check("404 status is not hidden", missing.robots_status == 404, missing)
 PY
 
 echo
-echo "ROBOTS DRILL PASS: opt-in 게이트 -> Disallow 판정 -> Crawl-delay -> 404 허용"
+echo "ROBOTS DRILL PASS: opt-in 게이트 -> Disallow 판정 -> Crawl-delay -> 404 허용 -> 와일드카드 차단/오차단방지"

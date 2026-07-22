@@ -357,11 +357,18 @@
 
 `ALLOW_REAL_ROBOTS=1 bash scripts/check-robots.sh` (사용자가 직접 실행). 3사 `/robots.txt` 각 1회 조회.
 
-| 사이트 | 판정 | status | Crawl-delay | 대상 URL |
+> 🔴 **아래 표의 ALLOW 판정은 틀렸다(2026-07-22 같은 날 정정).** 이 리포트는 `urllib.robotparser`로 판정했는데 그게 **와일드카드를 지원하지 않는다** — 루리웹의 `Disallow: /*view=`를 통째로 무시했다. 실제로는 우리 루리웹 목록 URL(`?view=thumbnail`)이 **금지 대상**이었고, 우리는 그걸 모른 채 긁었다. 게이트를 고친 뒤(자체 와일드카드 매처) **3사 재대조가 필요하다.** 뽐뿌의 ALLOW도 같은 깨진 매처가 낸 값이라 **아직 검증되지 않았다.** → `docs/99` 2026-07-22 교훈.
+
+| 사이트 | 판정(⚠️깨진 매처) | status | Crawl-delay | 대상 URL |
 |---|---|---|---|---|
-| ppomppu | **ALLOW** | 200 | 없음 | `/zboard/zboard.php?id=ppomppu` |
-| ruliweb | **ALLOW** | 200 | 없음 | `/market/board/1020?view=thumbnail&page=1` |
+| ppomppu | ALLOW ⚠️**미검증** | 200 | 없음 | `/zboard/zboard.php?id=ppomppu` |
+| ruliweb | ~~ALLOW~~ → **실제 DISALLOW**(`/*view=`) | 200 | 없음 | `/market/board/1020?view=thumbnail&page=1` |
 | **fmkorea** | **🔴 DISALLOW** | 200 | 없음 | `/hotdeal` |
+
+**루리웹 robots.txt 원문**(2026-07-22, 사용자가 직접 조회): `Disallow:` `/search` `/timeline` `/allbbs` `/member` `/*cate=` `/*view=` `/*view_cert=` `/*view_best=` `/*search_type=` `/*search_key=` `/*orderby=` `/*range=` `/*custom_list=`
+- 즉 **쿼리 파라미터를 겨냥한 규칙이 대부분**이다. `?view=`·`?cate=`·`?orderby=` 등이 붙은 목록 변형은 전부 금지 — 사이트가 "정렬·뷰 변형 URL은 긁지 마라"고 말하는 것이다.
+- **`view=` 없는 경로는 허용된다**: `/market/board/1020`, `/market/board/1020?page=2`, `/market/board/1020/read/105373` (고친 매처로 검증, 테스트 `test_paths_without_disallowed_patterns_are_allowed`).
+- 따라서 루리웹을 다시 켜려면 **URL에서 `view=thumbnail`을 빼야** 하고, 그러면 파서가 기대하는 뷰가 달라질 수 있어 **그 뷰의 golden fixture가 필요**하다.
 
 - **Crawl-delay 선언 없음** → 셋 다 우리 하한(게시판 60초/req, PERF-05)이 그대로 유효 주기다. 하한은 설정으로도 robots로도 완화되지 않는다(SEC-08).
 - **펨코는 크롤링 금지다.** 절대 원칙 5(기술적 차단 우회 금지)에 따라 **켜지 않는다.** 우회(프록시·UA위장) 검토조차 하지 않는다.
