@@ -57,60 +57,66 @@ class ReviewCallbackRouterTest {
 
 	@Test
 	void promotesFromAllowedChatWithTelegramChannel() {
-		String reply = router.route(555L, "promote:42");
+		var result = router.route(555L, "promote:42");
 
 		assertThat(resolve.calls).containsExactly("promote:42:TELEGRAM");
-		assertThat(reply).contains("승격");
+		assertThat(result.reply()).contains("승격");
+		assertThat(result.editMessage()).as("상태 바뀜 → 메시지 편집(버튼 제거)").isTrue();
 	}
 
 	@Test
 	void rejectsFromAllowedChatWithTelegramChannel() {
-		String reply = router.route(555L, "reject:42");
+		var result = router.route(555L, "reject:42");
 
 		assertThat(resolve.calls).containsExactly("reject:42:TELEGRAM");
-		assertThat(reply).contains("기각");
+		assertThat(result.reply()).contains("기각");
+		assertThat(result.editMessage()).isTrue();
 	}
 
 	/** Q-22: [무시] 콜백은 사후학습으로 흐른다(허용 chat만). */
 	@Test
 	void ignoreFromAllowedChatRoutesToLearning() {
-		String reply = router.route(555L, "ignore:42");
+		var result = router.route(555L, "ignore:42");
 
 		assertThat(ignoreDeal.ignored).containsExactly(42L);
-		assertThat(reply).contains("무시");
+		assertThat(result.reply()).contains("무시");
+		assertThat(result.editMessage()).isTrue();
 	}
 
-	/** SEC-03: 허용 목록 밖 chat의 명령은 처리하지 않는다 — use-case를 아예 안 부른다. */
+	/** SEC-03: 허용 목록 밖 chat의 명령은 처리하지 않는다 — use-case를 아예 안 부른다. 남의 메시지도 안 건드린다. */
 	@Test
 	void deniesCommandFromUnauthorizedChat() {
-		String reply = router.route(999L, "promote:42");
+		var result = router.route(999L, "promote:42");
 
 		assertThat(resolve.calls).isEmpty();
-		assertThat(reply).contains("권한");
+		assertThat(result.reply()).contains("권한");
+		assertThat(result.editMessage()).as("바뀐 게 없으니 편집 안 함").isFalse();
 	}
 
 	@Test
 	void reportsAlreadyResolvedItemWithoutThrowing() {
 		resolve.toThrow = new ReviewItemNotFoundException(42);
 
-		String reply = router.route(555L, "reject:42");
+		var result = router.route(555L, "reject:42");
 
-		assertThat(reply).contains("이미 처리");
+		assertThat(result.reply()).contains("이미 처리");
+		assertThat(result.editMessage()).as("이 눌림으로 바뀐 게 없다").isFalse();
 	}
 
 	@Test
 	void reportsUnclassifiedPromoteRejected() {
 		resolve.toThrow = new UnclassifiedPromoteNotSupportedException(42);
 
-		String reply = router.route(555L, "promote:42");
+		var result = router.route(555L, "promote:42");
 
-		assertThat(reply).contains("미상");
+		assertThat(result.reply()).contains("미상");
+		assertThat(result.editMessage()).as("승격 실패 → reject 버튼은 남겨야 하므로 편집 안 함").isFalse();
 	}
 
 	@Test
 	void unknownCallbackDataIsRejected() {
-		assertThat(router.route(555L, "garbage")).contains("알 수 없는");
-		assertThat(router.route(555L, "promote:notanumber")).contains("알 수 없는");
+		assertThat(router.route(555L, "garbage").reply()).contains("알 수 없는");
+		assertThat(router.route(555L, "promote:notanumber").reply()).contains("알 수 없는");
 		assertThat(resolve.calls).isEmpty();
 	}
 }

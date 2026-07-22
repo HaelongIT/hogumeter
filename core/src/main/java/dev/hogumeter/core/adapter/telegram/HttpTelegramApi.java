@@ -108,6 +108,14 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 		post(baseUrl + "/answerCallbackQuery", body);
 	}
 
+	@Override
+	public void editMessageText(String chatId, long messageId, String text) {
+		// reply_markup을 빈 inline_keyboard로 보내 버튼을 제거한다(처리 후 다시 못 누르게 + "처리됨"을 남긴다, Q-73 ③).
+		String body = "chat_id=" + enc(chatId) + "&message_id=" + messageId
+				+ "&text=" + enc(text) + "&reply_markup=" + enc("{\"inline_keyboard\":[]}");
+		post(baseUrl + "/editMessageText", body);
+	}
+
 	/**
 	 * getUpdates 응답에서 <b>콜백 업데이트만</b> 뽑는다. Map으로 방어적 탐색 — 텔레그램 JSON 형태가 흔들려도
 	 * 없는 필드는 건너뛴다(전체 폴을 죽이지 않는다). 형태: {@code {"result":[{"update_id":N,"callback_query":
@@ -128,7 +136,14 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 			long updateId = update.get("update_id") instanceof Number n ? n.longValue() : 0L;
 			String data = cq.get("data") instanceof String s ? s : null;
 			String queryId = cq.get("id") instanceof String s ? s : null;
-			out.add(new CallbackUpdate(updateId, fromChatId, data, queryId));
+			// 편집 대상(버튼이 달린 원 메시지)의 좌표·본문. 없으면 0/null → 폴러가 편집을 건너뛴다(Q-73 ③).
+			Map<?, ?> message = cq.get("message") instanceof Map<?, ?> m ? m : null;
+			long messageChatId = (message != null && message.get("chat") instanceof Map<?, ?> chat
+					&& chat.get("id") instanceof Number cid) ? cid.longValue() : 0L;
+			long messageId = (message != null && message.get("message_id") instanceof Number mid)
+					? mid.longValue() : 0L;
+			String messageText = (message != null && message.get("text") instanceof String t) ? t : null;
+			out.add(new CallbackUpdate(updateId, fromChatId, data, queryId, messageChatId, messageId, messageText));
 		}
 		return out;
 	}

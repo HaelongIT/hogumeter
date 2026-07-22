@@ -2,6 +2,7 @@ package dev.hogumeter.core.adapter.telegram;
 
 import dev.hogumeter.core.adapter.telegram.TelegramInboundApi.CallbackUpdate;
 import dev.hogumeter.core.application.ReviewCallbackRouter;
+import dev.hogumeter.core.application.ReviewCallbackRouter.CallbackResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,8 +51,15 @@ public class TelegramInboundPoller {
 	public void poll() {
 		try {
 			for (CallbackUpdate update : api.getUpdates(offset)) {
-				String reply = router.route(update.fromChatId(), update.data());
-				api.answerCallbackQuery(update.callbackQueryId(), reply, true); // 모달로 — 결과를 놓치지 않게(Q-73)
+				CallbackResult result = router.route(update.fromChatId(), update.data());
+				api.answerCallbackQuery(update.callbackQueryId(), result.reply(), true); // 모달로 — 결과를 놓치지 않게(Q-73 ①)
+				// 상태가 바뀌었으면 원 메시지를 편집해 버튼을 없애고 결과를 남긴다 — 나중에 봐도 처리됐음을 안다(Q-73 ③).
+				// messageId가 없으면(옛 메시지 등) 건너뛴다. 편집 실패는 이 try의 catch가 삼켜 다음 콜백을 안 죽인다.
+				if (result.editMessage() && update.messageId() != 0) {
+					String resolved = update.messageText() == null ? result.reply()
+							: update.messageText() + "\n\n" + result.reply();
+					api.editMessageText(String.valueOf(update.messageChatId()), update.messageId(), resolved);
+				}
 				offset = Math.max(offset, update.updateId() + 1); // 처리한 것 다음부터 — 재수신 방지
 			}
 		}

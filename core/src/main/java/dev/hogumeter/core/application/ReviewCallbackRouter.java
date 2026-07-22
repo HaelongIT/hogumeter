@@ -45,50 +45,69 @@ public class ReviewCallbackRouter {
 	}
 
 	/**
-	 * @return 버튼 누른 사람에게 answerCallbackQuery로 답할 짧은 문구. 실패도 문구로 돌려준다(던지지 않는다) —
-	 *     인바운드 한 건의 오류가 폴러를 죽이지 않게.
+	 * 콜백을 처리하고 결과를 낸다. 실패도 던지지 않고 결과로 돌려준다 — 인바운드 한 건의 오류가 폴러를 죽이지 않게.
+	 *
+	 * @return {@link CallbackResult} — {@code reply}는 answerCallbackQuery로 누른 사람에게 답할 문구,
+	 *     {@code editMessage}는 <b>상태가 바뀌었나</b>(승격·기각·무시 성공 = 참). 참이면 폴러가 원 메시지를 편집해
+	 *     버튼을 제거하고 결과를 남긴다. 권한 실패·알 수 없는 명령·이미 처리됨·미상 승격 불가는 <b>거짓</b>이다 —
+	 *     이 눌림으로 바뀐 게 없으니 남의 메시지를 건드리지 않는다(Q-73 ③).
 	 */
-	public String route(long fromChatId, String callbackData) {
+	public CallbackResult route(long fromChatId, String callbackData) {
 		if (!allowedChats.contains(fromChatId)) {
 			log.warn("SEC-03: 허용되지 않은 chat {}의 명령을 거부했습니다", fromChatId);
-			return "권한이 없습니다.";
+			return noChange("권한이 없습니다.");
 		}
 		String[] parts = callbackData == null ? new String[0] : callbackData.split(":", 2);
 		if (parts.length != 2) {
-			return "알 수 없는 명령입니다.";
+			return noChange("알 수 없는 명령입니다.");
 		}
 		long id;
 		try {
 			id = Long.parseLong(parts[1]);
 		}
 		catch (NumberFormatException e) {
-			return "알 수 없는 명령입니다.";
+			return noChange("알 수 없는 명령입니다.");
 		}
 		try {
 			switch (parts[0]) {
 				case "promote" -> {
 					resolve.promote(id, "TELEGRAM");
-					return "승격했습니다 — 표본에 복귀합니다.";
+					return applied("승격했습니다 — 표본에 복귀합니다.");
 				}
 				case "reject" -> {
 					resolve.reject(id, "TELEGRAM");
-					return "기각했습니다 — 영구 제외합니다.";
+					return applied("기각했습니다 — 영구 제외합니다.");
 				}
 				case "ignore" -> {
 					ignoreDeal.ignore(id); // Q-22 사후학습 — 노이즈로 기록, 빈출 토큰을 제외 키워드 후보로
-					return "무시했습니다 — 비슷한 알림이 잦으면 제외 키워드를 제안합니다.";
+					return applied("무시했습니다 — 비슷한 알림이 잦으면 제외 키워드를 제안합니다.");
 				}
 				default -> {
-					return "알 수 없는 명령입니다.";
+					return noChange("알 수 없는 명령입니다.");
 				}
 			}
 		}
 		catch (ReviewItemNotFoundException e) {
-			return "이미 처리됐거나 없는 항목입니다.";
+			return noChange("이미 처리됐거나 없는 항목입니다.");
 		}
 		catch (UnclassifiedPromoteNotSupportedException e) {
-			return "미상 항목은 승격할 수 없습니다(대상 지정 필요).";
+			return noChange("미상 항목은 승격할 수 없습니다(대상 지정 필요).");
 		}
+	}
+
+	/**
+	 * 콜백 처리 결과. {@code editMessage}=상태가 바뀌어 원 메시지를 편집(버튼 제거·결과 표기)해야 하는가,
+	 * {@code reply}=누른 사람에게 답할 문구.
+	 */
+	public record CallbackResult(boolean editMessage, String reply) {
+	}
+
+	private static CallbackResult applied(String reply) {
+		return new CallbackResult(true, reply);
+	}
+
+	private static CallbackResult noChange(String reply) {
+		return new CallbackResult(false, reply);
 	}
 
 	private static Set<Long> parseChats(String csv) {
