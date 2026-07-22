@@ -191,8 +191,14 @@ _(이하 2026-07-08 2차 기획 통합에서 등장한 위임 항목. 출처: `w
   - `GetBenchmarkUseCase`·`GetSignalUseCase`·`EvaluateAlertOnDealUseCase`·`RecordPurchaseUseCase`가 전부 `demandScope.scope(...)` **앞에** `excludeKeywords.filter(...)`를 건다 — 네 표면이 같은 표본을 봐야 화면이 서로 다른 사실을 말하지 않는다.
   - `AlertPolicySettings`(+`excludeKeywords`, 공백 제거·빈 값 탈락·중복 접기)·`AlertPolicyEntity`(`@JdbcTypeCode(ARRAY)`)·벌크 UPDATE에 포함·`AlertPolicyView`/`UpdateRequest`. web: 정책 패널에 쉼표 한 줄 입력(PUT 전체 교체라 **항상 보낸다** — 안 보내면 저장 때마다 목록이 사라진다).
   - 테스트: `GetBenchmarkUseCaseTest`(제외 시 n·최저가 변화 + **거울상** 무력화 방지), `AlertPolicySettingsTest`(정규화), `updatePreservesColumnsTheEntityDoesNotMap`(이제 exclude_keywords는 **갱신 대상**, demand_axis_filter만 보존 대상), 스모크가 미설정 `[]`·왕복을 종단 검증. web 165→170.
-- **남은 것(여전히 열림)**: ① **global_setting** 전역 제외 키워드 — 읽기 경로도 **생산자 화면도** 없다(전역 설정 UI 부재). 지금은 per-product만. ② **⚠️LABEL 가시성** — C-5는 LABEL도 통계 제외하되 ⚠️로 노출하라지만, `alert_policy`에 per-keyword mode 컬럼이 없어 현재 전 키워드를 EXCLUDE로 다룬다(숨김). LABEL 노출은 mode 저장 + 표시 UI가 선행.
-- **재개 트리거**: ① 전역 설정 화면(생산자)이 생기면 global_setting 병합 — `VariantExcludeKeywords.keywordsFor`가 두 출처를 합치면 된다(seam 그 한 곳). ② per-keyword mode 컬럼과 ⚠️ 표시가 필요할 때 LABEL 분기.
+- **✅ ① global_setting 전역 제외 키워드 해소(2026-07-22)**: `global_setting`은 V1부터 있었으나 **엔티티도 REST도 없어 완전히 죽은 테이블**이었다(table-wiring·dead-columns 게이트가 둘 다 면제로 물고 있었다). 생산자·소비처가 동시에 생겨 살아났다.
+  - **소비처**: `VariantExcludeKeywords.keywordsFor`가 **전역 ∪ 제품별** 합집합(재개 트리거가 지목한 그 seam 한 곳). 둘 중 하나만 걸려도 제외(보수적).
+  - **생산자**: 신규 `GlobalExcludeKeywords`(global_setting['exclude_keywords'] 읽기/전체교체, generic jsonb라 네이티브 SQL) + `GlobalSettingsController`(GET/PUT `/api/v1/settings/exclude-keywords`) + web `settings/SettingsPage`('설정' 탭).
+  - **정규화 정본 하나**: `ExcludeKeywordPolicy.normalize`로 추출 — per-product(`AlertPolicySettings`)와 전역이 같은 규칙을 써야 합칠 때 공백·중복으로 안 어긋난다(사본 금지).
+  - **정직한 기본값**: 미설정→빈 목록(부재를 "전부 제외"로 안 읽음), 저장값 깨짐→빈 목록(전 표면이 이 조회를 타므로 통째로 안 죽인다).
+  - 관통 테스트: 전역 키워드만으로(정책 없이) 기준가 표본에서 빠지는지 — 끊기면 "저장은 되는데 효과 없는 죽은 손잡이". + 왕복·정규화·부재·깨진값 4케이스, web 5케이스, 스모크 5-2c(왕복+정규화 종단). 게이트: 두 allowlist에서 global_setting 면제 삭제(낡은 면제를 게이트가 차단했다).
+- **남은 것(여전히 열림)**: ② **⚠️LABEL 가시성** — C-5는 LABEL도 통계 제외하되 ⚠️로 노출하라지만, `alert_policy`에 per-keyword mode 컬럼이 없어 현재 전 키워드를 EXCLUDE로 다룬다(숨김). LABEL 노출은 mode 저장 + 표시 UI가 선행.
+- **재개 트리거**: ② per-keyword mode 컬럼과 ⚠️ 표시가 필요할 때 LABEL 분기.
 
 ## [열림] Q-29. 세 집합 predicate의 미완 components (keyword-miss·선택축값·배치유보·신선도)
 - **맥락**: docs/03 3-1 세 집합 자격 술어 중 DealEvent 필드로 도출 가능한 부분(classified·outlier 3상태·status)만 `DealSets`에 구현. 나머지 components는 상태/데이터 부재로 미포함.
