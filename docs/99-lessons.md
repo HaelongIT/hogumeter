@@ -896,3 +896,14 @@
 - **교훈(규칙화)**: **빠른 루프는 반복용이고, 커밋 게이트는 전체다.** CLAUDE.md도 `uv run pytest`를 기본으로 적어 두고 `-m "not integration"`은 "빠른 루프"라고 단서를 달았는데, 내가 그 단서를 기본으로 바꿔 썼다. **선택적으로 건너뛰는 플래그를 쓴 뒤에는 "무엇을 건너뛰었는가"를 세어 본다** — pytest는 친절하게 `18 deselected`라고 말해 주고 있었고 나는 그 숫자를 읽지 않았다. GREEN 숫자만 보고 커밋하면 **건너뛴 것이 곧 안 보는 것**이 된다.
 - **또 하나(사본이 셋이 되기 전에 모은다)**: 같은 "3사 스펙"을 `test_pipeline_smoke`·`test_main`에 각각 만들어 두 사본이 됐고, 세 번째가 필요해지자 드리프트가 확정적이었다. `tests/boards.py` 하나로 모았다 — **두 번째 사본을 만들 때가 모을 때다.**
 - **관련**: `collector/tests/boards.py`(공용 3사 스펙 + golden 경로) · `test_end_to_end_ingest`·`test_main`·`test_pipeline_smoke`(레지스트리 분리) · `main(boards=…)` 주입 seam · 전체 304 통과.
+
+## 2026-07-22 — 같은 타입을 내는 생산자는 같은 소비자에게 간다 (중고가 신품 기준가로 새는 길)
+
+- **맥락**: M2(중고) 착수 전 실사. collector에 `parse_bunjang`(번개장터)이 fixture·프라이버시 테스트까지 갖춰 이미 있었다. 다만 어느 레지스트리에도 없어 **폴링된 적이 없었다.**
+- **증상**: 없음. 모든 테스트가 GREEN이고, 아무 로그도 없다. 번개가 꺼져 있으니 아무 일도 안 일어난다.
+- **원인**: `parse_bunjang`은 핫딜 파서와 **똑같은 `ParsedDeal`**을 낸다 → 같은 `raw_deal_post`에 `site='bunjang'`으로 적재된다. 그런데 core의 `findUnprocessed()`는 **소스를 전혀 가리지 않는다.** 즉 M2의 첫 걸음(번개를 켠다)이 곧 700,000원짜리 중고 아이폰을 신품 딜로 만들어 기준가를 끌어내리는 순간이었다.
+- **교훈 ①(규칙화)**: **같은 타입을 내는 생산자는 같은 소비자에게 간다.** 새 생산자를 만들 때 "이 값이 흘러가는 소비자가 이 부류를 구별하는가"를 묻는다. 타입이 같으면 컴파일러도 테스트도 절대 안 알려준다 — `site` 같은 **데이터 필드**가 유일한 구별자일 때, 그 구별은 코드로 존재하지 않으면 존재하지 않는 것이다.
+- **교훈 ②(규칙화)**: **경계는 차단이 아니라 허용으로 판정한다.** "중고 사이트 목록"을 막는 방식이면 새 중고 사이트가 규칙을 매치 실패시키고 **하류의 기본값**(=신품 적재)으로 조용히 떨어진다 — 이미 `docs/99`에 적어 둔 "부분적으로 아는 패턴" 실패 모드 그대로다. 허용집합이면 모르는 소스가 안전한 쪽으로 떨어진다. **대신 허용집합의 대가를 세어 실어 보낸다**(`skippedForeignSource`) — 새 게시판을 core가 몰라 조용히 버리는 일이 카운터로 보인다.
+- **교훈 ③**: **허용집합을 "지금 폴링하는 곳"으로 좁히지 않는다.** 루리웹·펨코는 robots로 폴링이 꺼져 있지만 허용집합엔 남긴다 — 이 집합은 "폴링하는 곳"이 아니라 "신품으로 해석해도 되는 곳"이고 그 성격은 robots와 무관하다. 좁혀 뒀다면 되살리는 날 딜이 조용히 버려진다.
+- **기계화**: 거울(core 허용집합 ↔ collector 파서 목록)은 드리프트하므로 `scripts/check-source-vocabulary.sh`가 **각 파서의 분류를 강제**한다 — 신품 허용집합이거나 `scripts/used-sources.txt` 선언이거나, 둘 다 아니면 FAIL, 둘 다여도 FAIL. 파서가 없는 허용 이름(죽은 어휘)도 FAIL. 계약 테스트 8케이스(주석 속 `Set.of` 미포함 포함).
+- **관련 테스트**: `NewProductSourcesTest`, `IngestDealsUseCaseTest#usedMarketplacePostNeverBecomesANewProductDeal` / `#unknownSourceIsSkippedAndCountedRatherThanTrusted`, `scripts/check-source-vocabulary.test.sh`.

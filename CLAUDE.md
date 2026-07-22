@@ -144,6 +144,7 @@ bash scripts/restore-drill.sh      # 기존 덤프만 복원 검증 (backup-dril
 bash scripts/rollback-drill.sh     # V 전진 → R 역순 후진 → 재전진 (REL-05)
 bash scripts/offsite-drill.sh      # MinIO에 대고 운영과 같은 업로드 경로 리허설
 bash scripts/check-table-wiring.sh # 아무도 쓰지도 읽지도 않는 테이블 (면제는 열린 Q-ID와 함께)
+bash scripts/check-source-vocabulary.sh  # 각 collector 파서가 신품/중고로 분류됐는가 (기준가 오염 차단)
 bash .claude/hooks/guard.test.sh   # 네트워크 차단 훅의 차단/통과 계약
 bash .githooks/pre-commit.test.sh  # gitleaks 훅의 차단/통과 계약
 bash scripts/check-env-example.test.sh   # compose ↔ .env.example 드리프트 게이트 (OPS-01)

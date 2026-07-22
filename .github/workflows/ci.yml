@@ -135,6 +135,16 @@ jobs:
       - name: 죽은 컬럼 게이트 계약 테스트
         run: bash scripts/check-dead-columns.test.sh
 
+      # 위 게이트들은 "무엇이 죽었나"를 본다. 이건 반대다 — **살아 있는데 잘못된 곳으로 흐르는 것**.
+      # collector의 파서는 전부 같은 `ParsedDeal`을 내고 같은 `raw_deal_post`로 간다. 그래서
+      # `parse_bunjang`(중고)이 켜지는 순간 중고 가격이 신품 기준가로 들어갈 참이었다(2026-07-22 발견).
+      # 각 파서가 core에서 어떻게 해석되는지(신품 허용집합 / 중고 선언) 분류를 강제한다.
+      - name: 수집 소스 어휘 게이트
+        run: bash scripts/check-source-vocabulary.sh
+
+      - name: 수집 소스 어휘 게이트 계약 테스트
+        run: bash scripts/check-source-vocabulary.test.sh
+
       # 위 게이트는 "테이블 이름이 코드에 나타나면" 통과시킨다 — `product_axis`처럼 **쓰기만 하고
       # 아무도 읽지 않는 테이블**은 못 잡는다(명시된 한계). 한 층 아래에서 잡는다:
       # 리포지토리가 선언한 조회 메서드를 프로덕션에서 아무도 부르지 않으면 그 테이블은 쓰기 전용이다.
