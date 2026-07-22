@@ -172,3 +172,39 @@ def test_entrypoint_exits_nonzero_when_a_board_is_disallowed(monkeypatch):
         return (200, b"User-agent: *\nDisallow: /\n")
 
     assert main(opener=disallow, clock=lambda: NOW) == 1
+
+
+def test_robots_check_targets_covers_sites_we_do_not_poll():
+    """확인 대상 != 폴링 대상.
+
+    `hotdeal_boards()`를 뽐뿌 1사로 좁혔을 때 이 도구도 같이 좁아져, **되살릴지 판단해야 하는**
+    루리웹·펨코를 못 보게 됐었다. 확인 도구가 "이미 켠 것만" 보면 아무것도 확인하지 못한다.
+    """
+    from collector.scheduler.sites import hotdeal_boards, robots_check_targets
+
+    names = [spec.name for spec in robots_check_targets()]
+
+    assert names == sorted(set(names), key=names.index), "중복 없이"
+    assert set(names) >= {"ppomppu", "ruliweb", "fmkorea", "bunjang"}
+    assert {spec.name for spec in hotdeal_boards()} <= set(names), "폴링 중인 곳은 반드시 포함"
+
+
+def test_ruliweb_candidate_url_has_no_view_parameter():
+    """`Disallow: /*view=`에 걸리지 않는 후보 URL이어야 확인에 의미가 있다 — 금지된 URL을 다시
+    물어봐야 답은 언제나 DISALLOW다."""
+    from collector.scheduler.sites import robots_check_targets
+
+    ruliweb = next(s for s in robots_check_targets() if s.name == "ruliweb")
+
+    assert "view=" not in ruliweb.url
+
+
+def test_bunjang_is_checked_before_it_is_ever_polled():
+    """파서·fixture·적재 경로는 다 있는데 robots는 확인된 적이 없다. 켜기 전에 확인할 수 있어야 한다."""
+    from collector.scheduler.policy import SiteKind
+    from collector.scheduler.sites import robots_check_targets
+
+    bunjang = next(s for s in robots_check_targets() if s.name == "bunjang")
+
+    assert bunjang.kind is SiteKind.MARKETPLACE
+    assert "bunjang.co.kr" in bunjang.url

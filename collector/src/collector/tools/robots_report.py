@@ -106,14 +106,14 @@ def main(*, opener=None, clock=None) -> int:
         # 문구가 아니라 마커를 낸다 — 한글은 콘솔 인코딩에 따라 깨지고, 그걸 grep하면 도구가 굳는다.
         print(f"REFUSED reason=real_network_opt_in_missing env={ALLOW_REAL_ROBOTS_ENV}")
         print(f"  {ALLOW_REAL_ROBOTS_ENV}=1 bash scripts/check-robots.sh")
-        print("  scope: robots.txt of 3 boards, one request each. No list pages.")
+        print("  scope: robots.txt of each candidate host, one request each. No list pages.")
         return 0
 
     from ..scheduler.fetcher import urllib_opener
-    from ..scheduler.sites import hotdeal_boards
+    from ..scheduler.sites import robots_check_targets
 
     now = (clock or (lambda: datetime.now(timezone.utc)))()
-    findings = report(hotdeal_boards(), opener or urllib_opener)
+    findings = report(robots_check_targets(), opener or urllib_opener)
 
     print(format_field_notes(findings, now))
     print()
