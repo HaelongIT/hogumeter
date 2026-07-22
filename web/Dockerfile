@@ -8,7 +8,7 @@ COPY src src
 # `npm run build` = tsc --noEmit + vite build. 타입 오류가 있으면 이미지가 안 만들어진다.
 RUN npm run build
 
-FROM nginx:1.29-alpine
+FROM nginx:1.31-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 # nginx 공식 엔트리포인트가 기동 전에 실행한다(10-… 20-… 다음). auth.inc를 생성한다.
 COPY docker-entrypoint.d/40-basic-auth.sh /docker-entrypoint.d/40-basic-auth.sh
