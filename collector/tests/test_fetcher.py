@@ -239,3 +239,87 @@ def test_block_signal_reaches_classify_status():
 
 def urllib_opener_stub_403():
     return (403, b"")
+
+
+# ── robots 와일드카드 (2026-07-22 실측 결함의 회귀) ─────────────────────
+#
+# `urllib.robotparser`는 와일드카드를 지원하지 않아 `Disallow: /*view=`를 통째로 무시했다.
+# 그 탓에 **루리웹이 금지한 URL을 우리가 실제로 긁고 있었다**(절대 원칙 5 위반).
+# 차단 장치가 미차단하면 받아 줄 다른 방어선이 없다 — 사이트 정책 앞에선 우리가 유일한 방어선이다.
+
+RULIWEB_ROBOTS = b"""User-agent: *
+Disallow: /search
+Disallow: /timeline
+Disallow: /allbbs
+Disallow: /member
+Disallow: /*cate=
+Disallow: /*view=
+Disallow: /*view_cert=
+Disallow: /*view_best=
+Disallow: /*search_type=
+Disallow: /*search_key=
+Disallow: /*orderby=
+Disallow: /*range=
+Disallow: /*custom_list=
+"""
+
+RULIWEB = "https://bbs.ruliweb.com"
+
+
+def _gate(robots: bytes, origin: str = RULIWEB) -> RobotsGate:
+    return RobotsGate(opener=FakeOpener({f"{origin}/robots.txt": (200, robots)}))
+
+
+def test_wildcard_disallow_blocks_query_param_that_stdlib_missed():
+    """`Disallow: /*view=` 는 `?view=thumbnail` 을 막는다 — 우리가 실제로 긁던 그 URL이다."""
+    gate = _gate(RULIWEB_ROBOTS)
+    assert gate.allows(f"{RULIWEB}/market/board/1020?view=thumbnail&page=1") is False
+
+
+def test_wildcard_disallow_matches_query_not_just_path():
+    """쿼리를 빼고 보면 `/*view=` 는 영원히 안 걸린다 — 매칭 대상은 경로+쿼리다."""
+    gate = _gate(RULIWEB_ROBOTS)
+    assert gate.allows(f"{RULIWEB}/market/board/1020?cate=99") is False
+
+
+def test_paths_without_disallowed_patterns_are_allowed():
+    """**오차단 방지**: 규칙에 안 걸리는 주소는 통과해야 한다(막는 장치일수록 통과를 먼저 시험한다)."""
+    gate = _gate(RULIWEB_ROBOTS)
+    assert gate.allows(f"{RULIWEB}/market/board/1020") is True
+    assert gate.allows(f"{RULIWEB}/market/board/1020/read/105373") is True
+    assert gate.allows(f"{RULIWEB}/market/board/1020?page=2") is True
+
+
+def test_prefix_disallow_still_works():
+    """와일드카드가 아닌 평범한 접두사 규칙도 그대로 막는다(회귀 방지)."""
+    gate = _gate(RULIWEB_ROBOTS)
+    assert gate.allows(f"{RULIWEB}/search?q=x") is False
+    assert gate.allows(f"{RULIWEB}/member/login") is False
+
+
+def test_end_anchor_dollar_is_honored():
+    """`$`는 끝 고정이다 — `/*.pdf$`는 .pdf로 끝날 때만 막는다."""
+    gate = _gate(b"User-agent: *\nDisallow: /*.pdf$\n", origin=SITE)
+    assert gate.allows(f"{SITE}/a/b.pdf") is False
+    assert gate.allows(f"{SITE}/a/b.pdf?x=1") is True  # 끝이 아니므로 안 막힌다
+
+
+def test_more_specific_allow_beats_disallow():
+    """가장 구체적인(긴) 매치가 이긴다 — Allow가 더 길면 Allow."""
+    gate = _gate(b"User-agent: *\nDisallow: /board\nAllow: /board/public\n", origin=SITE)
+    assert gate.allows(f"{SITE}/board/private") is False
+    assert gate.allows(f"{SITE}/board/public/1") is True
+
+
+def test_named_agent_group_wins_over_star():
+    """우리를 이름으로 지목한 그룹이 있으면 그 그룹만 적용한다."""
+    robots = b"User-agent: *\nDisallow: /\n\nUser-agent: hogumeter\nDisallow: /admin\n"
+    gate = _gate(robots, origin=SITE)
+    assert gate.allows(f"{SITE}/anything") is True  # * 그룹의 전면 금지는 우리에게 적용 안 됨
+    assert gate.allows(f"{SITE}/admin/x") is False
+
+
+def test_empty_disallow_means_no_restriction():
+    """빈 `Disallow:` 는 규칙이 아니라 '제약 없음'이다."""
+    gate = _gate(b"User-agent: *\nDisallow:\n", origin=SITE)
+    assert gate.allows(f"{SITE}/anything") is True
