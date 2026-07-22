@@ -1,5 +1,5 @@
 # 빌드 → 정적 서빙. 최종 이미지에 node/소스를 남기지 않는다.
-FROM node:22-slim AS build
+FROM node:26-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
