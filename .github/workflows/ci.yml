@@ -145,6 +145,14 @@ jobs:
       - name: 수집 소스 어휘 게이트 계약 테스트
         run: bash scripts/check-source-vocabulary.test.sh
 
+      # 코드가 `docs/91 Q-74`를 인용하는데 보드에 Q-74가 없었다(2026-07-23). 인용은 근거처럼 보이고
+      # 근거는 없었다 — 잠정값의 위험이 어디에도 기록되지 않는다. 다른 게이트는 allowlist의 인용만 본다.
+      - name: 보드 인용 게이트 (없는 Q를 인용하지 않는가)
+        run: bash scripts/check-board-references.sh
+
+      - name: 보드 인용 게이트 계약 테스트
+        run: bash scripts/check-board-references.test.sh
+
       # 위 게이트는 "테이블 이름이 코드에 나타나면" 통과시킨다 — `product_axis`처럼 **쓰기만 하고
       # 아무도 읽지 않는 테이블**은 못 잡는다(명시된 한계). 한 층 아래에서 잡는다:
       # 리포지토리가 선언한 조회 메서드를 프로덕션에서 아무도 부르지 않으면 그 테이블은 쓰기 전용이다.
