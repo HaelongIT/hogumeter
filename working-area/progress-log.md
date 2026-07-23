@@ -1,3 +1,26 @@
+## 2026-07-23 — USED-04 평가기 배선 (무중단, 이어서)
+
+- **USED-04 배선(`605dce3`)**: `ListingExtractor`(v1 규칙)·`UsedRiskSignals`가 순수 도메인으로
+  GREEN인 채 호출자 0이었다. `EvaluateListingUseCase`로 조립해 `POST /api/v1/used-searches/{id}/
+  evaluate`를 열었다(AC-12·13·14·15).
+  - 입력 3단(URL→TEXT→MANUAL) 한 추상. TEXT는 `원`/`만원` 단위가 붙은 숫자만 가격으로 읽는다 —
+    단위 없는 숫자를 가격으로 읽으면 `RTX 5070`→5,070원 같은 함정이 반복된다. 여러 금액이 있으면
+    가장 큰 것(배송비·에누리가 아니라)을 매물가로. 실패하면 다음 폴백을 가리키지 값을 지어내지 않는다.
+  - URL은 실 fetch하지 않는다(정지조건) — V13 `listing.url`로 이미 아는 매물인지만 보고, 못 찾으면
+    즉시 TEXT 요청으로 폴백(Q-76, 새 네트워크 호출 0).
+  - AC-15 교체 지점: `ListingExtractor` 인터페이스 + `CoreApplication`의 `@Bean` 한 줄. 순수 도메인에
+    Spring 애노테이션을 얹지 않고(이 저장소 관례) 조립부에서 분리했다.
+  - 신규 `PriceContextCalculator`(순수): 활성 매물 스냅샷은 통계 가공 없이 나열, 신품 기준가 대비 %는
+    variantId를 준 요청에서만(안 주면 null). 기준가 0은 나눗셈 대신 null(Q-53 교훈 재사용).
+  - 위험 신호는 나열만(판정 금지) — "업자 레퍼토리 키워드"는 전용 사전이 없어 그 검색의
+    `exclude_keywords`를 재사용한다(Q-77, 사기 어휘를 지어내 하드코딩하지 않는다).
+  - 새로 인용한 Q-76·Q-77을 **코드와 같은 커밋에서** docs/91에 만들었다 — 직전 커밋에서 만든
+    `check-board-references` 게이트가 강제하는 바로 그 규율을 스스로 처음 지킨 사례.
+- core 전체 GREEN(신규 테스트 4파일 27케이스, 전부 첫 실행 GREEN), 감사 게이트 7종 통과, 스모크 PASS.
+
+**여전히 사람 손(정지조건)**: ① 번개 실폴링(`COLLECTOR_ALLOW_NETWORK=1`) ② 루리웹 `view=` 없는
+fixture 1장.
+
 ## 2026-07-23 — USED-03 중고 생애주기 알림 + 보드 인용 게이트 (무중단, 이어서)
 
 - **USED-03 배선(`544d5ff`)**: `UsedMatcher`(3계층 필터)·`UsedAlertPolicy`·`UsedSearchSpec`은 순수
