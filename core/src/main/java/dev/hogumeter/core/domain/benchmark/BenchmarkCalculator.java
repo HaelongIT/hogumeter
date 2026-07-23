@@ -3,6 +3,7 @@ package dev.hogumeter.core.domain.benchmark;
 import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.Quantiles;
 import dev.hogumeter.core.domain.deal.DealEvent;
+import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.dealset.DealSets;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -24,8 +25,19 @@ public class BenchmarkCalculator {
 	private static final BigDecimal HUNDRED = new BigDecimal("100");
 	private static final BigDecimal ONE = BigDecimal.ONE;
 
+	/** 표시 손잡이 없이 조회하는 호출부 호환 seam — includeOutliers=false와 동일. */
 	public BenchmarkView compute(List<DealEvent> candidates, Long currentPrice,
 			int periodMonths, BenchmarkParams params, Clock clock) {
+		return compute(candidates, currentPrice, periodMonths, params, clock, false);
+	}
+
+	/**
+	 * @param includeOutliers 표시 손잡이(Q-11). true여도 계산 진실(n·tier·benchmarkPrice 등)은
+	 *     불변 — 이상치는 항상 pricingSample에서 제외된다. 이 값은 오직 {@code outliers} 표시
+	 *     목록을 채우는 데만 쓰인다.
+	 */
+	public BenchmarkView compute(List<DealEvent> candidates, Long currentPrice,
+			int periodMonths, BenchmarkParams params, Clock clock, boolean includeOutliers) {
 		if (periodMonths <= 0) {
 			throw new InvalidBenchmarkPeriodException(periodMonths);
 		}
@@ -86,8 +98,20 @@ public class BenchmarkCalculator {
 				leg(currentPrice, benchmarkPrice),
 				leg(currentPrice, periodLowest == null ? null : periodLowest.price()));
 
+		// 8. 표시 손잡이(Q-11) — 계산 진실(위 1~7)과 완전히 분리된 사후 조립. pricingSample이 아니라
+		// candidates에서 뽑는다(pricingSample은 이미 이상치를 뺀 뒤라 여기 낼 것이 없다). 손잡이가
+		// 꺼져 있으면 후보를 거르지도 않는다 — "요청 안 한 목록"과 "요청했는데 0건"을 같게 두되
+		// 비용은 손잡이가 켜졌을 때만 든다.
+		List<BenchmarkView.DealRef> outliers = includeOutliers
+				? within(candidates, now, zone, effectiveMonths).stream()
+						.filter(d -> d.outlierFlag() != OutlierFlag.NONE)
+						.sorted(Comparator.comparingLong(DealEvent::priceFirst))
+						.map(d -> toRef(d, zone))
+						.toList()
+				: List.of();
+
 		return new BenchmarkView(tier, benchmarkPrice, goodDealLine, periodLowest, latestDeal,
-				n, m, expandedToMonths, currentPrice, gap, cases);
+				n, m, expandedToMonths, currentPrice, gap, cases, outliers);
 	}
 
 	/**

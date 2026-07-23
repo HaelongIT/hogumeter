@@ -43,7 +43,7 @@ class AlertDispatcherTest {
 	private static BenchmarkView sufficient() {
 		return new BenchmarkView(Tier.SUFFICIENT, 890_000L, 850_000L,
 				new PricePoint(820_000L, LocalDate.of(2026, 6, 1)), null,
-				7, 3, null, 990_000L, new Gap(null, null), List.of());
+				7, 3, null, 990_000L, new Gap(null, null), List.of(), List.of());
 	}
 
 	private static Clock clockAtHour(int hour) {

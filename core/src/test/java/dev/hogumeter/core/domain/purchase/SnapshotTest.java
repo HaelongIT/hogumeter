@@ -16,7 +16,7 @@ class SnapshotTest {
 
 	private BenchmarkView sufficient(long benchmark) {
 		return new BenchmarkView(Tier.SUFFICIENT, benchmark, 850_000L, null, null, 5, 5, null, 900_000L, null,
-				List.of());
+				List.of(), List.of());
 	}
 
 	@Test
@@ -46,7 +46,7 @@ class SnapshotTest {
 				new DealRef(870_000L, LocalDate.of(2026, 3, 1), "ppomppu", "https://p.test/1", List.of()),
 				new DealRef(820_000L, LocalDate.of(2026, 3, 2), "ruliweb", "https://r.test/2", List.of()));
 		BenchmarkView sparse = new BenchmarkView(Tier.SPARSE, null, null, null, null, 2, 1, null, 900_000L, null,
-				cases);
+				cases, List.of());
 
 		Snapshot snap = Snapshot.from(sparse, 900_000L, BASIS);
 
@@ -60,7 +60,7 @@ class SnapshotTest {
 	@Test
 	void noneViewHasNoStats() {
 		BenchmarkView none = new BenchmarkView(Tier.NONE, null, null, null, null, 0, 0, null, 900_000L, null,
-				List.of());
+				List.of(), List.of());
 
 		Snapshot snap = Snapshot.from(none, 900_000L, BASIS);
 

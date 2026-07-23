@@ -26,6 +26,7 @@ const benchmark = (over: Partial<BenchmarkView> = {}): BenchmarkView => ({
   currentPrice: 890_000,
   gap: { vsBenchmark: { won: 70_000, pct: 8.5 }, vsLowest: { won: 110_000, pct: 14.1 } },
   cases: [],
+  outliers: [],
   ...over,
 })
 
@@ -234,6 +235,7 @@ describe('lowestLine — 기간 최저가', () => {
     currentPrice: 890_000,
     gap: { vsBenchmark: { won: 70_000, pct: 8.5 }, vsLowest: { won: 110_000, pct: 14.1 } },
     cases: [],
+    outliers: [],
     ...over,
   })
 

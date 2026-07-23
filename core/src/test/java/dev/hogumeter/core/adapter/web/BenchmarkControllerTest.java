@@ -89,6 +89,37 @@ class BenchmarkControllerTest {
 				.andExpect(jsonPath("$.m").value(5));
 	}
 
+	/** Q-11 REST 계약 — includeOutliers=true일 때만 outliers 필드가 채워진다(계산 진실은 불변). */
+	@Test
+	void includeOutliersTrueAddsTheDisplayListWithoutChangingTheBenchmark() throws Exception {
+		insertCrossVerifiedDeal(820_000, 30);
+		insertCrossVerifiedDeal(850_000, 25);
+		insertCrossVerifiedDeal(890_000, 20);
+		insertCrossVerifiedDeal(920_000, 15);
+		insertCrossVerifiedDeal(950_000, 10);
+		Instant when = Instant.now().minus(Duration.ofDays(5));
+		DealEventEntity outlier = dealEvents.save(new DealEventEntity(variantId, false, null,
+				5_000_000L, 5_000_000L, 5_000_000L, 5_000_000L, Origin.LIVE, false, OutlierFlag.UPPER, false,
+				DealStatus.ACTIVE, when, when));
+		RawDealPost r = rawPosts.save(new RawDealPost("ppomppu", "p" + counter++,
+				"https://ppomppu.test/" + counter, "제목", when, "ACTIVE"));
+		sources.save(new DealEventSourceEntity(outlier.getId(), r.getId(), "ppomppu"));
+
+		mockMvc.perform(get("/api/v1/variants/{id}/benchmark", variantId)
+						.param("periodMonths", "6"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.n").value(5))
+				.andExpect(jsonPath("$.outliers").isArray())
+				.andExpect(jsonPath("$.outliers").isEmpty());
+
+		mockMvc.perform(get("/api/v1/variants/{id}/benchmark", variantId)
+						.param("periodMonths", "6").param("includeOutliers", "true"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.n").value(5)) // 계산 진실은 그대로
+				.andExpect(jsonPath("$.benchmarkPrice").value(890_000))
+				.andExpect(jsonPath("$.outliers[0].price").value(5_000_000));
+	}
+
 	@Test
 	void invalidPeriodReturns400WithCode() throws Exception {
 		mockMvc.perform(get("/api/v1/variants/{id}/benchmark", variantId).param("periodMonths", "0"))

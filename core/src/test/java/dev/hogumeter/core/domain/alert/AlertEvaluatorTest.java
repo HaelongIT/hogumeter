@@ -30,19 +30,19 @@ class AlertEvaluatorTest {
 	private static BenchmarkView sufficient() {
 		return new BenchmarkView(Tier.SUFFICIENT, 890_000L, 850_000L,
 				new PricePoint(820_000L, LocalDate.of(2026, 6, 1)), null,
-				7, 3, null, 990_000L, new Gap(null, null), List.of());
+				7, 3, null, 990_000L, new Gap(null, null), List.of(), List.of());
 	}
 
 	private static BenchmarkView sparse(long current, long... casePrices) {
 		List<DealRef> cases = Arrays.stream(casePrices).boxed()
 				.map(p -> new DealRef(p, LocalDate.of(2026, 6, 1), "ppomppu", "u", List.of())).toList();
 		return new BenchmarkView(Tier.SPARSE, null, null, null, null, cases.size(), 0, null, current,
-				new Gap(null, null), cases);
+				new Gap(null, null), cases, List.of());
 	}
 
 	private static BenchmarkView none(long current) {
 		return new BenchmarkView(Tier.NONE, null, null, null, null, 0, 0, null, current, new Gap(null, null),
-				List.of());
+				List.of(), List.of());
 	}
 
 	private static DealEvent deal(long price) {
@@ -139,7 +139,7 @@ class AlertEvaluatorTest {
 		// Q-53: 현재가 미확립(null)이면 잭팟은 현재가 대비 판정이라 근거가 없다. 아무리 싼 딜이라도 발화 금지 —
 		// 예전엔 현재가 0에 대해 threshold=0을 계산해 조용히 놓쳤다(0 비교라 로그도 근거도 없이).
 		BenchmarkView view = new BenchmarkView(Tier.NONE, null, null, null, null, 0, 0, null, null,
-				new Gap(null, null), List.of());
+				new Gap(null, null), List.of(), List.of());
 
 		AlertDecision r = evaluator.evaluate(deal(1L), view, policy(null), params);
 

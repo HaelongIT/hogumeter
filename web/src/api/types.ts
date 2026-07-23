@@ -108,6 +108,11 @@ export interface BenchmarkView {
   currentPrice: number | null
   gap: Gap
   cases: DealRef[]
+  /**
+   * 표시 손잡이(Q-11, `includeOutliers=true`일 때만 채워짐) — 계산 진실(tier·n·benchmarkPrice)과
+   * 무관한 표시 전용 목록. 손잡이를 안 켰으면 항상 빈 배열.
+   */
+  outliers: DealRef[]
 }
 
 /** GET /api/v1/variants/{variantId}/signal — 표시 전용. 알림 트리거가 아니다. */

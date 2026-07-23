@@ -38,7 +38,11 @@ class BenchmarkCalculatorTest {
 	}
 
 	private BenchmarkView compute(List<DealEvent> deals, long currentPrice) {
-		return calculator.compute(deals, currentPrice, PERIOD, BenchmarkParamsFixtures.defaultParams(), CLOCK);
+		return calculator.compute(deals, currentPrice, PERIOD, BenchmarkParamsFixtures.defaultParams(), CLOCK, false);
+	}
+
+	private BenchmarkView computeIncludingOutliers(List<DealEvent> deals, long currentPrice) {
+		return calculator.compute(deals, currentPrice, PERIOD, BenchmarkParamsFixtures.defaultParams(), CLOCK, true);
 	}
 
 	// ---- AC-4 NONE ----
@@ -145,6 +149,60 @@ class BenchmarkCalculatorTest {
 		assertThat(view.benchmarkPrice()).isEqualTo(850_000L); // 이상치 미포함 median
 	}
 
+	/**
+	 * Q-11 — includeOutliers는 <b>표시 손잡이</b>다. 계산 진실(tier·n·benchmarkPrice)은 이 값과
+	 * 무관하게 이상치를 항상 제외한다 — 손잡이는 별도의 표시용 목록({@code outliers})만 채운다.
+	 */
+	@Test
+	void includeOutliersFalseByDefaultLeavesTheDisplayListEmpty() {
+		List<DealEvent> deals = List.of(
+				single(800_000L, "2026-07-01"),
+				aDealEvent().withPriceFirst(5_000_000L).singleSite().outlier(OutlierFlag.UPPER)
+						.firstSeen("2026-07-02T00:00:00Z").build());
+
+		BenchmarkView view = compute(deals, 990_000L); // includeOutliers=false
+
+		assertThat(view.outliers()).isEmpty();
+		assertThat(view.n()).isEqualTo(1); // 계산 진실은 손잡이와 무관 — 항상 이상치 제외
+	}
+
+	@Test
+	void includeOutliersTrueListsThemWithoutTouchingCalculationTruth() {
+		List<DealEvent> deals = List.of(
+				single(800_000L, "2026-07-01"),
+				single(820_000L, "2026-06-20"),
+				single(850_000L, "2026-06-10"),
+				single(900_000L, "2026-06-05"),
+				single(950_000L, "2026-05-15"),
+				aDealEvent().withPriceFirst(5_000_000L).singleSite().outlier(OutlierFlag.UPPER)
+						.firstSeen("2026-07-02T00:00:00Z").build(),
+				aDealEvent().withPriceFirst(10_000L).singleSite().outlier(OutlierFlag.LOWER)
+						.firstSeen("2026-07-03T00:00:00Z").build());
+
+		BenchmarkView view = computeIncludingOutliers(deals, 990_000L);
+
+		// 손잡이를 켜도 계산 진실은 그대로다 — n·tier·median은 이상치 2건을 여전히 뺀 값.
+		assertThat(view.n()).isEqualTo(5);
+		assertThat(view.tier()).isEqualTo(Tier.SUFFICIENT);
+		assertThat(view.benchmarkPrice()).isEqualTo(850_000L);
+		// 표시용 목록에만 이상치 2건이 나열된다(가격순).
+		assertThat(view.outliers()).extracting(BenchmarkView.DealRef::price)
+				.containsExactly(10_000L, 5_000_000L);
+	}
+
+	@Test
+	void outlierDisplayListRespectsThePeriodWindow() {
+		List<DealEvent> deals = List.of(
+				single(800_000L, "2026-07-01"),
+				// 기간(6개월, 하한 2026-01-15) 밖의 이상치는 손잡이를 켜도 나오지 않는다.
+				aDealEvent().withPriceFirst(5_000_000L).singleSite().outlier(OutlierFlag.UPPER)
+						.firstSeen("2025-01-01T00:00:00Z").build());
+
+		BenchmarkView view = computeIncludingOutliers(deals, 990_000L);
+
+		assertThat(view.outliers()).isEmpty();
+	}
+
 	// ---- BM-05 AC-3 연동: 영구 제외(사기 기각) 딜은 outlierFlag NONE이어도 표본 배제 ----
 	@Test
 	void excludesPermanentlyRejectedDealsFromSample() {
@@ -198,7 +256,7 @@ class BenchmarkCalculatorTest {
 				single(860_000L, "2026-01-01"));
 
 		BenchmarkView view = calculator.compute(deals, 990_000L, 1,
-				BenchmarkParamsFixtures.defaultParams(), CLOCK);
+				BenchmarkParamsFixtures.defaultParams(), CLOCK, false);
 
 		assertThat(view.n()).isEqualTo(7);
 		assertThat(view.tier()).isEqualTo(Tier.SUFFICIENT);
@@ -215,7 +273,7 @@ class BenchmarkCalculatorTest {
 				single(830_000L, "2024-11-01"));
 
 		BenchmarkView view = calculator.compute(deals, 990_000L, 1,
-				BenchmarkParamsFixtures.defaultParams(), CLOCK);
+				BenchmarkParamsFixtures.defaultParams(), CLOCK, false);
 
 		assertThat(view.n()).isEqualTo(1); // 상한 밖 3건 제외
 		assertThat(view.tier()).isEqualTo(Tier.SPARSE);
@@ -280,7 +338,8 @@ class BenchmarkCalculatorTest {
 				cross(890_000L, "2026-06-14"), cross(920_000L, "2026-06-16"),
 				cross(950_000L, "2026-06-18"));
 
-		BenchmarkView view = calculator.compute(deals, null, PERIOD, BenchmarkParamsFixtures.defaultParams(), CLOCK);
+		BenchmarkView view = calculator.compute(deals, null, PERIOD, BenchmarkParamsFixtures.defaultParams(), CLOCK,
+				false);
 
 		assertThat(view.currentPrice()).isNull();
 		assertThat(view.gap().vsBenchmark()).isNull();
@@ -309,10 +368,10 @@ class BenchmarkCalculatorTest {
 	@Test
 	void rejectsNonPositivePeriod() {
 		assertThatThrownBy(() -> calculator.compute(List.of(), 990_000L, 0,
-				BenchmarkParamsFixtures.defaultParams(), CLOCK))
+				BenchmarkParamsFixtures.defaultParams(), CLOCK, false))
 				.isInstanceOf(InvalidBenchmarkPeriodException.class);
 		assertThatThrownBy(() -> calculator.compute(List.of(), 990_000L, -1,
-				BenchmarkParamsFixtures.defaultParams(), CLOCK))
+				BenchmarkParamsFixtures.defaultParams(), CLOCK, false))
 				.isInstanceOf(InvalidBenchmarkPeriodException.class);
 	}
 }

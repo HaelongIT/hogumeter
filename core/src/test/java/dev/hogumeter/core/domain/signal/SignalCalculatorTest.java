@@ -27,12 +27,12 @@ class SignalCalculatorTest {
 	private static BenchmarkView sufficient(Long benchmark, Long goodDealLine, int m) {
 		return new BenchmarkView(Tier.SUFFICIENT, benchmark, goodDealLine,
 				new PricePoint(820_000L, LocalDate.of(2026, 6, 1)), null, 7, m, null, 990_000L,
-				new Gap(null, null), List.of());
+				new Gap(null, null), List.of(), List.of());
 	}
 
 	private static BenchmarkView sparse() {
 		return new BenchmarkView(Tier.SPARSE, null, null, null, null, 3, 0, null, 990_000L,
-				new Gap(null, null), List.of());
+				new Gap(null, null), List.of(), List.of());
 	}
 
 	private static DealEvent activeDeal(long priceLast, String lastEvidenceIso) {

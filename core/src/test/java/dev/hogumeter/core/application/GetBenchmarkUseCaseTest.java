@@ -297,6 +297,35 @@ class GetBenchmarkUseCaseTest {
 	}
 
 	/**
+	 * Q-11 배선 확인 — {@code includeOutliers}가 예전엔 파라미터로만 받고 계산기로 <b>한 번도 넘겨지지
+	 * 않았다</b>(호출자 0과 같은 모양: 값이 받아지긴 하지만 흐르지 않는다). 이 테스트가 없으면
+	 * 배선을 지워도(3-arg 오버로드가 5-arg에 false를 하드코딩해도) 아무것도 안 깨진다.
+	 */
+	@Test
+	void includeOutliersFlowsToTheCalculatorAndPopulatesTheDisplayList() {
+		insertCrossVerifiedDeal(820_000, "2026-06-10");
+		insertCrossVerifiedDeal(850_000, "2026-06-12");
+		insertCrossVerifiedDeal(890_000, "2026-06-14");
+		insertCrossVerifiedDeal(920_000, "2026-06-16");
+		insertCrossVerifiedDeal(950_000, "2026-06-18");
+		long outlierId = insertCrossVerifiedDeal(variantId, 5_000_000, "2026-06-19", null);
+		jdbc.update("update deal_event set outlier_flag = 'UPPER' where id = ?", outlierId);
+		em.flush();
+		em.clear();
+
+		BenchmarkView withoutOutliers = useCase.getBenchmark(variantId, 6, false);
+		BenchmarkView withOutliers = useCase.getBenchmark(variantId, 6, true);
+
+		// 손잡이를 켜도 꺼도 계산 진실은 같다 — 이상치는 항상 표본에서 빠진다.
+		assertThat(withoutOutliers.n()).isEqualTo(5);
+		assertThat(withOutliers.n()).isEqualTo(5);
+		assertThat(withoutOutliers.benchmarkPrice()).isEqualTo(withOutliers.benchmarkPrice());
+		// 표시 목록만 손잡이를 따른다.
+		assertThat(withoutOutliers.outliers()).isEmpty();
+		assertThat(withOutliers.outliers()).extracting(BenchmarkView.DealRef::price).containsExactly(5_000_000L);
+	}
+
+	/**
 	 * Q-66 ①(확정본 §40·41): <b>분리(SPLIT)면 수요축 값별로 분포가 갈린다.</b> 지금까지 SPLIT은 저장만 되고
 	 * 아무 동작도 바꾸지 못했다 — 모든 색이 한 분포에 섞여 median이 색과 무관한 값이 됐다.
 	 */

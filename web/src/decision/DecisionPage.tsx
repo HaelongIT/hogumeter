@@ -52,6 +52,8 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
   const [variantId, setVariantId] = useState<number | null>(initialVariantId)
   const [periodMonths, setPeriodMonths] = useState<number>(6)
   const [demandAxisValue, setDemandAxisValue] = useState<string | null>(null)
+  // Q-11: 기본 숨김 + 사용자 토글. 켜도 기준가 계산은 안 바뀐다 — 표시 전용 목록만 채워진다.
+  const [includeOutliers, setIncludeOutliers] = useState(false)
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -81,7 +83,7 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
     // 신호등·기준가는 **같은 수요축 값**으로 부른다 — 다르면 한 화면이 서로 다른 사실을 말한다.
     Promise.all([
       api.getSignal(variantId, demandAxisValue), // 기간 무관 — core가 6개월로 고정한다
-      api.getBenchmark(variantId, periodMonths, demandAxisValue),
+      api.getBenchmark(variantId, periodMonths, demandAxisValue, includeOutliers),
       api.getCadence(variantId, periodMonths),
     ])
       .then(([signal, benchmark, cadence]) => live && setLoaded({ signal, benchmark, cadence }))
@@ -90,7 +92,7 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
     return () => {
       live = false
     }
-  }, [variantId, periodMonths, demandAxis, demandAxisValue])
+  }, [variantId, periodMonths, demandAxis, demandAxisValue, includeOutliers])
 
   const badge = loaded && signalBadge(loaded.signal)
 
@@ -125,6 +127,17 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
           </select>
         </label>
       </div>
+
+      {/* Q-11: 기본 숨김. 켜도 기준가·신호는 안 바뀐다 — 계산에서 제외된 값을 참고로만 보여준다.
+          별도 행으로 둔다 — 위 context-row는 2열 그리드라 세 번째 항목은 어그러진다. */}
+      <label className="outlier-toggle">
+        <input
+          type="checkbox"
+          checked={includeOutliers}
+          onChange={(event) => setIncludeOutliers(event.target.checked)}
+        />
+        이상치 포함(참고용)
+      </label>
 
       {/* 분리(SPLIT) 제품은 값마다 분포가 다르다 — 어느 값을 볼지 사람이 골라야 답할 수 있다(Q-66 ①). */}
       {demandAxis !== null && (
@@ -236,6 +249,25 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
               <h2>사례 {loaded.benchmark.cases.length}건</h2>
               <ul>
                 {loaded.benchmark.cases.map((deal) => (
+                  <li key={deal.sourceUrl}>
+                    {deal.date} · {deal.price.toLocaleString('en-US')}원 · {deal.site}
+                    {conditionsSuffix(deal.conditions)} ·{' '}
+                    <a href={deal.sourceUrl} target="_blank" rel="noreferrer">
+                      원문
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Q-11 — 계산 진실과 무관한 참고 목록이다. 이 딜들은 기준가·신호 어디에도 반영되지
+              않았다 — 판단은 사람이 원문을 보고 한다(절대 원칙 2). */}
+          {includeOutliers && loaded.benchmark.outliers.length > 0 && (
+            <section aria-label="이상치" className="outliers">
+              <h2>이상치 {loaded.benchmark.outliers.length}건(기준가 계산에서 제외됨)</h2>
+              <ul>
+                {loaded.benchmark.outliers.map((deal) => (
                   <li key={deal.sourceUrl}>
                     {deal.date} · {deal.price.toLocaleString('en-US')}원 · {deal.site}
                     {conditionsSuffix(deal.conditions)} ·{' '}

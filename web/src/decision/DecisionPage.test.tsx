@@ -36,6 +36,7 @@ const benchmark: BenchmarkView = {
   currentPrice: 890_000,
   gap: { vsBenchmark: { won: 70_000, pct: 8.5 }, vsLowest: { won: 110_000, pct: 14.1 } },
   cases: [],
+  outliers: [],
 }
 
 const pick = () => userEvent.selectOptions(screen.getByLabelText('variant'), '11')
@@ -186,7 +187,7 @@ describe('DecisionPage — 수요축 분리 제품', () => {
     await userEvent.selectOptions(screen.getByLabelText('variant'), '21')
     await userEvent.selectOptions(await screen.findByLabelText('색상'), '블랙')
 
-    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(21, 6, '블랙'))
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(21, 6, '블랙', false))
     expect(api.getSignal).toHaveBeenCalledWith(21, '블랙')
   })
 })
@@ -207,7 +208,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
     await pick()
 
-    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 6, null))
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 6, null, false))
     expect(api.getCadence).toHaveBeenCalledWith(11, 6)
   })
 
@@ -217,7 +218,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     await pick()
     await userEvent.selectOptions(screen.getByLabelText('기간'), '12')
 
-    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 12, null))
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 12, null, false))
     expect(api.getCadence).toHaveBeenCalledWith(11, 12)
   })
 
@@ -234,5 +235,61 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     )
     // core는 신호등에 기간을 받지 않는다 — 인자를 지어내지 않았다.
     expect(api.getSignal).toHaveBeenLastCalledWith(11, null)
+  })
+})
+
+describe('DecisionPage — 이상치 토글 (Q-11, 기본 숨김)', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'listProducts').mockResolvedValue([iphone])
+    vi.spyOn(api, 'getSignal').mockResolvedValue(signal)
+    vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
+    vi.spyOn(api, 'listPurchases').mockResolvedValue([])
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [] })
+    vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
+  })
+
+  it('기본은 꺼져 있고, 켜면 includeOutliers=true로 다시 부른다', async () => {
+    vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
+    render(<DecisionPage />)
+    await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+    await pick()
+
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 6, null, false))
+
+    await userEvent.click(screen.getByLabelText('이상치 포함(참고용)'))
+
+    await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 6, null, true))
+  })
+
+  it('토글을 켜고 이상치가 있으면 계산 진실과 분리해 보여준다', async () => {
+    vi.spyOn(api, 'getBenchmark').mockResolvedValue({
+      ...benchmark,
+      outliers: [
+        { price: 5_000_000, date: '2026-07-02', site: 'ppomppu', sourceUrl: 'https://p/9', conditions: [] },
+      ],
+    })
+    render(<DecisionPage />)
+    await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+    await pick()
+    await userEvent.click(screen.getByLabelText('이상치 포함(참고용)'))
+
+    expect(await screen.findByRole('heading', { name: /이상치 1건/ })).toBeInTheDocument()
+    expect(screen.getByLabelText('이상치')).toHaveTextContent('5,000,000원')
+    expect(screen.getByLabelText('이상치')).toHaveTextContent('기준가 계산에서 제외됨')
+  })
+
+  it('토글이 꺼져 있으면 outliers가 응답에 있어도 그리지 않는다', async () => {
+    vi.spyOn(api, 'getBenchmark').mockResolvedValue({
+      ...benchmark,
+      outliers: [
+        { price: 5_000_000, date: '2026-07-02', site: 'ppomppu', sourceUrl: 'https://p/9', conditions: [] },
+      ],
+    })
+    render(<DecisionPage />)
+    await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+    await pick()
+
+    await screen.findByLabelText('판단 요약')
+    expect(screen.queryByLabelText('이상치')).not.toBeInTheDocument()
   })
 })

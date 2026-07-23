@@ -34,6 +34,7 @@ paths:
 - **SPARSE/NONE에서는 통계 용어도 금액도 내지 않는다.** 테스트로 `/\d{1,3}(,\d{3})+\s*원/`이 없음을 단언한다. 대신 사례를 원문 링크로 나열한다(절대 원칙 2).
 - **주기(CAD)에 "예상·예측"을 쓰지 않는다.** 테스트가 그 단어의 부재를 단언한다.
 - **`currentPrice === null`이면 미확립이다**(`currentPriceUnavailable`, `docs/91` Q-53). core가 미확립이면 `currentPrice: null`·`gap`의 두 leg도 null로 보낸다(갭을 아예 계산하지 않는다) — 갭을 그리지 않는다. 해석은 **한 곳**에만 둔다. 예전엔 sentinel 0이라 `=== 0`이었으나(그때 core가 `−100%`를 보냈다), 이제 null이 타입상 명시라 각 소비처가 `=== null`로 내로잉한다.
+- **이상치 토글(Q-11, 2026-07-23)**: `BenchmarkView.outliers`는 `includeOutliers=true`를 보낸 요청에서만 채워지는 **표시 전용** 목록이다 — 켜도 `tier`·`n`·`benchmarkPrice` 등 계산 진실은 안 바뀐다. `DecisionPage`의 체크박스는 기본 꺼짐(과대약속 금지: 이상치가 기준가에 들어간 것처럼 보이면 안 된다). 이 항목의 core 쪽 재개 트리거("M1 web 슬라이스에서 기준가 화면 구현 시")가 **화면이 이미 서 있는데도 몇 주째 참인 채 방치**돼 있었다 — `getBenchmark(...)`가 `includeOutliers`를 받기만 하고 계산기로 넘기지 않는 "파라미터 0" 결함이었다.
 
 ## 범위
 

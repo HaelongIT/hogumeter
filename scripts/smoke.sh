@@ -327,7 +327,7 @@ echo "$bench" | grep -q '"conditions":' || fail "DealRef.conditions가 응답에
 # core가 필드 이름을 바꾸면(goodDealLine → goodDealCutoff 등) 단위 테스트는 GREEN인데 화면은
 # 조용히 undefined를 그린다. 부품별 GREEN은 모듈 경계 계약을 보장하지 않는다(CLAUDE.md).
 # 목록의 정본은 web/src/api/types.ts의 BenchmarkView다 — 필드를 늘리면 여기도 늘린다.
-for field in tier benchmarkPrice goodDealLine periodLowest latestDeal n m expandedToMonths currentPrice gap cases; do
+for field in tier benchmarkPrice goodDealLine periodLowest latestDeal n m expandedToMonths currentPrice gap cases outliers; do
 	echo "$bench" | grep -q "\"${field}\":" ||
 		fail "web BenchmarkView가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $bench"
 done

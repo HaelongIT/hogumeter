@@ -14,7 +14,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * 기준가 조회 유스케이스(BM-06 배선). variant의 deal_event를 로드·도메인 매핑해 순수 계산기에 넘긴다.
- * includeOutliers는 표시 손잡이라 계산 진실 불변(이상치 항상 제외) — 표시용 목록 배선은 후속(docs/91 Q-11).
+ * includeOutliers는 표시 손잡이라 계산 진실 불변(이상치 항상 제외) — {@code BenchmarkView.outliers}만
+ * 채운다(Q-11 해소, 재개 트리거였던 "M1 web 슬라이스의 기준가 화면"이 이미 서 있었다).
  */
 @Service
 public class GetBenchmarkUseCase {
@@ -63,6 +64,6 @@ public class GetBenchmarkUseCase {
 		deals = demandScope.scope(variantId, deals, demandAxisValue);
 		Long current = currentPrice.currentPriceFor(variantId); // 미확립이면 null(Q-53)
 		// K는 사용자 손잡이라 variant마다 다르다(Q-48 ①) — 나머지 수치는 시스템 고정.
-		return calculator.compute(deals, current, periodMonths, params.of(variantId), clock);
+		return calculator.compute(deals, current, periodMonths, params.of(variantId), clock, includeOutliers);
 	}
 }

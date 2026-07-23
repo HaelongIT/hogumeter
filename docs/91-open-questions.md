@@ -57,10 +57,11 @@ _(Q-5. 뽐뿌 golden fixture 재채취 — **해소됨 2026-07-09**: 재채취 *
 - **잠정값**: `BenchmarkCalculator.qualifiesAsColdStartJackpot(dealPriceFirst, currentPrice, params)` 순수 술어로 분리 — 뷰는 tier=NONE만 표기. seam = 이 메서드 1곳.
 - **재개 트리거**: AL 모듈(기능3)이 NONE 구간 알림을 배선할 때 이 술어를 호출 — 시그니처·소비 지점 확정.
 
-## [열림] Q-11. includeOutliers 토글은 계산 진실 밖
+## [해소 2026-07-23] Q-11. includeOutliers 토글은 계산 진실 밖
 - **맥락**: `docs/benchmark/03` line 9의 `includeOutliers`(기본 false)는 표시 손잡이 — "계산 진실은 불변". 순수 계산기는 항상 이상치를 제외한다.
-- **잠정값**: `compute()`의 진실 경로엔 미진입(이상치 항상 제외). 토글은 표시용 별도 목록(향후 web 어댑터 관심사)로 이번 증분 범위 밖.
-- **재개 트리거**: M1 web 슬라이스에서 기준가 화면 구현 시 — 이상치 목록 표시 경로를 계산 진실과 분리해 배선.
+- **✅ 이 항목의 재개 트리거는 이미 참이었다**: "M1 web 슬라이스에서 기준가 화면 구현 시"라고 적혀 있었는데, `DecisionPage`(기준가 화면)는 오래전부터 서 있었다 — Q-46·Q-48·Q-67과 같은 모양의 **거짓 봉인**이었다. 실측(2026-07-23): `GetBenchmarkUseCase.getBenchmark(...)`는 `includeOutliers` 파라미터를 **받기만 하고 계산기로 한 번도 넘기지 않았다**(호출자 0과 같은 결의 결함 — "파라미터 0").
+- **해소 내용**: `BenchmarkCalculator.compute(...)`에 `includeOutliers` 인자 추가 + `BenchmarkView.outliers` 필드 신설. 손잡이가 켜져도 tier·n·benchmarkPrice 등 계산 진실은 **완전히 불변**(같은 window의 `candidates`에서 outlierFlag≠NONE만 걸러 별도 목록으로 조립, pricingSample과 무관). `GetBenchmarkUseCase`가 이제 실제로 넘긴다. REST(`BenchmarkController`)는 이미 파라미터를 받고 있었으므로 무변경. web `DecisionPage`에 "이상치 포함(참고용)" 체크박스 추가 — 기본 꺼짐, 켜면 계산과 분리된 목록을 원문 링크와 함께 보여준다.
+- **검증**: 배선 뮤테이션으로 RED 확인(`GetBenchmarkUseCaseTest`), REST 계약 테스트(`BenchmarkControllerTest`), 실 브라우저로 실 데이터에 대고 토글 on/off 확인(n=6 불변, 이상치 1건만 별도 표시).
 
 ## [열림] Q-12. 병합 가격 허용폭의 기준가(base) = anchor 딜
 - **맥락**: `MERGE_PRICE_TOLERANCE` = max(base×ratio, floor)에서 base를 두 딜 중 무엇으로 삼을지 docs 미명시(BM-04).

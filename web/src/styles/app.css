@@ -320,6 +320,15 @@
   min-width: 116px;
 }
 
+.outlier-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  color: var(--ink-dim);
+  font-size: 0.9em;
+}
+
 /*
  * 판정 히어로 — **답이 주인공이다.** 이 화면에서 사람이 알고 싶은 건 "지금 사도 되나"의 답 하나이고,
  * 계기·수치는 그 근거다. 그래서 판정은 한 줄이 아니라 히어로로 온다.
@@ -599,6 +608,30 @@
   padding: 10px 13px;
   background: var(--panel);
   border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+/* ── 이상치(Q-11 표시 손잡이) — 사례와 같은 모양, 계산 진실 밖임을 잊지 않게 옅게 */
+.outliers h2 {
+  font-size: 0.9375rem;
+  margin-bottom: 8px;
+  color: var(--ink-dim);
+}
+
+.outliers ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.outliers li {
+  font-size: 0.875rem;
+  color: var(--ink-dim);
+  padding: 10px 13px;
+  background: var(--panel);
+  border: 1px dashed var(--hairline);
   border-radius: var(--radius-sm);
 }
 

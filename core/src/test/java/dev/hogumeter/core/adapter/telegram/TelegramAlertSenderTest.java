@@ -51,7 +51,7 @@ class TelegramAlertSenderTest {
 				.withSourceUrl("https://ppomppu.test/1").build();
 		var view = new BenchmarkView(Tier.SUFFICIENT, 890_000L, null,
 				new BenchmarkView.PricePoint(850_000L, java.time.LocalDate.of(2026, 6, 1)), null, 2, 2, null, null,
-				new BenchmarkView.Gap(null, null), List.of());
+				new BenchmarkView.Gap(null, null), List.of(), List.of());
 		return new AlertMessage(deal, view, new AlertDecision(true, AlertIntensity.JACKPOT, List.of(), List.of()),
 				null, "아이폰 17", "256GB", 42L);
 	}

@@ -88,10 +88,12 @@ export const api = {
   /**
    * @param demandAxisValue 분리(SPLIT) 제품에서 볼 수요축 값(Q-66 ①). 묶음이면 생략한다.
    *     분리인데 안 보내면 core가 400(`BM_DEMAND_AXIS_VALUE_REQUIRED`) — 전체로 답하면 묶음의 거짓말이다.
+   * @param includeOutliers Q-11 표시 손잡이 — true면 계산 진실과 무관한 `outliers` 목록이 채워진다.
    */
-  getBenchmark: (variantId: number, periodMonths = 6, demandAxisValue?: string | null) =>
+  getBenchmark: (variantId: number, periodMonths = 6, demandAxisValue?: string | null, includeOutliers = false) =>
     request<BenchmarkView>(
-      `/api/v1/variants/${variantId}/benchmark?periodMonths=${periodMonths}${demandAxisParam(demandAxisValue)}`,
+      `/api/v1/variants/${variantId}/benchmark?periodMonths=${periodMonths}` +
+        `&includeOutliers=${includeOutliers}${demandAxisParam(demandAxisValue)}`,
     ),
 
   /** 신호등도 기준가와 **같은 표본**을 봐야 한다 — 한쪽만 색을 가르면 화면이 서로 다른 사실을 말한다. */

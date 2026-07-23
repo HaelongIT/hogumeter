@@ -25,12 +25,12 @@ class AlertMessageFormatterTest {
 	private static BenchmarkView sufficient(long benchmark, long lowest, int m) {
 		return new BenchmarkView(Tier.SUFFICIENT, benchmark, null,
 				new BenchmarkView.PricePoint(lowest, LocalDate.of(2026, 6, 10)), null, m, m, null, null,
-				new BenchmarkView.Gap(null, null), List.of());
+				new BenchmarkView.Gap(null, null), List.of(), List.of());
 	}
 
 	private static BenchmarkView sparse(int n) {
 		return new BenchmarkView(Tier.SPARSE, null, null, null, null, n, 0, null, null,
-				new BenchmarkView.Gap(null, null), List.of());
+				new BenchmarkView.Gap(null, null), List.of(), List.of());
 	}
 
 	private static AlertMessage first(DealEvent deal, BenchmarkView view, AlertIntensity intensity,

@@ -952,3 +952,11 @@
 - **교훈(규칙화)**: **문자열을 조합해 그리는 화면은, 그 문자열이 core에서 이미 완성된 조각(예: `source`)을 포함한다면, 실제 렌더 결과를 눈으로 한 번 봐야 한다.** 단위 테스트가 mock 데이터의 필드 존재만 확인하고 "그 값과 우리가 붙이는 접미사가 합쳐진 최종 문장"을 사람이 읽지 않으면 중복·어색함이 그대로 배포된다. **여러 컴포넌트의 상호작용(등록→다른 화면 갱신)도 마찬가지** — 각 컴포넌트를 독립적으로 테스트하면 통합 지점의 결함은 원리적으로 안 보인다.
 - **방법**: 실행 중인 dev compose 스택(core+web 재빌드, postgres 데이터는 보존)에 실제로 접속해 폼을 채우고 제출했다. 네이티브 `<select>`는 스크린샷에 안 보이므로(OS 팝업) `HTMLSelectElement.prototype.value`의 setter를 직접 호출해 값 설정 + `change` 이벤트 디스패치로 다뤘다. curl로 새 REST를 스모크에 추가할 때 한글 payload를 argv로 넘기면 Windows curl.exe가 cp949로 깨뜨린다는, 이미 smoke.sh 4)단계에 적혀 있던 규칙을 다시 만났다 — **새 curl 블록을 추가할 때 근처의 기존 관례(파일로 페이로드 전달)를 먼저 살폈어야** 시행착오가 없었다.
 - **관련**: `web/src/used/UsedPage.tsx`(`evaluateRefreshKey` seam), `web/src/used/UsedPage.test.tsx`, `web/src/used/UsedEvaluatePage.tsx`(문구 수정), `scripts/smoke.sh` 5-4c(페이로드 파일화).
+
+## 2026-07-23 — "받기만 하고 안 넘긴다"는 호출자 0의 사촌이다 (Q-11 파라미터 0)
+
+- **맥락**: `GetBenchmarkUseCase.getBenchmark(variantId, periodMonths, includeOutliers, demandAxisValue)`는 REST부터 파라미터를 제대로 받고 있었다. 컴파일도 되고 테스트도 통과했다 — **다만 메서드 본문이 그 값을 계산기에 한 번도 넘기지 않았다.**
+- **왜 이런 결함이 생기나**: "호출자 0인 순수 함수"(이미 규칙화됨)와 거울상이다 — 그쪽은 함수가 아무도 안 부르는 경우이고, 이쪽은 **파라미터가 함수 안으로는 들어오지만 그 함수의 하위 호출로 흘러나가지 못하는** 경우다. 시그니처만 보면 "당연히 쓰겠지"라고 넘기기 쉽다.
+- **왜 오래 방치됐나**: Q-11의 재개 트리거가 "M1 web 슬라이스에서 기준가 화면 구현 시"였는데, 그 화면(`DecisionPage`)은 이미 오래전에 완성돼 있었다 — Q-46·Q-48·Q-67과 똑같은 모양의 **거짓 봉인**이다. "화면이 생기면 그때 배선하자"고 적어 둔 조건이 조용히 참이 된 채 아무도 다시 보지 않았다.
+- **교훈(규칙화)**: **메서드에 파라미터가 있다고 그 값이 쓰인다는 뜻이 아니다.** "쓰기만 하는 테이블", "호출자 0인 함수"를 감사하듯, **"받았는데 다음 호출로 안 넘기는 파라미터"**도 같은 감사 대상이다 — 특히 boolean 플래그(표시 손잡이류)처럼 아래로 한 겹만 통과시키면 되는 값일수록, 그 한 겹을 빼먹기 쉽고 컴파일러도 못 잡는다. 기계화 후보: 메서드 파라미터 이름이 그 본문 안의 다른 메서드 호출 인자 목록 어디에도 안 나타나면 의심 — 노이즈가 커서 완전 자동화는 어렵지만, "표시 손잡이" 계열 boolean 파라미터는 손으로 훑을 가치가 있다.
+- **관련**: `BenchmarkCalculator.compute(...)`(신규 `includeOutliers` 인자 + `outliers` 필드), `GetBenchmarkUseCaseTest#includeOutliersFlowsToTheCalculatorAndPopulatesTheDisplayList`(배선 뮤테이션으로 RED 확인), `BenchmarkControllerTest`, `web/src/decision/DecisionPage.tsx`.

@@ -15,6 +15,9 @@ import java.util.List;
  * @param currentPrice 현재가 — <b>미확립이면 null</b>(네이버 키 미발급, Q-53). 0을 sentinel로 쓰지
  *     않는다 — 0이면 갭이 −100%가 되어 "지금 100% 싸다"는 거짓말이 된다. null이면 gap의 두 leg도 null.
  * @param cases SPARSE일 때 사례 나열(가격·날짜·출처), 그 외 빈 리스트
+ * @param outliers 표시 손잡이(Q-11) — {@code includeOutliers=true}일 때만 채워지는 <b>표시 전용</b>
+ *     목록. 계산 진실(n·tier·benchmarkPrice)에는 손잡이와 무관하게 항상 영향을 주지 않는다 —
+ *     이상치는 여기서만 보이고, 위 통계에서는 이 손잡이가 꺼져 있어도 켜져 있어도 항상 제외된다.
  */
 public record BenchmarkView(
 		Tier tier,
@@ -27,7 +30,8 @@ public record BenchmarkView(
 		Integer expandedToMonths,
 		Long currentPrice,
 		Gap gap,
-		List<DealRef> cases) {
+		List<DealRef> cases,
+		List<DealRef> outliers) {
 
 	public record PricePoint(long price, LocalDate date) {
 	}
