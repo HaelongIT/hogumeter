@@ -348,9 +348,12 @@ for counter in 'matched\[' 'confirmed=1' 'candidate=0' 'unknown=0' 'rejected=0' 
 	echo "$tick" | grep -q "$counter" ||
 		fail "매칭 tier 카운터에 '$counter'가 없다 (Q-57 계약 드리프트): $tick"
 done
-# Q-57: 후속 알림 발송 수도 종단 로그에 실린다(첫 알림만 세고 후속을 버리면 절반 카운터). 이 틱엔 후속 0.
-echo "$tick" | grep -q 'followUpsSent\[priceChanged=0 ended=0\]' ||
-	fail "후속 알림 카운터가 틱 로그에 없다 (Q-57): $tick"
+# Q-57·Q-13: 후속 알림 발송 수도 종단 로그에 실린다(첫 알림만 세고 후속을 버리면 절반 카운터). 이 틱엔 후속 0.
+# 문구를 통째로 grep하지 않는다 — 카운터를 늘릴 때마다 문구가 깨지는 함정을 이미 한 번 겪었다(위 참조).
+for counter in 'followUpsSent\[' 'priceChanged=0' 'ended=0' 'verified=0'; do
+	echo "$tick" | grep -q "$counter" ||
+		fail "후속 알림 카운터 '$counter'가 틱 로그에 없다 (Q-57·Q-13): $tick"
+done
 # Q-56: 단계 실패 수도 실린다 — 건강한 틱은 0이라, 이게 비-0이면 "도는 척" 틱이 로그 한 줄에 보인다.
 echo "$tick" | grep -q 'stepsFailed=0' || fail "단계 실패 카운터가 틱 로그에 없거나 0이 아니다 (Q-56): $tick"
 # Q-20 ②: 방해금지로 보류된 알림 수 + 종료분 플러시 결과도 실린다. 이 딜엔 방해금지가 없어 전부 0.
@@ -787,6 +790,25 @@ done
 mbench=$(curl -fsS "${WEB}/api/v1/variants/${merge_vid}/benchmark?periodMonths=6")
 echo "$mbench" | grep -q '"n":1' || fail "병합 후 표본이 1건이 아니다(딜이 안 합쳐졌다): $mbench"
 echo "$mbench" | grep -q '"m":1' || fail "병합됐는데 교차검증 m이 1이 아니다: $mbench"
+
+# Q-13: 먼저 처리된 원문이 SPARSE 첫 알림(GOOD)을 내고, 두 번째가 흡수(병합)된다 — 병합은 그 첫 알림을
+# **다시 내지 않고** VERIFIED 후속으로만 알린다. 둘 다 스텁 로그와 틱 카운터에 흔적을 남긴다.
+for _ in $(seq 20); do
+	verified_tick=$(compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' |
+		grep -E 'verified=[1-9]' | tail -1 || true)
+	[ -n "$verified_tick" ] && break
+	sleep 2
+done
+[ -n "$verified_tick" ] ||
+	fail "병합됐는데 틱 로그에 followUpsSent[...verified=1...]이 없다 (Q-13 미배선?)"
+compose logs --no-log-prefix core 2>&1 | grep -q 'STUB alert.*followUp=VERIFIED' ||
+	fail "VERIFIED 후속 알림 본문이 스텁 로그에 없다 (Q-13)"
+# 중복 발송 방지의 핵심 단언: 이 제품 이름(고유하게 지었다)으로 나간 **첫 알림**(intensity=)은
+# 정확히 1번이어야 한다 — 병합이 같은 트리거를 재평가해 두 번째 SEND_NOW를 냈다면 2가 잡힌다.
+merge_first_alerts=$(compose logs --no-log-prefix core 2>&1 |
+	grep 'STUB alert' | grep 'intensity=' | grep -c '병합테스트 제품' || true)
+[ "${merge_first_alerts:-0}" = 1 ] ||
+	fail "병합 딜의 첫 알림이 정확히 1번이 아니다 (실제 ${merge_first_alerts:-0}번 — Q-13 중복 발송 회귀?)"
 
 echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
 # 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.

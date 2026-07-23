@@ -144,6 +144,30 @@ class PipelineSchedulerTest {
 		assertThat(reported.get().followUpEndedSent()).isEqualTo(3);
 	}
 
+	/**
+	 * Q-13 — ingest가 이번 틱에 병합한 딜 id를 {@code IngestReport.mergedDealIds()}로 흘려보내고,
+	 * 스케줄러가 그 목록을 <b>VERIFIED</b> 종류로 후속 알림에 태운다. 병합은 이제 첫 알림을 다시 안 내는
+	 * 대신 이 경로로만 알린다 — 배선을 지우면(또는 엉뚱한 종류로 보내면) 이 테스트가 잡는다.
+	 */
+	@Test
+	@DisplayName("ingest가 병합한 딜 id를 VERIFIED 후속 알림으로 흘려보낸다 (Q-13)")
+	void mergedDealIdsFlowToVerifiedFollowUp() {
+		Supplier<IngestReport> ingestWithMerge = () -> new IngestReport(1, 0, 0, 0, 0, 0, 0, 0, List.of(7L, 8L));
+		List<Long> verifiedCalledWith = new ArrayList<>();
+		BiFunction<List<Long>, FollowUpKind, Integer> capturing = (ids, kind) -> {
+			if (kind == FollowUpKind.VERIFIED) {
+				verifiedCalledWith.addAll(ids);
+			}
+			return ids.size();
+		};
+
+		new PipelineScheduler(expire, ingestWithMerge, conditions, () -> List.of(), () -> List.of(),
+				capturing, () -> EMPTY, reported::set).tick();
+
+		assertThat(verifiedCalledWith).containsExactly(7L, 8L);
+		assertThat(reported.get().followUpVerifiedSent()).isEqualTo(2);
+	}
+
 	@Test
 	@DisplayName("아무 일도 없어도 보고한다 — 조용한 스케줄러는 죽은 스케줄러와 구별되지 않는다")
 	void idleTickStillReports() {

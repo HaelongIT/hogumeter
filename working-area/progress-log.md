@@ -1,3 +1,22 @@
+## 2026-07-23 — Q-13 병합 알림 중복발화 결함 수정 (무중단, 이어서)
+
+- **경위**: 배경 에이전트에 docs/91 "거짓 봉인"(재개 트리거가 이미 참인데 방치된 항목) 스캔을 맡겼고,
+  Q-13("BM-04 병합의 알림 억제는 AL 모듈 관심사" — 재개 트리거 "AL 착수 시")을 지적. AL은 이미
+  완성돼 있어 트리거가 참이었다. 서브에이전트 주장을 그대로 믿지 않고 `IngestDealsUseCase`·
+  `AlertEvaluator`·`DealMergePolicy`·`FollowUpAlertUseCase` 원문을 직접 대조해 실결함 확인.
+- **결함**: `confirmDeal`의 병합 분기가 신규 딜 생성과 **같은** `alertEvaluation.evaluate(...)`를 호출.
+  `priceFirst`는 병합으로 안 바뀌므로 같은 트리거가 매번 재충족 → 텔레그램 실전송(Q-20) 이후
+  같은 딜이 병합될 때마다 중복 알림이 나갈 결함(현재는 `StubAlertSender`가 로그만 남겨 조용).
+- **수정**: 병합은 `DispatchOutcome.NO_ALERT`만 반환, 병합 딜 id를 `IngestReport.mergedDealIds()`로
+  모아 `PipelineScheduler`가 기존에 검증된 멱등 경로 `FollowUpAlertUseCase.sendFollowUps(ids,
+  FollowUpKind.VERIFIED)`로 넘김 — 새 dedup 로직 없이 재사용. 부수적으로 `FollowUpKind.VERIFIED`
+  (AL-03 세 번째 종류, 선언만 되고 호출자 0이던 것)도 같이 배선.
+- **검증**: 회귀 테스트(`mergingASecondSiteDoesNotResendTheFirstAlert` 등)는 수정을 되돌려 RED
+  확인 후 복원(뮤테이션 검증). core 전체 GREEN, 감사 게이트 통과. `scripts/smoke.sh` 5-1h에
+  종단 단언 추가(병합 딜 첫 알림 정확히 1번·VERIFIED 후속이 로그·틱 카운터에 반영) — 격리
+  컨테이너(`CORE_PORT=58605`)로 실행해 첫 시도에 전부 통과.
+- docs/91 Q-13 "[해소 2026-07-23]"로 갱신, docs/99 교훈 추가. 커밋 예정.
+
 ## 2026-07-23 — Q-11 이상치 토글 배선 (무중단, 이어서)
 
 - **사용자 지시**: "확인은 나중에 할게, 무중단 개발 ㄱㄱ" — 다음 증분 추천 후 자율 진행.

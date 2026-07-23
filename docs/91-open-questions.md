@@ -68,10 +68,7 @@ _(Q-5. 뽐뿌 golden fixture 재채취 — **해소됨 2026-07-09**: 재채취 *
 - **잠정값**: base = **기존(anchor·먼저 처리된) 딜의 priceFirst**. seam = `DealMergePolicy.priceWithinTolerance` 1곳. 경계 포함(≤). 시간 윈도도 경계 포함(48h 정확=병합).
 - **재개 트리거**: 1차 검증에서 과분할(같은 딜 갈라짐)/오병합 관측 시 base 정의(min/max/평균) 재조정.
 
-## [열림] Q-13. BM-04 병합의 알림 억제·소급 방지는 AL 모듈 관심사
-- **맥락**: AC-3 "확정 시 소급 알림 없음", AC-4 "흡수 글은 새 첫 알림 금지"는 **알림 발화 규칙**. BM-04(순수 병합)는 병합 판정·상태 전이까지만 책임진다.
-- **잠정값**: BM-04는 `canMerge`/`merge` + 상태 전이(흡수 시 NEW 리셋 없음, ACTIVE→VERIFIED)만 보장. 실제 첫 알림 억제·소급 방지는 AL 모듈이 상태기계 이벤트를 구독해 처리(docs/02 알림 매핑).
-- **재개 트리거**: AL(기능3) 착수 시 상태 전이 이벤트 → 알림 판정 배선.
+_(Q-13. BM-04 병합의 알림 억제·소급 방지는 AL 모듈 관심사 — **해소됨 2026-07-23**: 배경 에이전트의 docs/91 "거짓 봉인" 스캔이 재개 트리거("AL 착수 시")가 이미 오래전 참이 됨을 지적 → 원문 대조로 실결함 확인. `IngestDealsUseCase.confirmDeal`의 병합(흡수) 분기가 신규 딜과 **똑같이** `alertEvaluation.evaluate(...)`를 호출하고 있었다 — `priceFirst`는 병합으로 안 바뀌므로 같은 트리거가 매번 다시 SEND_NOW를 냈을 결함(AC-3·AC-4 위반, 텔레그램 실전송 시 중복 문자로 드러날 것). `StubAlertSender`가 로그만 남겨 지금까지 조용했다. 수정: 병합은 `DispatchOutcome.NO_ALERT`만 반환하고 병합된 딜 id를 `IngestReport.mergedDealIds()`로 모아 `PipelineScheduler`가 이미 검증된 멱등 메커니즘 `FollowUpAlertUseCase.sendFollowUps(ids, FollowUpKind.VERIFIED)`로 넘긴다(AL-03의 세 번째 종류 VERIFIED — 선언은 됐으나 프로덕션 호출자가 0이던 것도 같이 배선). 회귀 테스트(`IngestDealsUseCaseTest#mergingASecondSiteDoesNotResendTheFirstAlert` 등)는 수정을 되돌려 RED를 확인한 뒤 복원해 뮤테이션 검증. `scripts/smoke.sh` 5-1h에 종단 단언 추가(병합 딜의 첫 알림이 정확히 1번, VERIFIED 후속이 스텁 로그·틱 카운터에 남음) — 격리 컨테이너로 실행해 통과 확인. decision-log 참조. 여기서 제거.)_
 
 ## [열림] Q-14. SPARSE 폴백 컷 밴드폭(absurdityRatio) — 미승인 잠정 파라미터
 - **맥락**: BM-05 AC-5 SPARSE 구간 폴백 컷은 "현재가 대비 비상식 가격"을 걸러야 하나, 그 밴드 폭이 docs/31 승인 6개 파라미터에 없다(신규 정책 수치).

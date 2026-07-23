@@ -22,11 +22,14 @@ import dev.hogumeter.core.application.IngestReport;
  * 셀 수 없다 — CANDIDATE·REJECTED는 딜을 만들지 않아 링크·딜 수에 흔적이 없다. 그래서 {@link IngestReport}로
  * 유스케이스가 직접 세어 넘긴다. 이 값이 있어야 "매칭이 대부분 REJECTED다"(카탈로그 협소) 같은 신호가 보인다.
  *
- * <p>{@code followUpPriceChangedSent}·{@code followUpEndedSent}는 이번 틱 <b>후속 알림</b> 발송 수다(AL-03,
- * OBS-02 "알림 발송 수", Q-57). 첫 알림과 부류가 달라 합치지 않고, 후속끼리도 <b>PRICE_CHANGED와 ENDED를
- * 가른다</b> — ENDED가 몰리면 딜이 대거 종료된 것이고 PRICE_CHANGED가 몰리면 가격이 움직인 것이라 뜻이 다르다.
- * 발송 수는 스냅샷에 흔적이 없어(전송은 상태 변화가 아니다) 스케줄러가 세어 넘긴다 — 안 그러면 {@code
- * sendFollowUps}가 낸 값이 조용히 버려진다("첫 알림은 세는데 후속은 안 세는" 절반 카운터).
+ * <p>{@code followUpPriceChangedSent}·{@code followUpEndedSent}·{@code followUpVerifiedSent}는 이번 틱
+ * <b>후속 알림</b> 발송 수다(AL-03, OBS-02 "알림 발송 수", Q-57·Q-13). 첫 알림과 부류가 달라 합치지 않고,
+ * 후속끼리도 <b>PRICE_CHANGED·ENDED·VERIFIED를 가른다</b> — ENDED가 몰리면 딜이 대거 종료된 것이고
+ * PRICE_CHANGED가 몰리면 가격이 움직인 것, VERIFIED가 몰리면 병합(교차검증)이 몰린 것이라 뜻이 다르다.
+ * VERIFIED는 ingest의 병합 분기가 <b>첫 알림 재발송 대신</b> 흘려보내는 대상이다(Q-13 — 병합은 priceFirst가
+ * 안 바뀌어 같은 트리거를 재평가하면 매번 다시 발화할 위험이 있었다). 발송 수는 스냅샷에 흔적이 없어(전송은
+ * 상태 변화가 아니다) 스케줄러가 세어 넘긴다 — 안 그러면 {@code sendFollowUps}가 낸 값이 조용히 버려진다
+ * ("첫 알림은 세는데 후속은 안 세는" 절반 카운터).
  *
  * <p>{@code reportCardsIssued}는 이번 틱에 발급한 성적표 수다(PUR-04). 발급은 REPORT_PENDING을 CLOSED로
  * 드레인하므로, 그냥 두면 {@code purchasesExpired}(= REPORT_PENDING 증가분)가 <b>"만료 − 발급"으로 오염</b>돼
@@ -56,14 +59,15 @@ public record PipelineTickReport(
 		IngestReport ingest,
 		int followUpPriceChangedSent,
 		int followUpEndedSent,
+		int followUpVerifiedSent,
 		int stepsFailed,
 		int heldAlertsFlushed,
 		int heldAlertsDropped,
 		FoldReport usedFold) {
 
 	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest,
-			int reportCardsIssued, int followUpPriceChangedSent, int followUpEndedSent, int stepsFailed,
-			int heldAlertsFlushed, int heldAlertsDropped, FoldReport usedFold) {
+			int reportCardsIssued, int followUpPriceChangedSent, int followUpEndedSent, int followUpVerifiedSent,
+			int stepsFailed, int heldAlertsFlushed, int heldAlertsDropped, FoldReport usedFold) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
 		// 발급이 REPORT_PENDING을 드레인하므로 Δ만으로는 만료 수가 아니다 — 발급 수를 더해 재구성한다.
@@ -84,6 +88,7 @@ public record PipelineTickReport(
 				ingest,
 				followUpPriceChangedSent,
 				followUpEndedSent,
+				followUpVerifiedSent,
 				stepsFailed,
 				heldAlertsFlushed,
 				heldAlertsDropped,
@@ -114,7 +119,8 @@ public record PipelineTickReport(
 				+ " firstAlertsSent=" + ingest.firstAlertsSent()
 				+ " heldAlerts=" + ingest.heldAlerts()
 				+ " followUpsSent[priceChanged=" + followUpPriceChangedSent
-				+ " ended=" + followUpEndedSent + "]"
+				+ " ended=" + followUpEndedSent
+				+ " verified=" + followUpVerifiedSent + "]"
 				+ " heldFlushed[sent=" + heldAlertsFlushed + " dropped=" + heldAlertsDropped + "]"
 				+ " usedBatchesFolded=" + usedFold.batches()
 				// 관측한 사건과 **알린** 수를 따로 낸다 — 둘의 차이가 곧 "3계층 필터·목표가가 얼마나

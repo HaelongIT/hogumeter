@@ -103,6 +103,18 @@ class FollowUpAlertUseCaseTest {
 				.contains(tuple(dealId, FollowUpKind.PRICE_CHANGED.name()));
 	}
 
+	/** Q-13 — 병합(교차검증)도 다른 후속 종류와 똑같이 "첫 알림 나간 딜에만·종류당 1회" 멱등을 따른다. */
+	@Test
+	void sendsVerifiedFollowUpForAMergedDeal() {
+		long dealId = dealThatAlreadyAlerted();
+
+		int sent = followUp.sendFollowUps(List.of(dealId), FollowUpKind.VERIFIED);
+
+		assertThat(sent).isEqualTo(1);
+		assertThat(recordingAlertSender.sent.get(0).followUpKind()).isEqualTo(FollowUpKind.VERIFIED);
+		assertThat(dealAlerts.existsByDealEventIdAndKind(dealId, FollowUpKind.VERIFIED.name())).isTrue();
+	}
+
 	@Test
 	void doesNotResendSameKind() {
 		long dealId = dealThatAlreadyAlerted();

@@ -27,6 +27,7 @@ import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.review.ReviewQueueItem;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -98,7 +99,7 @@ public class IngestDealsUseCase {
 		switch (match.tier()) {
 			case CONFIRMED -> {
 				tally.confirmed++;
-				DispatchOutcome outcome = confirmDeal(post, match.variantId(), match.demandAxisValue());
+				DispatchOutcome outcome = confirmDeal(post, match.variantId(), match.demandAxisValue(), tally);
 				if (outcome == DispatchOutcome.SENT) {
 					tally.firstAlertsSent++;
 				}
@@ -120,7 +121,7 @@ public class IngestDealsUseCase {
 	}
 
 	/** @return 이 딜에 대한 알림 판정 결과 — 첫 알림이 실제로 나갔는지(SENT) 세기 위함(Q-57 ③). */
-	private DispatchOutcome confirmDeal(RawDealPost post, long variantId, String demandAxisValue) {
+	private DispatchOutcome confirmDeal(RawDealPost post, long variantId, String demandAxisValue, Tally tally) {
 		DealEvent candidate = candidateFrom(post, variantId, demandAxisValue);
 
 		for (DealEventEntity existing : dealEvents.findByVariantId(variantId)) {
@@ -130,7 +131,12 @@ public class IngestDealsUseCase {
 				existing.applyMerge(merged.priceFirst(), merged.priceMin(), merged.priceMax(), merged.priceLast(),
 						merged.crossVerified(), merged.status(), merged.firstSeen(), merged.lastSeen());
 				sources.save(new DealEventSourceEntity(existing.getId(), post.getId(), post.getSite()));
-				return alertEvaluation.evaluate(variantId, existing.getId(), mapper.toDomain(existing)); // 흡수 후속 판정
+				// Q-13: 흡수는 첫 알림을 다시 내지 않는다 — priceFirst는 병합으로 안 바뀌므로 같은 트리거를
+				// 재평가하면 매번 다시 SEND_NOW가 날 수 있었다(텔레그램이 켜지면 중복 문자로 드러날 결함).
+				// 대신 VERIFIED 후속(AL-03) 대상으로만 기록한다 — PipelineScheduler가 FollowUpAlertUseCase로
+				// 넘기고, 그쪽은 "첫 알림이 이미 나간 딜에만·종류당 1회"로 멱등이라 중복 병합에도 안전하다.
+				tally.mergedDealIds.add(existing.getId());
+				return DispatchOutcome.NO_ALERT;
 			}
 		}
 
@@ -238,10 +244,11 @@ public class IngestDealsUseCase {
 		int firstAlertsSent;
 		int heldAlerts;
 		int skippedForeignSource;
+		final List<Long> mergedDealIds = new ArrayList<>();
 
 		IngestReport toReport() {
 			return new IngestReport(confirmed, candidate, unknown, rejected, skippedNoPrice, firstAlertsSent,
-					heldAlerts, skippedForeignSource);
+					heldAlerts, skippedForeignSource, mergedDealIds);
 		}
 	}
 }

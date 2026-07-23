@@ -143,6 +143,32 @@ class IngestDealsUseCaseTest {
 		assertThat(sources.findByDealEventId(deals.get(0).getId())).hasSize(2); // 2사이트 소스
 	}
 
+	/**
+	 * Q-13 AC-3·4 — 두 번째 사이트가 흡수(병합)돼도 <b>같은 첫 알림을 다시 보내지 않는다</b>.
+	 *
+	 * <p>이 테스트가 생기기 전엔 {@code confirmDeal}의 병합 분기가 {@code alertEvaluation.evaluate}를
+	 * 신규 딜과 똑같이 다시 불렀다 — 딜의 {@code priceFirst}는 병합으로도 안 바뀌므로 목표가 조건이 여전히
+	 * 참이면 매 병합마다 {@code AlertDispatcher.dispatch}가 SEND_NOW를 다시 냈다(스텁이라 안 보였을
+	 * 뿐, 텔레그램이 켜지면 같은 딜에 중복 문자가 갔을 결함). 병합은 대신 VERIFIED 후속 대상으로만 기록된다.
+	 */
+	@Test
+	void mergingASecondSiteDoesNotResendTheFirstAlert() {
+		policies.save(new AlertPolicyEntity(variantId, 900_000L, 6, null, null, 5, List.of())); // 목표가 90만
+		savePost("ppomppu", "아이폰 17 256기가 89만", 890_000L, T); // 첫 알림 발송(목표가 이하)
+
+		IngestReport first = useCase.ingestPending();
+		savePost("ruliweb", "아이폰 17 256기가 특가", 895_000L, T.plus(Duration.ofHours(6))); // 병합
+
+		IngestReport second = useCase.ingestPending();
+
+		assertThat(first.firstAlertsSent()).isEqualTo(1);
+		assertThat(recordingAlertSender.sent).as("병합이 첫 알림을 또 보내지 않는다").hasSize(1);
+		assertThat(second.firstAlertsSent()).as("병합은 첫 알림이 아니다").isZero();
+		long dealId = dealEvents.findByVariantId(variantId).get(0).getId();
+		assertThat(second.mergedDealIds()).as("병합된 딜은 VERIFIED 후속 대상으로 기록된다")
+				.containsExactly(dealId);
+	}
+
 	@Test
 	void noPricePostIsSkipped() {
 		savePost("ppomppu", "아이폰 17 256기가 팝니다 문의", null, T);
