@@ -904,13 +904,14 @@ echo "--- 5-4) 중고 목록 스냅샷 → listing 생애주기 (USED-02, 접기
 compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
 	-v ON_ERROR_STOP=1 >/dev/null <<SQL || fail "중고 검색·관측 삽입 실패"
 insert into used_search (product_id, platform, required_keywords, exclude_keywords, poll_interval_min)
-values (${product_id}, 'BUNJANG', '{"스모크"}', '{}', 10);
-insert into used_listing_observation (used_search_id, listing_id, title, price, observed_at)
-select id, v.lid, v.title, v.price, v.at from used_search,
-  (values ('a1', '스모크 중고 미개봉', 900000, now() - interval '20 minutes'),
-          ('a2', '스모크 중고 S급',   990000, now() - interval '20 minutes'),
-          ('a1', '스모크 중고 미개봉', 820000, now() - interval '10 minutes'))
-  as v(lid, title, price, at)
+values (${product_id}, 'BUNJANG', '{"스모크"}', '{"부품"}', 10);
+insert into used_listing_observation (used_search_id, listing_id, title, price, observed_at, url)
+select id, v.lid, v.title, v.price, v.at, v.url from used_search,
+  (values ('a1', '스모크 중고 미개봉', 900000, now() - interval '20 minutes', 'https://example.invalid/u/a1'),
+          ('a2', '스모크 중고 S급',   990000, now() - interval '20 minutes', 'https://example.invalid/u/a2'),
+          ('a3', '스모크 중고 부품용', 100000, now() - interval '20 minutes', 'https://example.invalid/u/a3'),
+          ('a1', '스모크 중고 미개봉', 820000, now() - interval '10 minutes', 'https://example.invalid/u/a1'))
+  as v(lid, title, price, at, url)
 where platform = 'BUNJANG';
 SQL
 
@@ -920,13 +921,26 @@ used_state() {
 		tr -d '\r'
 }
 for _ in $(seq 20); do
-	[ "$(used_state)" = "a1=ACTIVE/820000,a2=SOLD/990000" ] && folded=1 && break
+	[ "$(used_state)" = "a1=ACTIVE/820000,a2=SOLD/990000,a3=SOLD/100000" ] && folded=1 && break
 	sleep 2
 done
 [ "${folded:-0}" = 1 ] || fail "중고 목록이 접히지 않았다 (listing=$(used_state))"
 # OBS-02: 조용히 도는 접기는 안 도는 것과 구별되지 않는다. 두 배치를 접었어야 한다.
 compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep -q 'usedBatchesFolded=2' ||
 	fail "틱 카운터에 usedBatchesFolded=2가 없다 (접기 미배선?)"
+
+echo "--- 5-4b) 중고 생애주기 알림 (USED-03, AC-7·8·9 — 3계층 필터가 종단에서 실제로 거른다) ---"
+# 알림 수와 생애주기 사건 수는 **부류가 다르다**. a3은 exclude('부품')에 걸려 매물로는 서지만
+# 알림은 안 나가고, 승격되지 않았으므로 소실해도 조용하다 — 그 차이를 종단에서 잠근다.
+# (`TELEGRAM_ENABLED=false`라 실 발송은 없다. 스텁이 본문을 로그로 남긴다.)
+used_tick=$(compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep 'usedBatchesFolded=2' | tail -1)
+for counter in 'usedLifecycle\[appeared=3' 'disappeared=2\]' 'usedAlerts\[new=2' 'priceDrop=1' 'soldOut=1\]'; do
+	echo "$used_tick" | grep -qE "$counter" ||
+		fail "중고 알림 카운터 '$counter'가 틱에 없다 (USED-03 미배선?): $used_tick"
+done
+# 스텁 본문에 원문 링크가 실렸는가 — 링크 없는 알림은 사람을 원문으로 못 보낸다(절대 원칙 2).
+compose logs --no-log-prefix core 2>&1 | grep -q 'STUB usedAlert.*https://example.invalid/u/a1' ||
+	fail "중고 알림 본문에 원문 링크가 없다"
 
 echo "--- 6) collector는 opt-in 없이 네트워크를 만지지 않는다 (OBS-01 구조화 로그) ---"
 # 로그는 JSON Lines다. 문장을 grep하지 말고 이벤트를 본다 — 문구는 바뀌어도 계약은 안 바뀐다.

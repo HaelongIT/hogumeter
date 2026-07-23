@@ -10,6 +10,7 @@ import dev.hogumeter.core.application.FlushHeldAlertsUseCase;
 import dev.hogumeter.core.application.FlushHeldAlertsUseCase.FlushReport;
 import dev.hogumeter.core.application.FollowUpAlertUseCase;
 import dev.hogumeter.core.application.FoldUsedListingsUseCase;
+import dev.hogumeter.core.application.FoldUsedListingsUseCase.FoldReport;
 import dev.hogumeter.core.application.IngestDealsUseCase;
 import dev.hogumeter.core.application.IngestReport;
 import dev.hogumeter.core.application.IssuePendingReportCardsUseCase;
@@ -77,7 +78,7 @@ public class PipelineScheduler {
 	private final Supplier<List<Long>> reprocessPrices;
 	private final Supplier<List<Long>> reprocessStatus;
 	private final BiFunction<List<Long>, FollowUpKind, Integer> followUp;
-	private final Supplier<Integer> foldUsedListings; // USED-02 목록 스냅샷 접기 — 접은 배치 수
+	private final Supplier<FoldReport> foldUsedListings; // USED-02 목록 스냅샷 접기 + 생애주기 알림(USED-03)
 	private final Supplier<FlushReport> flushHeld; // 방해금지 종료분 재평가·발송(Q-20 ②)
 	private final Consumer<Boolean> healthTick; // 틱 건강 여부 → 연속 실패 시 관리 알림(OBS-03, Q-56)
 	private final Supplier<PipelineSnapshot> probe;
@@ -99,7 +100,7 @@ public class PipelineScheduler {
 		this(expireObservations::expireDueObservations, issueReportCards::issuePendingReportCards,
 				ingest::ingestPending, conditions::preserveTags,
 				prices::reprocessPriceChanges, status::reprocessEndedDeals, followUp::sendFollowUps, flushHeld::flush,
-				() -> foldUsedListings.foldPending().batches(), healthMonitor::onTick,
+				foldUsedListings::foldPending, healthMonitor::onTick,
 				() -> new PipelineSnapshot(
 						rawPosts.count(),
 						sources.count(),
@@ -125,7 +126,7 @@ public class PipelineScheduler {
 	PipelineScheduler(Runnable expireObservations, Supplier<Integer> issueReportCards, Supplier<IngestReport> ingest,
 			Runnable preserveConditions, Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
 			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<FlushReport> flushHeld,
-			Supplier<Integer> foldUsedListings, Consumer<Boolean> healthTick, Supplier<PipelineSnapshot> probe,
+			Supplier<FoldReport> foldUsedListings, Consumer<Boolean> healthTick, Supplier<PipelineSnapshot> probe,
 			Consumer<PipelineTickReport> report) {
 		this.expireObservations = expireObservations;
 		this.issueReportCards = issueReportCards;
@@ -147,7 +148,7 @@ public class PipelineScheduler {
 			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<PipelineSnapshot> probe,
 			Consumer<PipelineTickReport> report) {
 		this(expireObservations, () -> 0, ingest, preserveConditions, reprocessPrices, reprocessStatus, followUp,
-				FlushReport::empty, () -> 0, healthy -> { }, probe, report);
+				FlushReport::empty, FoldReport::empty, healthy -> { }, probe, report);
 	}
 
 	@Scheduled(fixedDelayString = "${core.pipeline.interval-ms:60000}",
@@ -173,7 +174,7 @@ public class PipelineScheduler {
 		// 방해금지가 끝난 보류분을 재평가해 보낸다(Q-20 ②) — 밤새 바뀐 상황을 발송 시점에 다시 판정한다.
 		FlushReport flush = runStepReturning("flush-held", flushHeld, FlushReport.empty());
 		// 중고 목록 접기는 신품 경로와 독립이다 — 순서 계약이 없어 끝에 둔다(한 단계 실패는 runStep이 격리).
-		int usedBatchesFolded = runStepReturning("fold-used-listings", foldUsedListings, 0);
+		FoldReport usedFold = runStepReturning("fold-used-listings", foldUsedListings, FoldReport.empty());
 		PipelineSnapshot after = snapshot();
 		// 건강 = 스냅샷 왕복 + 단계 실패 0. DB가 닿지 않으면(스냅샷 null) 리포트는 못 내도 건강 신호는 낸다 —
 		// 그래야 지속 DB 장애가 관리 알림으로 이어진다(OBS-03). 리포트는 스냅샷이 있을 때만.
@@ -181,7 +182,7 @@ public class PipelineScheduler {
 		if (before != null && after != null) {
 			// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다. stepsFailed로 그 사실도 싣는다.
 			report.accept(PipelineTickReport.between(before, after, ingestReport, reportCardsIssued, followUpPrice,
-					followUpEnded, stepFailures, flush.flushed(), flush.dropped(), usedBatchesFolded));
+					followUpEnded, stepFailures, flush.flushed(), flush.dropped(), usedFold));
 		}
 		healthTick.accept(healthy); // 연속 실패면 관리 알림(PipelineHealthMonitor)
 	}

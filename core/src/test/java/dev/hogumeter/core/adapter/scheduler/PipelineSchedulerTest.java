@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import dev.hogumeter.core.application.FlushHeldAlertsUseCase;
+import dev.hogumeter.core.application.FoldUsedListingsUseCase.FoldReport;
 import dev.hogumeter.core.application.IngestReport;
 import dev.hogumeter.core.domain.alert.FollowUpKind;
 import java.util.ArrayList;
@@ -158,7 +159,7 @@ class PipelineSchedulerTest {
 	void heldAlertFlushCountsFlowIntoReport() {
 		// 플러시가 (발송 2, 드롭 1)을 내면 리포트에 그대로 실려야 한다 — 배선이 끊기면 0이라 이 테스트가 잡는다.
 		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
-				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), () -> 0, healthy -> { }, () -> EMPTY,
+				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), FoldReport::empty, healthy -> { }, () -> EMPTY,
 				reported::set).tick();
 
 		assertThat(reported.get().heldAlertsFlushed()).isEqualTo(2);
@@ -166,15 +167,17 @@ class PipelineSchedulerTest {
 	}
 
 	@Test
-	@DisplayName("중고 목록 접기 결과가 틱 리포트에 흐른다 (USED-02)")
+	@DisplayName("중고 접기·생애주기 알림 결과가 틱 리포트에 흐른다 (USED-02·03)")
 	void usedListingFoldCountFlowsIntoReport() {
 		// 포트의 계산이 아니라 **주입**을 시험한다 — 배선을 지우면 0이 되어 이 테스트가 RED가 된다.
 		// 그 확인 없이 유스케이스 단위 테스트만 두면 "GREEN인데 죽어 있다"를 한 층 위에 다시 만든다.
+		// 알림 수까지 함께 흐르는지 본다: 접기만 흐르고 알림이 0에 머물면 아무도 눈치채지 못한다.
+		FoldReport fold = new FoldReport(3, 5, 1, 2, 1, 4, 2, 1);
 		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
-				FlushHeldAlertsUseCase.FlushReport::empty, () -> 3, healthy -> { }, () -> EMPTY,
+				FlushHeldAlertsUseCase.FlushReport::empty, () -> fold, healthy -> { }, () -> EMPTY,
 				reported::set).tick();
 
-		assertThat(reported.get().usedListingBatchesFolded()).isEqualTo(3);
+		assertThat(reported.get().usedFold()).isEqualTo(fold);
 	}
 
 	@Test
@@ -201,7 +204,7 @@ class PipelineSchedulerTest {
 		};
 
 		new PipelineScheduler(expire, issue, ingest, conditions, prices, status, followUp,
-				FlushHeldAlertsUseCase.FlushReport::empty, () -> 0, healthy -> { }, probe, reported::set).tick();
+				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, healthy -> { }, probe, reported::set).tick();
 
 		assertThat(calls).as("발급은 만료 뒤·ingest 앞").containsSubsequence("expire", "issue", "ingest");
 		assertThat(reported.get().reportCardsIssued()).isEqualTo(2);
@@ -225,7 +228,7 @@ class PipelineSchedulerTest {
 	private PipelineScheduler schedulerWithHealth(Supplier<IngestReport> ingest, Supplier<PipelineSnapshot> probe,
 			List<Boolean> health) {
 		return new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
-				FlushHeldAlertsUseCase.FlushReport::empty, () -> 0, health::add, probe, reported::set);
+				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, health::add, probe, reported::set);
 	}
 
 	@Test

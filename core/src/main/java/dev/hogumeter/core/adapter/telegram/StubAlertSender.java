@@ -2,6 +2,8 @@ package dev.hogumeter.core.adapter.telegram;
 
 import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.application.port.out.AlertSender;
+import dev.hogumeter.core.application.port.out.UsedAlertMessage;
+import dev.hogumeter.core.application.port.out.UsedAlertSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -18,11 +20,13 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnProperty(name = "telegram.enabled", havingValue = "false", matchIfMissing = true)
-public class StubAlertSender implements AlertSender {
+public class StubAlertSender implements AlertSender, UsedAlertSender {
 
 	private static final Logger log = LoggerFactory.getLogger(StubAlertSender.class);
 
 	private final AlertMessageFormatter formatter = new AlertMessageFormatter();
+
+	private final UsedAlertMessageFormatter usedFormatter = new UsedAlertMessageFormatter();
 
 	@Override
 	public void send(AlertMessage message) {
@@ -33,5 +37,11 @@ public class StubAlertSender implements AlertSender {
 				: "intensity=" + message.decision().intensity();
 		// 여러 줄 본문은 한 로그 줄로(\n 이스케이프) — 로그 파서가 줄바꿈에 걸려 넘어지지 않게.
 		log.info("[STUB alert] {} | {}", marker, formatter.format(message).replace("\n", " ⏎ "));
+	}
+
+	@Override
+	public void sendUsed(UsedAlertMessage message) {
+		log.info("[STUB usedAlert] kind={} | {}", message.kind(),
+				usedFormatter.format(message).replace("\n", " ⏎ "));
 	}
 }

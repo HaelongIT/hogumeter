@@ -39,17 +39,27 @@ public class UsedListingObservationEntity {
 	@Column(name = "observed_at", nullable = false)
 	private Instant observedAt;
 
+	/** 파서가 만든 원문 링크(V13). NULL 가능 — V13 이전 관측이거나 파서가 URL을 못 만든 경우. */
+	@Column
+	private String url;
+
 	protected UsedListingObservationEntity() {
 	}
 
 	/** 테스트·시드용. 운영 삽입은 collector가 한다(core는 이 테이블을 읽기만 한다). */
 	public UsedListingObservationEntity(Long usedSearchId, String listingId, String title, long price,
 			Instant observedAt) {
+		this(usedSearchId, listingId, title, price, observedAt, null);
+	}
+
+	public UsedListingObservationEntity(Long usedSearchId, String listingId, String title, long price,
+			Instant observedAt, String url) {
 		this.usedSearchId = usedSearchId;
 		this.listingId = listingId;
 		this.title = title;
 		this.price = price;
 		this.observedAt = observedAt;
+		this.url = url;
 	}
 
 	public Long getId() {
@@ -74,5 +84,9 @@ public class UsedListingObservationEntity {
 
 	public Instant getObservedAt() {
 		return observedAt;
+	}
+
+	public String getUrl() {
+		return url;
 	}
 }

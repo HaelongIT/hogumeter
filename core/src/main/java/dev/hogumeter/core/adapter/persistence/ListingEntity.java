@@ -15,8 +15,8 @@ import java.time.Instant;
  * V3 {@code listing} — 목록 diff가 도출·갱신하는 <b>생애주기 엔티티</b>(USED-02). 자연키는
  * {@code (used_search_id, listing_id)}이며 끌올(같은 매물 재노출)은 새 행이 아니라 같은 행의 갱신이다.
  *
- * <p>{@code promoted}·{@code detail_fetched}는 알림 승격 층(USED-03·04)의 몫이라 여기서는 기본값만
- * 지킨다 — 이 슬라이스는 생애주기만 접는다.
+ * <p>{@code promoted}는 USED-03 알림 층이 세운다 — 첫 알림이 나간 매물만 후속(가격하락·판매완료)
+ * 알림 대상이 된다(AC-8·9). {@code detail_fetched}는 아직 USED-04(상세 1회 fetch)의 몫이라 기본값이다.
  */
 @Entity
 @Table(name = "listing")
@@ -54,14 +54,24 @@ public class ListingEntity {
 	@Column(name = "last_seen", nullable = false)
 	private Instant lastSeen;
 
+	/** 원문 링크(V13). 관측에서 옮겨온다 — core가 플랫폼별 URL을 조립하지 않는다. NULL 가능. */
+	@Column
+	private String url;
+
 	protected ListingEntity() {
 	}
 
 	public ListingEntity(Long usedSearchId, String listingId, String title, long price, Instant seenAt) {
+		this(usedSearchId, listingId, title, price, seenAt, null);
+	}
+
+	public ListingEntity(Long usedSearchId, String listingId, String title, long price, Instant seenAt,
+			String url) {
 		this.usedSearchId = usedSearchId;
 		this.listingId = listingId;
 		this.title = title;
 		this.price = price;
+		this.url = url;
 		this.status = ListingStatus.ACTIVE;
 		this.promoted = false;
 		this.detailFetched = false;
@@ -74,6 +84,24 @@ public class ListingEntity {
 		this.title = title;
 		this.price = price;
 		this.lastSeen = seenAt;
+	}
+
+	/**
+	 * 최신 관측이 URL을 알고 있으면 채운다. <b>있던 URL을 null로 덮지 않는다</b> — V13 이전 관측이
+	 * 섞여 있으면 "모름"이 "없음"을 이기게 되고, 링크가 조용히 사라진다.
+	 */
+	public void observedUrl(String observedUrl) {
+		if (observedUrl != null && !observedUrl.isBlank()) {
+			this.url = observedUrl;
+		}
+	}
+
+	/**
+	 * 이 매물로 첫 알림이 나갔다(AC-8·9의 전제). 후속 알림(가격하락·판매완료)은 <b>승격된 매물만</b>
+	 * 대상이라, 이 표식이 없으면 스냅샷 전체가 알림 대상이 되어 스팸이 된다.
+	 */
+	public void promote() {
+		this.promoted = true;
 	}
 
 	/**
@@ -130,5 +158,9 @@ public class ListingEntity {
 
 	public Instant getLastSeen() {
 		return lastSeen;
+	}
+
+	public String getUrl() {
+		return url;
 	}
 }

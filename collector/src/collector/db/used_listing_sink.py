@@ -20,9 +20,9 @@ from ..parsers.models import ParsedDeal
 
 _INSERT = """
 insert into used_listing_observation
-    (used_search_id, listing_id, title, price, observed_at, raw)
+    (used_search_id, listing_id, title, price, observed_at, url, raw)
 values
-    (%(used_search_id)s, %(listing_id)s, %(title)s, %(price)s, %(observed_at)s, %(raw)s)
+    (%(used_search_id)s, %(listing_id)s, %(title)s, %(price)s, %(observed_at)s, %(url)s, %(raw)s)
 """
 
 
@@ -63,6 +63,8 @@ def _params(used_search_id: int, deal: ParsedDeal, observed_at: datetime) -> dic
         "listing_id": deal.post_id,
         "title": deal.title,
         "price": deal.headline_price,
+        # 원문 링크는 **파서가 만든다** — core가 플랫폼별 URL 형태를 다시 해석하면 한쪽이 조용히 틀린다.
+        "url": deal.url,
         # SEC-07: `raw` 허용집합은 파서가 이미 좁혔다(uid·location·imp_id 배제). 여기서 넓히지 않는다.
         "raw": Jsonb(deal.raw) if deal.raw else None,
         "observed_at": observed_at,

@@ -12,6 +12,4 @@
 # **테스트는 호출자가 아니다.**
 
 DigestRules           Q-33  다이제스트(docs/18)는 M1 범위 밖.
-UsedAlertPolicy       Q-72  M2 중고 알림 판정 — 소비처(collector 번개 폴링 → Listing → 알림)가 실 폴링 뒤라 미배선.
 UsedRiskSignals       Q-72  M2 URL 평가기(USED-04) 위험 신호 — 평가기 유스케이스 미배선.
-UsedMatcher           Q-72  M2 3계층 필터 — 유일한 호출자(UsedAlertPolicy·UsedRiskSignals)가 위에서 죽은 것으로 선언돼 전이적으로 소비처 0.

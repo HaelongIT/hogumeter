@@ -1,5 +1,6 @@
 package dev.hogumeter.core.adapter.scheduler;
 
+import dev.hogumeter.core.application.FoldUsedListingsUseCase.FoldReport;
 import dev.hogumeter.core.application.IngestReport;
 
 /**
@@ -58,11 +59,11 @@ public record PipelineTickReport(
 		int stepsFailed,
 		int heldAlertsFlushed,
 		int heldAlertsDropped,
-		int usedListingBatchesFolded) {
+		FoldReport usedFold) {
 
 	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest,
 			int reportCardsIssued, int followUpPriceChangedSent, int followUpEndedSent, int stepsFailed,
-			int heldAlertsFlushed, int heldAlertsDropped, int usedListingBatchesFolded) {
+			int heldAlertsFlushed, int heldAlertsDropped, FoldReport usedFold) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
 		// 발급이 REPORT_PENDING을 드레인하므로 Δ만으로는 만료 수가 아니다 — 발급 수를 더해 재구성한다.
@@ -86,7 +87,7 @@ public record PipelineTickReport(
 				stepsFailed,
 				heldAlertsFlushed,
 				heldAlertsDropped,
-				usedListingBatchesFolded);
+				usedFold);
 	}
 
 	/** 한 줄 요약. 0을 생략하지 않는다 — "성공했는데 0건"이 사라지면 드리프트를 못 본다. */
@@ -115,7 +116,16 @@ public record PipelineTickReport(
 				+ " followUpsSent[priceChanged=" + followUpPriceChangedSent
 				+ " ended=" + followUpEndedSent + "]"
 				+ " heldFlushed[sent=" + heldAlertsFlushed + " dropped=" + heldAlertsDropped + "]"
-				+ " usedBatchesFolded=" + usedListingBatchesFolded
+				+ " usedBatchesFolded=" + usedFold.batches()
+				// 관측한 사건과 **알린** 수를 따로 낸다 — 둘의 차이가 곧 "3계층 필터·목표가가 얼마나
+				// 걸렀는가"다. 합치면 "알림이 안 나갔다"와 "매물이 없었다"를 구별할 수 없다.
+				+ " usedLifecycle[appeared=" + usedFold.appeared()
+				+ " revived=" + usedFold.revived()
+				+ " priceChanged=" + usedFold.priceChanged()
+				+ " disappeared=" + usedFold.disappeared() + "]"
+				+ " usedAlerts[new=" + usedFold.alertsNew()
+				+ " priceDrop=" + usedFold.alertsPriceDrop()
+				+ " soldOut=" + usedFold.alertsSoldOut() + "]"
 				+ " stepsFailed=" + stepsFailed;
 	}
 }

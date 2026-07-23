@@ -105,6 +105,14 @@ class IngestDealsUseCaseTest {
 		recordingAlertSender.sent.clear(); // 스파이는 싱글톤 — @Transactional이 롤백하지 않으므로 매 케이스 초기화
 	}
 
+	/**
+	 * 종류별 큐 조회는 <b>테스트만</b> 쓴다 — 프로덕션 조회는 네이티브 SQL(`GetReviewQueueUseCase`)이라
+	 * 리포지토리에 두면 "호출자 0인 조회 메서드"가 된다. 테스트가 걸러 쓴다.
+	 */
+	private List<ReviewQueueItemEntity> queuedOf(ReviewQueueType type) {
+		return reviewQueue.findAll().stream().filter(i -> i.getType() == type).toList();
+	}
+
 	private void savePost(String site, String title, Long price, Instant when) {
 		rawPosts.save(new RawDealPost(site, "post" + postSeq++, "https://" + site + ".test/" + postSeq,
 				title, price, when, when, "ACTIVE"));
@@ -181,7 +189,7 @@ class IngestDealsUseCaseTest {
 		useCase.ingestPending();
 
 		assertThat(dealEvents.findByVariantId(variantId)).isEmpty();
-		assertThat(reviewQueue.findByType(ReviewQueueType.UNCLASSIFIED)).hasSize(1);
+		assertThat(queuedOf(ReviewQueueType.UNCLASSIFIED)).hasSize(1);
 	}
 
 	/**
@@ -224,7 +232,7 @@ class IngestDealsUseCaseTest {
 
 		useCase.ingestPending();
 
-		List<ReviewQueueItemEntity> queued = reviewQueue.findByType(ReviewQueueType.DEMAND_UNKNOWN);
+		List<ReviewQueueItemEntity> queued = queuedOf(ReviewQueueType.DEMAND_UNKNOWN);
 		assertThat(queued).as("미상 딜만 큐에 뜬다 — 블랙은 안 뜬다").hasSize(1);
 	}
 
@@ -235,7 +243,7 @@ class IngestDealsUseCaseTest {
 
 		useCase.ingestPending();
 
-		assertThat(reviewQueue.findByType(ReviewQueueType.DEMAND_UNKNOWN)).isEmpty();
+		assertThat(queuedOf(ReviewQueueType.DEMAND_UNKNOWN)).isEmpty();
 	}
 
 	@Test
@@ -247,7 +255,7 @@ class IngestDealsUseCaseTest {
 		useCase.ingestPending();
 		useCase.ingestPending(); // 같은 미상 원문이 다시 스캔된다
 
-		List<ReviewQueueItemEntity> items = reviewQueue.findByType(ReviewQueueType.UNCLASSIFIED);
+		List<ReviewQueueItemEntity> items = queuedOf(ReviewQueueType.UNCLASSIFIED);
 		assertThat(items).hasSize(1);
 		assertThat(items.get(0).getOccurrences()).isEqualTo(2);
 	}
@@ -266,7 +274,7 @@ class IngestDealsUseCaseTest {
 		assertThat(deals).hasSize(6); // 전부 별개(간격이 허용폭 초과)
 		DealEventEntity low = deals.stream().filter(d -> d.getPriceFirst() == 100_000L).findFirst().orElseThrow();
 		assertThat(low.getOutlierFlag()).isEqualTo(OutlierFlag.LOWER);
-		assertThat(reviewQueue.findByType(ReviewQueueType.OUTLIER_LOWER)).hasSize(1);
+		assertThat(queuedOf(ReviewQueueType.OUTLIER_LOWER)).hasSize(1);
 	}
 
 	@Test

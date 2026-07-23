@@ -2,6 +2,8 @@ package dev.hogumeter.core.adapter.telegram;
 
 import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.application.port.out.AlertSender;
+import dev.hogumeter.core.application.port.out.UsedAlertMessage;
+import dev.hogumeter.core.application.port.out.UsedAlertSender;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +26,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnProperty(name = "telegram.enabled", havingValue = "true")
-public class TelegramAlertSender implements AlertSender {
+public class TelegramAlertSender implements AlertSender, UsedAlertSender {
 
 	private static final Logger log = LoggerFactory.getLogger(TelegramAlertSender.class);
 
@@ -37,6 +39,8 @@ public class TelegramAlertSender implements AlertSender {
 	private final TelegramApi api;
 	private final String chatId;
 	private final AlertMessageFormatter formatter = new AlertMessageFormatter();
+
+	private final UsedAlertMessageFormatter usedFormatter = new UsedAlertMessageFormatter();
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public TelegramAlertSender(@Value("${telegram.bot-token:}") String botToken,
@@ -71,6 +75,20 @@ public class TelegramAlertSender implements AlertSender {
 		List<TelegramApi.Button> buttons = message.dealEventId() == null
 				? List.of()
 				: List.of(new TelegramApi.Button("🔕 무시", "ignore:" + message.dealEventId()));
+		post(text, buttons);
+	}
+
+	/**
+	 * USED-03 중고 알림. 버튼은 아직 없다 — [무시]는 신품 딜의 사후학습(Q-22)에 묶인 콜백이라
+	 * 중고 매물에 그대로 붙이면 없는 딜 id를 가리킨다. 중고용 액션이 정해지면 그때 단다.
+	 */
+	@Override
+	public void sendUsed(UsedAlertMessage message) {
+		post(usedFormatter.format(message), List.of());
+	}
+
+	/** 전송·상태 분류는 알림 부류와 무관하다 — 한 곳에 둔다(SEC-08 처리가 갈라지지 않게). */
+	private void post(String text, List<TelegramApi.Button> buttons) {
 		int status;
 		try {
 			status = api.sendMessage(chatId, text, buttons);

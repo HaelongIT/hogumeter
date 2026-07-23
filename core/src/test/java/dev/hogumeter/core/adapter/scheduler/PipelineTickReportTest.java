@@ -2,6 +2,7 @@ package dev.hogumeter.core.adapter.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.hogumeter.core.application.FoldUsedListingsUseCase.FoldReport;
 import dev.hogumeter.core.application.IngestReport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ class PipelineTickReportTest {
 
 	/** 매칭 카운터를 안 보는 스냅샷 산술 테스트용 — 수집 리포트·후속 알림·단계 실패 수는 0으로 둔다. */
 	private static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after) {
-		return PipelineTickReport.between(before, after, IngestReport.empty(), 0, 0, 0, 0, 0, 0, 0);
+		return PipelineTickReport.between(before, after, IngestReport.empty(), 0, 0, 0, 0, 0, 0, FoldReport.empty());
 	}
 
 	@Test
@@ -124,7 +125,7 @@ class PipelineTickReportTest {
 		IngestReport ingest = new IngestReport(3, 1, 2, 5, 4, 2, 1, 0);
 
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				ingest, 0, 0, 0, 0, 0, 0, 0);
+				ingest, 0, 0, 0, 0, 0, 0, FoldReport.empty());
 
 		assertThat(report.ingest()).isEqualTo(ingest);
 		assertThat(report.toString()).contains(
@@ -141,7 +142,7 @@ class PipelineTickReportTest {
 	@DisplayName("후속 알림 발송 수가 종류별로 요약에 실린다 (priceChanged·ended)")
 	void reportsFollowUpSendCountsByKind() {
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				IngestReport.empty(), 0, 4, 2, 0, 0, 0, 0);
+				IngestReport.empty(), 0, 4, 2, 0, 0, 0, FoldReport.empty());
 
 		assertThat(report.followUpPriceChangedSent()).isEqualTo(4);
 		assertThat(report.followUpEndedSent()).isEqualTo(2);
@@ -156,7 +157,7 @@ class PipelineTickReportTest {
 	@DisplayName("단계 실패 수가 요약에 실린다 (stepsFailed)")
 	void reportsStepFailureCount() {
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				IngestReport.empty(), 0, 0, 0, 2, 0, 0, 0);
+				IngestReport.empty(), 0, 0, 0, 2, 0, 0, FoldReport.empty());
 
 		assertThat(report.stepsFailed()).isEqualTo(2);
 		assertThat(report.toString()).contains("stepsFailed=2");
@@ -167,7 +168,7 @@ class PipelineTickReportTest {
 	@DisplayName("보류 플러시 결과가 요약에 실린다 (heldFlushed sent·dropped)")
 	void reportsHeldFlushCounts() {
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				IngestReport.empty(), 0, 0, 0, 0, 3, 1, 0);
+				IngestReport.empty(), 0, 0, 0, 0, 3, 1, FoldReport.empty());
 
 		assertThat(report.heldAlertsFlushed()).isEqualTo(3);
 		assertThat(report.heldAlertsDropped()).isEqualTo(1);
