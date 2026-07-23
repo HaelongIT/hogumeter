@@ -1,3 +1,33 @@
+## 2026-07-23 — 번개 robots ALLOW 확인 → 마켓 폴링 배선 완료 (무중단, 이어서)
+
+사용자가 `ALLOW_REAL_ROBOTS=1 bash scripts/check-robots.sh`를 직접 실행 → **번개 ALLOW(robots 부재)·
+루리웹 ALLOW(view= 없는 URL)·펨코 DISALLOW**. 실측을 docs/98에 기록.
+- **번개 마켓 폴링 종단 배선(`00651e0`)**: `market_spec`(검색→SiteSpec 순수 변환) + `_poll_market`
+  (검색당 run_cycle → `used_listing_sink.insert_batch` → `used_cycle` 이벤트) + 한 커넥션 공유.
+  앞 배치에서 만든 `UsedSearchSource`·`UsedListingSink`가 **엔트리포인트에서 아무도 안 불려** 죽은
+  생산자였는데 이 배선으로 살렸다. market_spec 5 + 종단 통합 3 테스트. collector 321 passed.
+  엔트리포인트 실제 실행(refused) 확인.
+- 이제 M2 데이터 파이프라인 뼈대가 완성됐다: **used_search 등록 → 번개 폴링 → 관측 적재 → core 접기
+  → listing 생애주기.** 남은 것은 그 위의 알림·평가기·화면이다.
+
+**⚠️ 다음 최고가치 두 항목이 사람 손(둘 다 실 네트워크 = 정지조건)**:
+1. **번개 실폴링 켜기** — `COLLECTOR_ALLOW_NETWORK=1`. 이걸 켜면 실 매물이 흐르고 M2가 살아 움직인다.
+2. **루리웹 fixture** — `view=` 없는 뷰 HTML 1장(1사→2사 = 교차검증 부활).
+
+**중고 알림(USED-03)을 지금 안 짠 이유 — 순서 판단**: `UsedAlertPolicy`(호출자 0)의 첫 소비자를
+만들 수 있으나, **알림 임계·동작은 실 매물로 검증하는 게 옳다.** 신품 루프의 교훈("검증 안 된 채
+쌓지 마라")을 중고에서 반복하지 않는다. 사용자가 위 1번을 켜서 실 매물을 관측한 뒤 알림을 붙이면
+임계가 실데이터에 근거한다. 지금 fixture로만 짜면 지어낸 임계가 조용히 굳는다. → USED-03은 실폴링 뒤.
+
+**core 모듈 소유권 관찰(사용자 확인 여지)**: 이 세션에서 core **기존 파일**을 여러 개 수정했다
+(`IngestDealsUseCase`·`PipelineScheduler`·`PipelineTickReport`·`UsedSearchEntity`). CLAUDE.md의
+"core=상대 개발자, 기존 파일 수정은 조율" 규칙과 실질이 다르다 — M2는 core 파이프라인 수정이
+불가피하다. 이전 세션들(PUR-04·Q-28)도 같은 관행이었고 전부 커밋됐다. 규칙을 갱신할지는 사용자 판단.
+
+**커밋 12개**(be25851·1d0672c·7f03fc5·09e7410·bb31c2a·0f22110·65cee02·40d8616·423acef 외 문서·00651e0). 미푸시.
+
+TURN-END: ① 정지조건 — 다음 최고가치 두 항목(번개 실폴링·루리웹 fixture)이 실 네트워크라 사람이 해야 하고, 남은 코드 일감(USED-03 중고 알림)은 실 매물로 임계를 검증하는 게 순서상 옳아 실폴링 뒤가 맞다(지어낸 임계 회피 = 가장 보수적 기본값). ⓐ M2 잔여는 실폴링 뒤 / ⓑ Q-72 부분해소 갱신 / ⓒ 소비처 0 감사로 UsedAlertPolicy·UsedMatcher가 죽어 있음 확인(실폴링 후 소비자 생성) / ⓓ 신규 계약(market_spec·소스 어휘 게이트) CI 배선·뮤테이션 증명 완료.
+
 ## 2026-07-22 (2) — M2 본체 착수: 중고 적재 루프 완성 + robots 확인 회귀 수정 (무중단)
 
 앞 항목에 이어 M2로. **커밋 6개**(be25851·1d0672c·7f03fc5·09e7410·bb31c2a·0f22110·65cee02).
