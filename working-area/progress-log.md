@@ -1,3 +1,27 @@
+## 2026-07-23 — CMP-02 쿠팡 확장 ingest (무중단, 이어서)
+
+- **CMP-02 배선(`8df0a86`)**: M2 core가 전 구간 완성돼 M3의 분리 가능한 조각으로 넘어갔다.
+  **서버는 쿠팡에 절대 접근하지 않는다** — 확장이 브라우저에서 읽어 보내는 값만 SEC-04(고정 토큰
+  인증 + 스키마 검증 + 레이트리밋)로 받는다. 확장 자체(크롬 확장 개발)·CMP-01의 네이버 조립(Q-3
+  대기)·web 표시는 범위 밖.
+  - V14 `coupang_price_observation`(insert-only). `wow_price`·`shipping_fee`는 null 가능 —
+    "확장이 못 읽었다"를 0으로 흘리지 않는다.
+  - `IngestCoupangObservationUseCase`(variant 존재·가격>0 검증) + `GetLatestCoupangPriceUseCase`
+    (같은 커밋에서 읽기까지 붙여 "쓰기만 하는 테이블"을 또 만들지 않았다 — 이 세션 내내 고친 패턴을
+    스스로 반복하지 않기).
+  - `FixedWindowRateLimiter`(순수, 시각 주입) 분당 30회(Q-78 잠정). REST 2종(`POST /observations`
+    토큰 헤더 상수시간 비교 + `GET /latest-price`). 토큰 미설정이면 전부 거절(미설정=열림 아님).
+  - compose·`.env.example`에 `EXTENSION_INGEST_TOKEN` 추가, OPS-01 게이트 통과.
+- core 전체 GREEN(신규 14케이스 전부 1회 실행 GREEN), 감사 게이트 9종 통과, 스모크 PASS.
+
+**여전히 사람 손(정지조건)**: 번개 실 폴링 활성화(`COLLECTOR_ALLOW_NETWORK=1`).
+
+**다음 후보 판단**: CMP-01(온디맨드 비교 조립)은 네이버 API(Q-3, 키 미발급)가 핵심 재료라 지금은
+"쿠팡 최신가 + 핫딜 간접가"만으로 반쪽 조립이 된다 — 반쪽을 만들면 다음 세션이 "이미 다 됐다"고
+오독할 위험이 있어(이 세션에서 여러 번 고친 함정과 같은 모양) 미룬다. 크롬 확장 자체·web 표시는
+프론트 영역이라 사용자 지시 대기. 남은 backend-only 후보는 점점 "결정 필요" 성격 항목들뿐이라,
+다음은 docs/91 전수를 다시 훑어 재현 가능한 것이 남았는지 확인하는 것이 순서.
+
 ## 2026-07-23 — USED-05 배선 완료 → M2 core 전 구간 완성 (무중단, 이어서)
 
 - **USED-05 배선(`bb17ec5`)**: `listing_note`·`comparison_axis`·`listing_axis_value`는 V3부터
