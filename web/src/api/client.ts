@@ -2,18 +2,27 @@ import type {
   AlertPolicyView,
   AlertStatus,
   ApiError,
+  AxisValueRequest,
   BenchmarkView,
   CadenceView,
+  ComparisonAxis,
+  ComparisonView,
+  EvaluationRequest,
+  EvaluationResponse,
   GlobalExcludeKeywordsView,
+  NoteCreated,
   ProductCreated,
   ProductSummary,
   PurchaseObservation,
   PurchaseRecorded,
   RecordPurchaseCommand,
   RegisterProductCommand,
+  RegisterUsedSearchCommand,
   ReviewQueueItem,
   SignalView,
   UpdateAlertPolicyCommand,
+  UsedSearchCreated,
+  UsedSearchView,
   VariantView,
 } from './types'
 
@@ -129,5 +138,45 @@ export const api = {
     request<GlobalExcludeKeywordsView>('/api/v1/settings/exclude-keywords', {
       method: 'PUT',
       body: JSON.stringify({ excludeKeywords }),
+    }),
+
+  // ── USED-01~05 중고 ────────────────────────────────────────────
+
+  listUsedSearches: (productId: number) =>
+    request<UsedSearchView[]>(`/api/v1/products/${productId}/used-searches`),
+
+  registerUsedSearch: (productId: number, cmd: RegisterUsedSearchCommand) =>
+    request<UsedSearchCreated>(`/api/v1/products/${productId}/used-searches`, {
+      method: 'POST',
+      body: JSON.stringify(cmd),
+    }),
+
+  /** URL은 실 fetch하지 않는다 — 이미 폴링해 아는 매물인지만 본다(core, docs/91 Q-76). */
+  evaluateListing: (usedSearchId: number, req: EvaluationRequest) =>
+    request<EvaluationResponse>(`/api/v1/used-searches/${usedSearchId}/evaluate`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+
+  /** 추가 전용 — 이미 정의된 축은 지워지지 않는다(USED-05 AC-17①). */
+  defineComparisonAxes: (productId: number, names: string[]) =>
+    request<ComparisonAxis[]>(`/api/v1/products/${productId}/comparison-axes`, {
+      method: 'PUT',
+      body: JSON.stringify({ names }),
+    }),
+
+  getComparison: (productId: number) => request<ComparisonView>(`/api/v1/products/${productId}/comparison`),
+
+  addListingNote: (listingId: number, body: string) =>
+    request<NoteCreated>(`/api/v1/listings/${listingId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+
+  /** 재승격(같은 매물·축)은 core가 값을 갱신한다 — 새 행이 아니다. */
+  promoteAxisValue: (listingId: number, req: AxisValueRequest) =>
+    command(`/api/v1/listings/${listingId}/axis-values`, {
+      method: 'POST',
+      body: JSON.stringify(req),
     }),
 }

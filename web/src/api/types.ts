@@ -224,6 +224,10 @@ export interface ApiError {
     // Q-15 승격·기각. NOT_FOUND는 "없는 id"와 "이미 처리됨"을 함께 뜻한다(둘 다 지금 큐에 없다).
     | 'REVIEW_ITEM_NOT_FOUND'
     | 'REVIEW_PROMOTE_UNSUPPORTED'
+    // USED-04·05
+    | 'USED_SEARCH_NOT_FOUND'
+    | 'LISTING_NOT_FOUND'
+    | 'COMPARISON_AXIS_NOT_FOUND'
     | (string & {})
   message: string
 }
@@ -287,3 +291,122 @@ export interface UpdateAlertPolicyCommand {
 export interface GlobalExcludeKeywordsView {
   excludeKeywords: string[]
 }
+
+// ── USED-01~05 중고 (M2) ──────────────────────────────────────────
+
+export type BonusMode = 'SORT' | 'TRIGGER'
+
+export interface BonusGroupInput {
+  keywords: string[]
+  mode: BonusMode
+}
+
+/** POST /api/v1/products/{productId}/used-searches. platform은 core가 v1 BUNJANG로 고정한다. */
+export interface RegisterUsedSearchCommand {
+  required: string[]
+  bonusGroups: BonusGroupInput[]
+  exclude: string[]
+  targetPrice: number | null
+  pollIntervalMin: number | null
+}
+
+export interface UsedSearchCreated {
+  usedSearchId: number
+}
+
+/**
+ * GET /api/v1/products/{productId}/used-searches — 등록된 중고 검색 조회. 없는 제품은 빈 배열
+ * (404 아님, variant 조회와 같은 계약). `pollIntervalMin`은 항상 하한(10) 이상으로 온다.
+ */
+export interface UsedSearchView {
+  usedSearchId: number
+  platform: string
+  required: string[]
+  exclude: string[]
+  targetPrice: number | null
+  pollIntervalMin: number
+  bonusGroups: BonusGroupInput[]
+}
+
+export type EvaluationKind = 'URL' | 'TEXT' | 'MANUAL'
+
+/** POST /api/v1/used-searches/{id}/evaluate 요청. kind별로 필요한 필드만 채운다. */
+export interface EvaluationRequest {
+  kind: EvaluationKind
+  text: string | null
+  title: string | null
+  price: number | null
+  url: string | null
+  variantId: number | null
+}
+
+export interface EvaluatedListing {
+  title: string
+  price: number
+  url: string | null
+}
+
+/**
+ * USED-04 AC-13 ① — 기준가를 합성하지 않는다. `benchmarkComparisonPercent`는 `variantId`를
+ * 준 요청에서만 채워진다(안 주면 null — "비교 안 함"이지 "0%"가 아니다). `activeSnapshotPrices`는
+ * 통계 가공 없이 그대로 나열된다.
+ */
+export interface PriceContext {
+  benchmarkComparisonPercent: number | null
+  activeSnapshotPrices: number[]
+  source: string
+}
+
+/** AC-14 — 나열만. "사기다"·"위험하다" 같은 판정 문구는 여기 없다(절대 원칙 2). */
+export interface RiskSignal {
+  category: string
+  detail: string
+}
+
+/**
+ * `needsInput`이 있으면 나머지는 전부 null — 이 입력으로는 못 읽었으니 그 종류로 다시 요청하라는 뜻.
+ * (URL→TEXT→MANUAL 폴백, docs/used/04 AC-12)
+ */
+export interface EvaluationResponse {
+  needsInput: EvaluationKind | null
+  listing: EvaluatedListing | null
+  priceContext: PriceContext | null
+  riskSignals: RiskSignal[] | null
+}
+
+/** PUT /api/v1/products/{productId}/comparison-axes — 추가 전용(기존 축을 지우지 않는다). */
+export interface ComparisonAxis {
+  id: number
+  name: string
+}
+
+/**
+ * GET /api/v1/products/{productId}/comparison. `axisValues`는 **승격 안 된 축의 키가 아예 없다** —
+ * null 값이 아니다. "미확인"과 "빈 문자열"을 혼동하면 체크리스트가 거짓말한다. 키는 축 id를
+ * 문자열로 표현한 것이다(JSON 객체 키는 항상 문자열).
+ */
+export interface ComparisonRow {
+  listingId: number
+  title: string
+  price: number
+  url: string | null
+  axisValues: Record<string, string>
+  notes: string[]
+}
+
+export interface ComparisonView {
+  axes: ComparisonAxis[]
+  rows: ComparisonRow[]
+}
+
+/** POST /api/v1/listings/{listingId}/notes */
+export interface NoteCreated {
+  noteId: number
+}
+
+/** POST /api/v1/listings/{listingId}/axis-values — 재승격(같은 축)은 값을 갱신한다. */
+export interface AxisValueRequest {
+  axisId: number
+  value: string
+}
+

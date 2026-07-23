@@ -21,6 +21,13 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: '제품 등록' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '지금 사도 되나' })).not.toBeInTheDocument()
   })
+
+  it('탭으로 중고 화면에 간다', async () => {
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: '중고' }))
+
+    expect(await screen.findByRole('heading', { name: '중고' })).toBeInTheDocument()
+  })
 })
 
 describe('App — 등록에서 판단으로 이어진다', () => {

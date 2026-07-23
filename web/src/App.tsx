@@ -4,9 +4,16 @@ import { DecisionPage } from './decision/DecisionPage'
 import { RegistrationPage } from './registration/RegistrationPage'
 import { ReviewQueuePage } from './review/ReviewQueuePage'
 import { SettingsPage } from './settings/SettingsPage'
+import { UsedPage } from './used/UsedPage'
 
-// 화면이 넷뿐이라 라우터를 들이지 않는다. URL이 필요해지면 그때 넣는다.
-const TABS = { decision: '지금 사도 되나', registration: '제품 등록', review: '미상 큐', settings: '설정' } as const
+// 화면이 다섯뿐이라 라우터를 들이지 않는다. URL이 필요해지면 그때 넣는다.
+const TABS = {
+  decision: '지금 사도 되나',
+  registration: '제품 등록',
+  used: '중고',
+  review: '미상 큐',
+  settings: '설정',
+} as const
 type Tab = keyof typeof TABS
 
 export function App() {
@@ -39,6 +46,7 @@ export function App() {
       </header>
       {tab === 'decision' && <DecisionPage initialVariantId={openVariantId} />}
       {tab === 'registration' && <RegistrationPage onOpenDecision={openDecision} />}
+      {tab === 'used' && <UsedPage />}
       {tab === 'review' && <ReviewQueuePage />}
       {tab === 'settings' && <SettingsPage />}
     </div>

@@ -942,6 +942,64 @@ done
 compose logs --no-log-prefix core 2>&1 | grep -q 'STUB usedAlert.*https://example.invalid/u/a1' ||
 	fail "중고 알림 본문에 원문 링크가 없다"
 
+echo "--- 5-4c) 중고 평가·비교 REST 계약 (USED-04·05 필드 드리프트) ---"
+# 계약 드리프트: web(used/*)이 읽는 필드가 core 응답에 전부 있는가. a1 listing은 5-4가 이미
+# 접어 둔 것을 재사용한다(ACTIVE/820,000) — 새로 심지 않는다.
+# 페이로드는 파일로 보낸다 — Windows curl.exe가 argv의 한글을 cp949로 넘겨 core가
+# `Invalid UTF-8 start byte`로 400을 낸다(위 4)단계와 같은 함정).
+used_search_id=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-c "select id from used_search where product_id = ${product_id} limit 1" | tr -d '\r')
+a1_listing_id=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-c "select id from listing where listing_id = 'a1'" | tr -d '\r')
+[ -n "$used_search_id" ] && [ -n "$a1_listing_id" ] || fail "중고 검색·매물 id를 찾지 못했다"
+
+eval_payload=$(mktemp)
+cat >"$eval_payload" <<'JSON'
+{"kind":"MANUAL","title":"스모크 평가용 매물","price":830000}
+JSON
+eval_resp=$(curl -fsS -X POST "${WEB}/api/v1/used-searches/${used_search_id}/evaluate" \
+	-H 'Content-Type: application/json' -d @"$eval_payload")
+rm -f "$eval_payload"
+for field in needsInput listing priceContext riskSignals; do
+	echo "$eval_resp" | grep -q "\"${field}\"" ||
+		fail "web EvaluationResponse가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $eval_resp"
+done
+echo "$eval_resp" | grep -q '"title":"스모크 평가용 매물"' || fail "평가 결과에 title이 없다: $eval_resp"
+echo "$eval_resp" | grep -q '"source":' || fail "priceContext.source가 없다 (계약 드리프트): $eval_resp"
+
+axes_payload=$(mktemp)
+cat >"$axes_payload" <<'JSON'
+{"names":["배터리%"]}
+JSON
+axes_resp=$(curl -fsS -X PUT "${WEB}/api/v1/products/${product_id}/comparison-axes" \
+	-H 'Content-Type: application/json' -d @"$axes_payload")
+rm -f "$axes_payload"
+axis_id=$(echo "$axes_resp" | sed 's/.*"id":\([0-9]*\).*/\1/')
+[ -n "$axis_id" ] || fail "비교축 생성 응답에서 id를 못 찾았다: $axes_resp"
+
+axis_value_payload=$(mktemp)
+printf '{"axisId":%s,"value":"92%%"}' "$axis_id" >"$axis_value_payload"
+curl -fsS -X POST "${WEB}/api/v1/listings/${a1_listing_id}/axis-values" \
+	-H 'Content-Type: application/json' -d @"$axis_value_payload" >/dev/null || fail "축값 승격 실패"
+rm -f "$axis_value_payload"
+
+note_payload=$(mktemp)
+cat >"$note_payload" <<'JSON'
+{"body":"스모크 메모"}
+JSON
+curl -fsS -X POST "${WEB}/api/v1/listings/${a1_listing_id}/notes" \
+	-H 'Content-Type: application/json' -d @"$note_payload" >/dev/null || fail "메모 추가 실패"
+rm -f "$note_payload"
+
+comparison=$(curl -fsS "${WEB}/api/v1/products/${product_id}/comparison")
+for field in axes rows; do
+	echo "$comparison" | grep -q "\"${field}\"" ||
+		fail "web ComparisonView가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $comparison"
+done
+echo "$comparison" | grep -q '"name":"배터리%"' || fail "비교표에 방금 만든 축이 없다: $comparison"
+echo "$comparison" | grep -q '"92%"' || fail "비교표에 승격한 축값이 없다: $comparison"
+echo "$comparison" | grep -q '"스모크 메모"' || fail "비교표에 방금 단 메모가 없다: $comparison"
+
 echo "--- 6) collector는 opt-in 없이 네트워크를 만지지 않는다 (OBS-01 구조화 로그) ---"
 # 로그는 JSON Lines다. 문장을 grep하지 말고 이벤트를 본다 — 문구는 바뀌어도 계약은 안 바뀐다.
 collector_log=$(compose logs --no-log-prefix collector 2>&1 | grep '^{' | tail -1)
