@@ -131,6 +131,18 @@ export interface CadenceView {
   guardMet: boolean
 }
 
+/**
+ * GET /api/v1/coupang/variants/{variantId}/latest-price — CMP-01 재료(쿠팡 크롬 확장이 보낸 최신 관측).
+ * 관측이 없으면 전 필드 null — core는 지어내지 않는다(확장 미연동이면 항상 이 모양).
+ */
+export interface CoupangLatestPrice {
+  regularPrice: number | null
+  wowPrice: number | null
+  shippingFee: number | null
+  url: string | null
+  observedAt: string | null
+}
+
 /** PUR-01 구매 관찰 상태기계(docs/15). */
 export type PurchaseState = 'OBSERVING' | 'REPORT_PENDING' | 'CLOSED' | 'ARCHIVED'
 

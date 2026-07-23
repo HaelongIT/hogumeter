@@ -6,7 +6,7 @@
  *  2. 현재가 미확립(null)이면 갭을 그리지 않는다 — core가 갭을 아예 계산하지 않는다.
  *  3. 주기는 발생·간격·경과일만 말한다. "다음 딜 예상"은 만들지 않는다.
  */
-import type { BenchmarkView, CadenceView, SignalColor, SignalView } from '../api/types'
+import type { BenchmarkView, CadenceView, CoupangLatestPrice, SignalColor, SignalView } from '../api/types'
 
 /**
  * 현재가 미확립 판정. core가 네이버 키 미발급 시 `currentPrice: null`을 보낸다(docs/91 Q-53).
@@ -82,6 +82,20 @@ export function gapLine(view: BenchmarkView): string {
   }
   const direction = leg.won > 0 ? '비쌈' : '쌈'
   return `현재가 ${won(view.currentPrice)} — 기준가보다 ${won(Math.abs(leg.won))} ${direction} (${pct(leg.pct)})`
+}
+
+/**
+ * CMP-01 재료 — 크롬 확장이 보낸 쿠팡 최신 관측가. 관측이 없으면(확장 미연동) 그 사실을 말한다 —
+ * 지어내지 않는다(절대 원칙 6). 와우가·배송비는 있을 때만 병기한다(일반 회원은 와우가가 없을 수 있다).
+ */
+export function coupangPriceLine(price: CoupangLatestPrice): string {
+  if (price.regularPrice === null) {
+    return '쿠팡 관측가 미확인 — 크롬 확장이 아직 연동되지 않았습니다'
+  }
+  const wow = price.wowPrice === null ? '' : ` · 와우가 ${won(price.wowPrice)}`
+  const shipping = price.shippingFee === null ? '' : ` · 배송비 ${won(price.shippingFee)}`
+  const observed = price.observedAt === null ? '' : ` (관측 ${price.observedAt.slice(0, 10)})`
+  return `쿠팡 정가 ${won(price.regularPrice)}${wow}${shipping}${observed}`
 }
 
 export function cadenceLine(cadence: CadenceView): string {

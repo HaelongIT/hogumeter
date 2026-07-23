@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
-import type { BenchmarkView, CadenceView, ProductSummary, SignalView } from '../api/types'
+import type { BenchmarkView, CadenceView, CoupangLatestPrice, ProductSummary, SignalView } from '../api/types'
 import { AlertPolicyPanel } from '../policy/AlertPolicyPanel'
 import { PurchasePanel } from '../purchase/PurchasePanel'
 import { Gauge } from './Gauge'
@@ -8,6 +8,7 @@ import {
   benchmarkLine,
   cadenceLine,
   conditionsSuffix,
+  coupangPriceLine,
   gapLine,
   lowestLine,
   signalBadge,
@@ -18,6 +19,7 @@ interface Loaded {
   signal: SignalView
   benchmark: BenchmarkView
   cadence: CadenceView
+  coupang: CoupangLatestPrice
 }
 
 const describe = (failure: unknown) =>
@@ -79,14 +81,17 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
     setError(null)
     setLoaded(null)
 
-    // 셋은 서로 독립이다. 하나가 실패하면 화면을 반쪽만 그리지 않고 실패를 말한다.
+    // 넷은 서로 독립이다. 하나가 실패하면 화면을 반쪽만 그리지 않고 실패를 말한다.
     // 신호등·기준가는 **같은 수요축 값**으로 부른다 — 다르면 한 화면이 서로 다른 사실을 말한다.
     Promise.all([
       api.getSignal(variantId, demandAxisValue), // 기간 무관 — core가 6개월로 고정한다
       api.getBenchmark(variantId, periodMonths, demandAxisValue, includeOutliers),
       api.getCadence(variantId, periodMonths),
+      api.getCoupangLatestPrice(variantId), // CMP-01 재료 — 확장 미연동이면 전 필드 null(실패 아님)
     ])
-      .then(([signal, benchmark, cadence]) => live && setLoaded({ signal, benchmark, cadence }))
+      .then(
+        ([signal, benchmark, cadence, coupang]) => live && setLoaded({ signal, benchmark, cadence, coupang }),
+      )
       .catch((failure) => live && setError(describe(failure)))
 
     return () => {
@@ -231,6 +236,10 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
             )}
             <p aria-label="딜 주기" className="readout">
               {cadenceLine(loaded.cadence)}
+            </p>
+            {/* CMP-01 — 쿠팡 크롬 확장이 보낸 관측(확장 미연동이면 미확인). 지어내지 않는다(원칙 6). */}
+            <p aria-label="쿠팡 관측가" className="readout">
+              {coupangPriceLine(loaded.coupang)}
             </p>
             {loaded.benchmark.latestDeal && (
               <p aria-label="최근 딜" className="readout">

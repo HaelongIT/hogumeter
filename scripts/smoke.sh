@@ -28,6 +28,8 @@ export COLLECTOR_ALLOW_NETWORK=0
 export TELEGRAM_ENABLED=false
 # 파이프라인 트리거를 촘촘히 — 스모크가 60초를 기다릴 수는 없다(운영 기본은 60000).
 export CORE_PIPELINE_INTERVAL_MS=2000
+# CMP-02 확장 ingest 종단 검증용 고정 토큰 — 실 쿠팡 접근이 아니라 우리 core REST를 우리가 두드린다.
+export EXTENSION_INGEST_TOKEN=smoke-only-not-a-secret
 
 WEB="http://127.0.0.1:${WEB_PORT}"
 compose() { docker compose -p "$PROJECT" "$@"; }
@@ -809,6 +811,32 @@ merge_first_alerts=$(compose logs --no-log-prefix core 2>&1 |
 	grep 'STUB alert' | grep 'intensity=' | grep -c '병합테스트 제품' || true)
 [ "${merge_first_alerts:-0}" = 1 ] ||
 	fail "병합 딜의 첫 알림이 정확히 1번이 아니다 (실제 ${merge_first_alerts:-0}번 — Q-13 중복 발송 회귀?)"
+
+echo "--- 5-1j) CMP-01 재료: 쿠팡 크롬 확장 ingest -> latest-price 왕복 (확장은 아직 없다, REST만) ---"
+# 확장이 아직 없으므로 미관측이 기본값 — 지어내지 않고 전 필드 null이어야 한다(GetLatestCoupangPriceUseCase).
+cmp_latest=$(curl -fsS "${WEB}/api/v1/coupang/variants/${variant_id}/latest-price")
+echo "$cmp_latest" | grep -q '"regularPrice":null' || fail "관측 전인데 regularPrice가 null이 아니다: $cmp_latest"
+# 계약 드리프트: web CoupangLatestPrice가 기대하는 필드가 전부 있는가(정본 = web/src/api/types.ts).
+for field in regularPrice wowPrice shippingFee url observedAt; do
+	echo "$cmp_latest" | grep -q "\"${field}\":" ||
+		fail "web CoupangLatestPrice가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $cmp_latest"
+done
+
+# 토큰 없이/틀리게 보내면 거절된다(SEC-04, 미설정을 '열림'으로 다루지 않는다).
+curl -sS -o /dev/null -w '%{http_code}' -X POST "${WEB}/api/v1/coupang/observations" \
+	-H 'Content-Type: application/json' -H 'X-Extension-Token: wrong-token' \
+	-d "{\"variantId\":${variant_id},\"regularPrice\":900000,\"wowPrice\":850000,\"shippingFee\":0,\"url\":\"https://coupang.test/1\"}" |
+	grep -q '^401$' || fail "확장 토큰이 틀렸는데 401이 아니다"
+
+# 진짜 확장이 보낼 법한 관측 하나(서버는 쿠팡에 절대 접근하지 않는다 — 이건 우리가 만든 합성 요청).
+curl -fsS -X POST "${WEB}/api/v1/coupang/observations" \
+	-H 'Content-Type: application/json' -H "X-Extension-Token: ${EXTENSION_INGEST_TOKEN}" \
+	-d "{\"variantId\":${variant_id},\"regularPrice\":900000,\"wowPrice\":850000,\"shippingFee\":0,\"url\":\"https://coupang.test/1\"}" \
+	>/dev/null || fail "쿠팡 관측 ingest 실패"
+
+cmp_latest=$(curl -fsS "${WEB}/api/v1/coupang/variants/${variant_id}/latest-price")
+echo "$cmp_latest" | grep -q '"regularPrice":900000' || fail "ingest한 관측이 latest-price에 없다: $cmp_latest"
+echo "$cmp_latest" | grep -q '"wowPrice":850000' || fail "와우가가 latest-price에 없다: $cmp_latest"
 
 echo "--- 5-2) 구매 기록(PUR) 왕복 — 쓰기 → 관찰 문맥 ---"
 # 딜이 하나도 없는 variant를 샀다. 정답은 "활성 딜 없음 + 더 싼 기회 0건"이다.

@@ -1,3 +1,25 @@
+## 2026-07-23 — CMP-01 쿠팡 관측가 web 병기 (무중단, 이어서)
+
+- **경위**: Q-13 커밋 후 ⓐⓑⓒⓓ 순서로 다음 증분을 찾음. ⓐM1은 코드 전부 완료(남은 건 외부 키·승인
+  뿐), ⓑdocs/91 열린 항목 다수가 실 수집 표본 필요로 재검증해도 진짜 막혀 있었음(Q-63·64·65 등),
+  ⓒ레포지토리 메서드·UseCase 클래스 호출자 0 감사(스크립트로 전수 확인) — 전부 배선돼 있어 깨끗.
+  그러다 API 필드 소비처 0 감사를 REST 엔드포인트 단위로 넓히다 `GET /api/v1/coupang/variants/
+  {id}/latest-price`(core `GetLatestCoupangPriceUseCase`, "CMP-01 재료"라고 자기 주석에 적혀
+  있음)를 web 어디도 부르지 않는다는 걸 발견 — CMP-02(확장 ingest 수신부)는 core에 완성돼 있었는데
+  스모크 커버리지도, web 소비처도 0이었다.
+- **한 일**: `web/src/api/types.ts`에 `CoupangLatestPrice`, `client.ts`에 `getCoupangLatestPrice`,
+  `decision/present.ts`에 순수 함수 `coupangPriceLine`(관측 없으면 "미확인 — 확장이 아직 연동되지
+  않았습니다", 있으면 정가·와우가·배송비·관측일 병기 — 금액을 지어내지 않는다). `DecisionPage`가
+  기존 신호등·기준가·주기 3종 조회에 네 번째로 병렬 fetch해 "근거·계기" 구간에 추가.
+  `scripts/smoke.sh` 5-1j: latest-price 필드 계약(널 응답)→ SEC-04 토큰 오류 401 → ingest POST →
+  latest-price 갱신 확인까지 종단 검증(우리 core를 우리가 두드리는 합성 요청, 실 쿠팡 접근 없음).
+- **의도적으로 안 한 일**: 네이버 leg(Q-3 키 미발급) · 크롬 확장 자체(manifest·content script) —
+  실 쿠팡 DOM 구조 fixture 없이 셀렉터를 지으면 "우연히 옳은 코드"가 된다(다음 쿠팡 개편에 조용히
+  틀려짐). docs/91 Q-79로 등재, 재개 트리거는 "네이버 키" 또는 "사람이 쿠팡 fixture 제공".
+- **검증**: core 무변경(전체 GREEN 유지), web 214 테스트 GREEN(신규 4), 빌드 클린, 감사 게이트 5종
+  통과, 스모크 격리 컨테이너(`CORE_PORT=58607`)로 첫 시도 전부 통과. docs/30 M3 절·`.claude/rules/
+  web-react.md`·docs/91 Q-79 갱신. 커밋 예정.
+
 ## 2026-07-23 — Q-13 병합 알림 중복발화 결함 수정 (무중단, 이어서)
 
 - **경위**: 배경 에이전트에 docs/91 "거짓 봉인"(재개 트리거가 이미 참인데 방치된 항목) 스캔을 맡겼고,

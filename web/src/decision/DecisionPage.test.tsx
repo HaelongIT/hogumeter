@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiFailure, api } from '../api/client'
-import type { BenchmarkView, CadenceView, SignalView } from '../api/types'
+import type { BenchmarkView, CadenceView, CoupangLatestPrice, SignalView } from '../api/types'
 import { DecisionPage } from './DecisionPage'
 
 const iphone = {
@@ -39,6 +39,15 @@ const benchmark: BenchmarkView = {
   outliers: [],
 }
 
+/** CMP-01 — 확장이 아직 없는 대부분의 테스트는 미연동(전 필드 null) 모양을 쓴다. */
+const coupangUnavailable: CoupangLatestPrice = {
+  regularPrice: null,
+  wowPrice: null,
+  shippingFee: null,
+  url: null,
+  observedAt: null,
+}
+
 const pick = () => userEvent.selectOptions(screen.getByLabelText('variant'), '11')
 
 describe('DecisionPage', () => {
@@ -47,6 +56,7 @@ describe('DecisionPage', () => {
     vi.spyOn(api, 'getSignal').mockResolvedValue(signal)
     vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
+    vi.spyOn(api, 'getCoupangLatestPrice').mockResolvedValue(coupangUnavailable)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([]) // 패널이 같은 화면에 있다
     vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [] }) // 알림 정책 패널도
     vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
@@ -69,6 +79,24 @@ describe('DecisionPage', () => {
     expect(screen.getByLabelText('기간 최저')).toHaveTextContent('기간 최저 780,000원 (2026-05-02)')
     expect(screen.getByLabelText('딜 주기')).toHaveTextContent('간격 median 28일')
     expect(screen.getByRole('link', { name: '원문' })).toHaveAttribute('href', 'https://ppomppu/1')
+    // CMP-01 — 확장 미연동이면 미확인이라고 말하고 금액을 지어내지 않는다.
+    expect(screen.getByLabelText('쿠팡 관측가')).toHaveTextContent('미확인')
+  })
+
+  it('쿠팡 확장이 관측을 보냈으면 정가·와우가를 함께 낸다 (CMP-01)', async () => {
+    vi.spyOn(api, 'getCoupangLatestPrice').mockResolvedValue({
+      regularPrice: 899_000,
+      wowPrice: 849_000,
+      shippingFee: 0,
+      url: 'https://coupang.test/1',
+      observedAt: '2026-07-20T00:00:00Z',
+    })
+    render(<DecisionPage />)
+    await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+    await pick()
+
+    expect(await screen.findByLabelText('쿠팡 관측가')).toHaveTextContent('쿠팡 정가 899,000원')
+    expect(screen.getByLabelText('쿠팡 관측가')).toHaveTextContent('와우가 849,000원')
   })
 
   it('현재가 미확립(null)이면 갭 자리에 거짓말 대신 이유를 쓴다', async () => {
@@ -167,6 +195,7 @@ describe('DecisionPage — 수요축 분리 제품', () => {
     vi.spyOn(api, 'getSignal').mockResolvedValue(signal)
     vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
+    vi.spyOn(api, 'getCoupangLatestPrice').mockResolvedValue(coupangUnavailable)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([])
     vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [] })
     vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
@@ -198,6 +227,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     vi.spyOn(api, 'getSignal').mockResolvedValue(signal)
     vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
+    vi.spyOn(api, 'getCoupangLatestPrice').mockResolvedValue(coupangUnavailable)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([]) // 패널이 같은 화면에 있다
     vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [] }) // 알림 정책 패널도
     vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
@@ -243,6 +273,7 @@ describe('DecisionPage — 이상치 토글 (Q-11, 기본 숨김)', () => {
     vi.spyOn(api, 'listProducts').mockResolvedValue([iphone])
     vi.spyOn(api, 'getSignal').mockResolvedValue(signal)
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
+    vi.spyOn(api, 'getCoupangLatestPrice').mockResolvedValue(coupangUnavailable)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([])
     vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [] })
     vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })

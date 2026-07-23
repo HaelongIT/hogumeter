@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { BenchmarkView, CadenceView, SignalView } from '../api/types'
+import type { BenchmarkView, CadenceView, CoupangLatestPrice, SignalView } from '../api/types'
 import {
   benchmarkLine,
   cadenceLine,
   conditionsSuffix,
+  coupangPriceLine,
   gapLine,
   lowestLine,
   sampleLabel,
@@ -267,5 +268,45 @@ describe('lowestLine — 기간 최저가', () => {
   /** 관측된 최저가가 없으면 줄 자체를 그리지 않는다 — "0원"이나 "최저 없음"을 지어내지 않는다. */
   it('기간 최저가 없으면 null이다', () => {
     expect(lowestLine(withLowest({ periodLowest: null }))).toBeNull()
+  })
+})
+
+/** CMP-01 재료 — 확장이 아직 없는 지금은 항상 전 필드 null이다. 그 사실을 지어내지 않고 말한다. */
+describe('coupangPriceLine — 크롬 확장 미연동이면 미확인, 관측이 있으면 정가/와우가/배송비', () => {
+  const noObservation: CoupangLatestPrice = {
+    regularPrice: null,
+    wowPrice: null,
+    shippingFee: null,
+    url: null,
+    observedAt: null,
+  }
+
+  it('관측이 없으면 미확인이라고 말하고 금액을 지어내지 않는다', () => {
+    const line = coupangPriceLine(noObservation)
+
+    expect(line).toContain('미확인')
+    expect(line).not.toMatch(PRICE_AMOUNT)
+  })
+
+  it('정가만 있으면 정가만 말한다', () => {
+    const line = coupangPriceLine({ ...noObservation, regularPrice: 899_000, observedAt: '2026-07-20T00:00:00Z' })
+
+    expect(line).toContain('쿠팡 정가 899,000원')
+    expect(line).toContain('2026-07-20')
+    expect(line).not.toContain('와우가')
+    expect(line).not.toContain('배송비')
+  })
+
+  it('와우가·배송비가 있으면 함께 병기한다', () => {
+    const line = coupangPriceLine({
+      ...noObservation,
+      regularPrice: 899_000,
+      wowPrice: 849_000,
+      shippingFee: 0,
+      observedAt: '2026-07-20T00:00:00Z',
+    })
+
+    expect(line).toContain('와우가 849,000원')
+    expect(line).toContain('배송비 0원')
   })
 })

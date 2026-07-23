@@ -7,6 +7,7 @@ import type {
   CadenceView,
   ComparisonAxis,
   ComparisonView,
+  CoupangLatestPrice,
   EvaluationRequest,
   EvaluationResponse,
   GlobalExcludeKeywordsView,
@@ -102,6 +103,10 @@ export const api = {
 
   getCadence: (variantId: number, periodMonths = 6) =>
     request<CadenceView>(`/api/v1/variants/${variantId}/cadence?periodMonths=${periodMonths}`),
+
+  /** CMP-01 재료 — 확장이 아직 안 보냈으면 전 필드 null(200). variant 존재 여부와 무관하게 그 모양이다. */
+  getCoupangLatestPrice: (variantId: number) =>
+    request<CoupangLatestPrice>(`/api/v1/coupang/variants/${variantId}/latest-price`),
 
   // PUR — 구매 기록(쓰기)과 관찰 문맥(읽기).
   listPurchases: (variantId: number) => request<PurchaseObservation[]>(`/api/v1/variants/${variantId}/purchases`),

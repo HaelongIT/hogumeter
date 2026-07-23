@@ -61,6 +61,12 @@
 ## M3 — 구매 비교 (CMP) + 크롬 확장
 온디맨드 비교 화면 + extension ingest + 확장 개발 + 반자동 폴백.
 
+> **2026-07-23 진행**: core ingest+조회(`CoupangObservationController`, SEC-04 토큰 인증)는 이미 서 있었다.
+> `GetLatestCoupangPriceUseCase`("CMP-01 재료")가 REST는 있는데 **web 소비처가 0**이었던 것을 찾아(API
+> 필드 소비처 0 감사) `DecisionPage`에 병기했다(관측 없으면 "미확인"이라고 정직하게 말한다). 스모크
+> 5-1j가 ingest→조회 종단 검증. **남은 것은 코드 밖 둘**(`docs/91` Q-79): 네이버 leg(Q-3 키 대기),
+> 크롬 확장 자체(실 쿠팡 DOM fixture 없이 만들면 우연히 옳은 코드가 된다 — 사람이 fixture 제공).
+
 ## M4 — 웹 마감
 조회·비교 대시보드, reviewQueue 웹 화면, 설정 전체, 이상치 토글.
 
