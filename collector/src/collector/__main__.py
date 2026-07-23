@@ -28,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 from collections.abc import Callable
 
 from .db.raw_deal_sink import RawDealSink, connect_from_env
+from .db.site_poll_state_sink import SitePollStateSink
 from .db.used_listing_sink import UsedListingSink
 from .db.used_search_source import UsedSearchSource
 from .observability import counters, event
@@ -77,6 +78,7 @@ def main(
     boards=None,
     used_sink=None,
     search_source=None,
+    poll_sink=None,
 ) -> int:
     now = clock()
     if os.environ.get(ALLOW_NETWORK_ENV) != "1":
@@ -89,10 +91,11 @@ def main(
     fetch = _build_fetcher(opener or urllib_opener, robots)
     interval_for = _interval_port(robots)
     # 게시판 sink와 중고 sink·검색 소스는 **한 커넥션**을 공유한다(같은 DB, 커넥션 하나면 족하다).
-    connection = _connect_if_needed(sink, used_sink, search_source)
+    connection = _connect_if_needed(sink, used_sink, search_source, poll_sink)
     sink = sink or (RawDealSink(connection) if connection else None)
     used_sink = used_sink or (UsedListingSink(connection) if connection else None)
     search_source = search_source or (UsedSearchSource(connection) if connection else None)
+    poll_sink = poll_sink or (SitePollStateSink(connection) if connection else None)
     # 기본은 레지스트리(robots가 허용한 곳만). 테스트는 여기에 자기 스펙을 주입해 **루프의
     # 멀티사이트 의미**(영향받은 사이트만 알림 등)를 폴링 대상과 무관하게 검증한다.
     specs = hotdeal_boards() if boards is None else list(boards)
@@ -133,8 +136,12 @@ def main(
                 _log("sink_error", now, error=f"{type(failure).__name__}: {failure}",
                      dropped=len(records), consecutive=sink_failures)
 
+        # 관측시계(docs/03 3-2): core의 신선도가 이 값을 읽는다. 성공한 폴링만 올라간다.
+        polls_recorded = _record_polls(poll_sink, result.states, now)
+
         # written은 실패 시 부재다. "0건 적재"와 "적재 못 함"은 다른 사건이다.
-        _log("cycle", now, written=written, skipped=len(skipped), **counters(result))
+        _log("cycle", now, written=written, skipped=len(skipped), polls_recorded=polls_recorded,
+             **counters(result))
 
         for alert in result.alerts:
             _log("alert", alert.at, kind="blocked", site=alert.site, reason=alert.reason)
@@ -150,7 +157,8 @@ def main(
         # sink·source가 둘 다 있을 때만 돈다(DB 미설정이면 게시판만 로그로 남기던 기존 동작 유지).
         if used_sink is not None and search_source is not None:
             market_states, sink_failures = _poll_market(
-                search_source, used_sink, market_states, now, fetch, interval_for, sink_failures)
+                search_source, used_sink, market_states, now, fetch, interval_for, sink_failures,
+                poll_sink)
 
         cycles += 1
 
@@ -169,7 +177,8 @@ def main(
     return 0
 
 
-def _poll_market(search_source, used_sink, market_states, now, fetch, interval_for, sink_failures):
+def _poll_market(search_source, used_sink, market_states, now, fetch, interval_for, sink_failures,
+                 poll_sink=None):
     """등록된 중고 검색을 각각 1회(due면) 폴링·적재. 게시판 루프와 같은 격리·주기 규약을 따른다.
 
     검색당 `run_cycle`을 부른다 — 한 번에 다 넣으면 `CycleResult.deals`가 통합돼 어느 검색에서
@@ -189,14 +198,37 @@ def _poll_market(search_source, used_sink, market_states, now, fetch, interval_f
         try:
             batch = used_sink.insert_batch(search.id, result.deals, now)
             sink_failures = 0
+            polls_recorded = _record_polls(poll_sink, result.states, now)
             # 0도 센다(OBS-02): "매물 0건"과 "적재 못 함"은 다른 사건이다. 후자는 아래 sink_error다.
             _log("used_cycle", now, search_id=search.id, site=spec.name,
-                 inserted=batch.inserted, skipped_no_price=batch.skipped_no_price)
+                 inserted=batch.inserted, skipped_no_price=batch.skipped_no_price,
+                 polls_recorded=polls_recorded)
         except Exception as failure:
             sink_failures += 1
             _log("sink_error", now, error=f"{type(failure).__name__}: {failure}",
                  search_id=search.id, dropped=len(result.deals), consecutive=sink_failures)
     return market_states, sink_failures
+
+
+def _record_polls(poll_sink, states, now: datetime) -> int | None:
+    """성공한 폴링 시각을 `site_poll_state`에 올린다. 부재(sink 없음·실패)는 0과 구별해 `None`이다.
+
+    실패해도 수집 루프를 죽이지 않는다 — 딜 적재가 살아 있으면 표본은 계속 늘고, 이 값의 부재는
+    core 쪽에서 "수집 기록 없음" 딱지로 드러난다. 다만 조용히 넘기지 않고 이벤트로 남긴다.
+    """
+    if poll_sink is None:
+        return None
+    polled = {
+        name: state.last_successful_poll
+        for name, state in states.items()
+        if state.last_successful_poll is not None
+    }
+    try:
+        return poll_sink.record_successes(polled)
+    except Exception as failure:
+        _log("poll_state_error", now, error=f"{type(failure).__name__}: {failure}",
+             sites=sorted(polled))
+        return None
 
 
 def _log(name: str, at: datetime, **fields) -> None:
@@ -225,13 +257,13 @@ def _interval_port(robots: RobotsGate) -> Callable[[SiteSpec], timedelta]:
     return interval_for
 
 
-def _connect_if_needed(sink, used_sink, search_source):
+def _connect_if_needed(sink, used_sink, search_source, poll_sink):
     """주입되지 않은 게 하나라도 있으면 커넥션을 연다. 전부 주입됐으면(테스트) DB를 안 만진다.
 
-    게시판·중고가 한 커넥션을 공유하므로 여기서 한 번만 연다 — 각자 `connect_from_env`를 부르면
-    커넥션이 둘로 갈린다.
+    게시판·중고·폴링 상태가 한 커넥션을 공유하므로 여기서 한 번만 연다 — 각자 `connect_from_env`를
+    부르면 커넥션이 여러 개로 갈린다.
     """
-    if sink is not None and used_sink is not None and search_source is not None:
+    if all(x is not None for x in (sink, used_sink, search_source, poll_sink)):
         return None
     return connect_from_env()
 

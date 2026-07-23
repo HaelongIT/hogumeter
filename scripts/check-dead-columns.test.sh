@@ -21,6 +21,8 @@ fake_root() {
 	cat >"$r/docs/91-open-questions.md" <<'MD'
 ## [열림] Q-9. 아직 막혀 있는 무엇
 ## [부분해소] Q-28. 일부만 됨
+## [부분해소 2026-07-22] Q-72. 날짜가 붙은 상태 표식(실제 보드의 형태)
+## [해소 2026-07-22] Q-73. 닫힌 것 — 여기 인용한 면제는 만료다
 MD
 	: >"$r/scripts/dead-columns-allowlist.txt"
 }
@@ -70,6 +72,14 @@ ddl "$r" '    confidence numeric(3, 2)'
 printf 't.confidence Q-9 잠정적으로 죽음(열린 Q)\n' >"$r/scripts/dead-columns-allowlist.txt"
 check 0 "죽은 컬럼 + 열린 Q 면제" "$r"
 
+# 실제 보드는 상태 표식 뒤에 날짜를 단다(`[부분해소 2026-07-22]`). 닫는 괄호를 바로 요구하던
+# 정규식이 그걸 "해소됨"으로 읽어 **멀쩡한 면제를 차단**했다(2026-07-23 실측).
+r=$(new_case)
+fake_root "$r"
+ddl "$r" '    confidence numeric(3, 2)'
+printf 't.confidence Q-72 날짜 붙은 부분해소는 여전히 열린 것\n' >"$r/scripts/dead-columns-allowlist.txt"
+check 0 "날짜가 붙은 [부분해소]도 열린 Q로 읽는다(오차단 금지)" "$r"
+
 echo "── 차단되어야 함 (exit 1) ──"
 
 r=$(new_case)
@@ -90,6 +100,12 @@ fake_root "$r"
 ddl "$r" '    confidence numeric(3, 2)'
 printf 't.confidence Q-404 없는 Q\n' >"$r/scripts/dead-columns-allowlist.txt" # 해소·부재 Q 인용
 check 1 "면제가 인용한 Q가 열려 있지 않다(만료된 면제)" "$r"
+
+r=$(new_case)
+fake_root "$r"
+ddl "$r" '    confidence numeric(3, 2)'
+printf 't.confidence Q-73 해소된 Q를 인용\n' >"$r/scripts/dead-columns-allowlist.txt"
+check 1 "날짜가 붙어도 [해소]는 만료다(느슨해진 정규식이 다 통과시키지 않는다)" "$r"
 
 r=$(new_case)
 fake_root "$r"

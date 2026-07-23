@@ -35,13 +35,14 @@ public class GetSignalUseCase {
 	private final VariantBenchmarkParams params;
 	private final VariantDemandScope demandScope;
 	private final VariantExcludeKeywords excludeKeywords;
+	private final ObservationClock observationClock;
 	private final Clock clock;
 	private final BenchmarkCalculator benchmark = new BenchmarkCalculator();
 	private final SignalCalculator signal = new SignalCalculator();
 
 	public GetSignalUseCase(VariantRepository variants, DealEventRepository dealEvents, DealEventMapper mapper,
 			CurrentPriceProvider currentPrice, VariantBenchmarkParams params, VariantDemandScope demandScope,
-			VariantExcludeKeywords excludeKeywords, Clock clock) {
+			VariantExcludeKeywords excludeKeywords, ObservationClock observationClock, Clock clock) {
 		this.variants = variants;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
@@ -49,6 +50,7 @@ public class GetSignalUseCase {
 		this.params = params;
 		this.demandScope = demandScope;
 		this.excludeKeywords = excludeKeywords;
+		this.observationClock = observationClock;
 		this.clock = clock;
 	}
 
@@ -71,8 +73,9 @@ public class GetSignalUseCase {
 		// 신호등의 tier도 K를 탄다 — 판단 화면과 같은 K를 써야 "기준가는 있는데 신호는 회색"이 안 생긴다.
 		BenchmarkView view = benchmark.compute(deals, currentPrice.currentPriceFor(variantId),
 				PERIOD_MONTHS, params.of(variantId), clock);
-		SignalView signalView = signal.compute(deals, view, clock.instant(), FRESHNESS_LIMIT, QUALIFY_LIMIT);
-		return withExclusionNote(signalView, filtered.excluded());
+		ObservationClock.Reading observed = observationClock.read();
+		SignalView signalView = signal.compute(deals, view, observed.at(), FRESHNESS_LIMIT, QUALIFY_LIMIT);
+		return withUnmeasuredClockNote(withExclusionNote(signalView, filtered.excluded()), observed);
 	}
 
 	/**
@@ -81,6 +84,19 @@ public class GetSignalUseCase {
 	 * 표본을 한꺼번에 갉아먹는데 이 딱지가 없으면 아무도 모른다. <b>0이면 딱지를 달지 않는다</b> —
 	 * 아무것도 안 걸렀다는 사실까지 화면을 어지럽힐 이유는 없다(로그·카운터와 달리 여긴 사람의 눈이다).
 	 */
+	/**
+	 * 폴링 기록이 없어 벽시계로 신선도를 잰 경우 그 사실을 딱지로 낸다. 신선도가 <b>측정된 것처럼</b>
+	 * 보이면 "수집이 멈춘 적 없다"는 거짓말이 된다 — 색은 그대로 두되 근거의 출처를 밝힌다.
+	 */
+	private static SignalView withUnmeasuredClockNote(SignalView view, ObservationClock.Reading observed) {
+		if (observed.measured()) {
+			return view;
+		}
+		List<String> notes = new ArrayList<>(view.notes());
+		notes.add("수집 기록 없음(신선도는 현재 시각 기준)");
+		return new SignalView(view.color(), view.goodDealLineEstablished(), notes);
+	}
+
 	private static SignalView withExclusionNote(SignalView view, int excluded) {
 		if (excluded <= 0) {
 			return view;

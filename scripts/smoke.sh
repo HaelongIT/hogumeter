@@ -265,6 +265,23 @@ for field in color goodDealLineEstablished notes; do
 		fail "web SignalView가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $signal"
 done
 
+# 관측시계(docs/03 3-2): 신선도는 벽시계가 아니라 **마지막 성공 폴링** 기준이다. 그 값의 생산자는
+# collector(별도 프로세스)이므로 여기서만 종단으로 확인할 수 있다 — 없으면 그 사실을 딱지로 말하고,
+# 생기면 딱지가 사라진다. 둘 다 본다: 딱지만 보면 "항상 켜진 딱지"를 잡지 못한다.
+# 문구가 아니라 **딱지의 유무**를 본다(문구를 grep하면 문구가 굳는다). 이 variant는 딜도 제외도
+# 없으므로 notes의 유일한 출처가 관측시계다.
+if echo "$signal" | grep -q '"notes":\[\]'; then
+	fail "site_poll_state가 비었는데 신호등이 그 사실을 말하지 않는다 (조용한 벽시계 대체): $signal"
+fi
+compose exec -T postgres psql -q -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-v ON_ERROR_STOP=1 >/dev/null <<'SQL' || fail "site_poll_state 삽입 실패"
+insert into site_poll_state (site, last_successful_poll_at) values ('ppomppu', now())
+on conflict (site) do update set last_successful_poll_at = excluded.last_successful_poll_at;
+SQL
+signal=$(curl -fsS "${WEB}/api/v1/variants/${variant_id}/signal")
+echo "$signal" | grep -q '"notes":\[\]' ||
+	fail "폴링 기록을 넣었는데도 딱지가 남아 있다 (core가 site_poll_state를 안 읽는다): $signal"
+
 cadence=$(curl -fsS "${WEB}/api/v1/variants/${variant_id}/cadence")
 echo "$cadence" | grep -q '"guardMet":false' || fail "발생 0인데 주기 가드가 통과했다: $cadence"
 for field in eventCount intervalMedianDays elapsedDays observedMonths guardMet; do

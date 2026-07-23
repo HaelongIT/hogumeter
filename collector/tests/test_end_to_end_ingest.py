@@ -19,6 +19,7 @@ import pytest
 
 from collector.__main__ import ALLOW_NETWORK_ENV, main
 from collector.db.raw_deal_sink import RawDealSink
+from collector.db.site_poll_state_sink import SitePollStateSink
 from boards import all_board_specs
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -108,6 +109,54 @@ def test_korean_titles_and_derived_json_round_trip(monkeypatch, connection, gold
 
     assert title.encode("cp949")  # 깨진 문자가 있으면 여기서 터진다
     assert derived > 0  # applied_conditions가 원본 JSON에 보존된다
+
+
+@pytest.mark.integration
+def test_successful_polls_land_in_site_poll_state(monkeypatch, connection, golden_opener):
+    """core의 신선도는 **우리가 마지막으로 성공한 폴링 시각**을 기준으로 잰다(docs/03 3-2).
+
+    이 값이 DB에 없으면 core는 벽시계로 대신하고, 그러면 수집이 멈춘 동안 딜이 늙는 것처럼 보여
+    신호등이 "딜 없음"으로 거짓 강등된다 — 문서가 막으려던 "무지를 부재로 오독"이다.
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    main(opener=golden_opener, boards=all_board_specs(), sink=RawDealSink(connection),
+         poll_sink=SitePollStateSink(connection), sleep=lambda _: None, clock=lambda: NOW,
+         max_cycles=1)
+
+    with connection.cursor() as cursor:
+        cursor.execute("select site, last_successful_poll_at from site_poll_state order by site")
+        rows = dict(cursor.fetchall())
+
+    assert set(rows) == {"fmkorea", "ppomppu", "ruliweb"}
+    assert all(at == NOW for at in rows.values())
+
+
+@pytest.mark.integration
+def test_a_failed_poll_does_not_advance_the_observation_clock(monkeypatch, connection):
+    """실패한 폴링은 시계를 밀지 않는다 — 밀면 "봤는데 딜이 없다"는 거짓 근거가 된다.
+
+    한 사이트만 실패시키면 나머지는 기록되고 그 사이트만 빠진다(부분 실패가 전체를 가리지 않는다).
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    ok = GoldenOpener()
+
+    def flaky(url: str):
+        if url.endswith("/robots.txt"):
+            return (404, b"")
+        if "ruliweb" in url:
+            return (500, b"")
+        return ok(url)
+
+    main(opener=flaky, boards=all_board_specs(), sink=RawDealSink(connection),
+         poll_sink=SitePollStateSink(connection), sleep=lambda _: None, clock=lambda: NOW,
+         max_cycles=1)
+
+    with connection.cursor() as cursor:
+        cursor.execute("select site from site_poll_state")
+        sites = {site for (site,) in cursor.fetchall()}
+
+    assert "ruliweb" not in sites
+    assert {"ppomppu", "fmkorea"} <= sites
 
 
 def _events(out: str) -> list[dict]:
