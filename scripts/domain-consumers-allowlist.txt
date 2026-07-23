@@ -12,4 +12,3 @@
 # **테스트는 호출자가 아니다.**
 
 DigestRules           Q-33  다이제스트(docs/18)는 M1 범위 밖.
-UsedRiskSignals       Q-72  M2 URL 평가기(USED-04) 위험 신호 — 평가기 유스케이스 미배선.

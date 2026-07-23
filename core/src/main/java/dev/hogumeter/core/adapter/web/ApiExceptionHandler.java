@@ -4,6 +4,7 @@ import dev.hogumeter.core.application.DemandAxisValueRequiredException;
 import dev.hogumeter.core.application.InvalidRegistrationException;
 import dev.hogumeter.core.application.ReviewItemNotFoundException;
 import dev.hogumeter.core.application.UnclassifiedPromoteNotSupportedException;
+import dev.hogumeter.core.application.UsedSearchNotFoundException;
 import dev.hogumeter.core.domain.alert.InvalidAlertPolicyException;
 import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
 import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
@@ -56,6 +57,12 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ApiError unclassifiedPromote(UnclassifiedPromoteNotSupportedException e) {
 		return new ApiError(UnclassifiedPromoteNotSupportedException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(UsedSearchNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ApiError usedSearchNotFound(UsedSearchNotFoundException e) {
+		return new ApiError(UsedSearchNotFoundException.CODE, e.getMessage());
 	}
 
 	public record ApiError(String code, String message) {

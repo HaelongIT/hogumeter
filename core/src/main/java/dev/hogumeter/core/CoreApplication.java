@@ -5,6 +5,8 @@ import dev.hogumeter.core.application.VariantNaming;
 import dev.hogumeter.core.application.port.out.AlertSender;
 import dev.hogumeter.core.domain.alert.AlertEvaluator;
 import dev.hogumeter.core.domain.alert.AlertGate;
+import dev.hogumeter.core.domain.used.ListingExtractor;
+import dev.hogumeter.core.domain.used.RuleBasedListingExtractor;
 import java.time.Clock;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -27,6 +29,12 @@ public class CoreApplication {
 	@Bean
 	AlertDispatcher alertDispatcher(AlertSender alertSender, VariantNaming variantNaming) {
 		return new AlertDispatcher(new AlertEvaluator(), new AlertGate(), alertSender, variantNaming::of);
+	}
+
+	/** USED-04 AC-15: v1은 규칙 기반. 인터페이스 뒤에 둬 v2(LLM)로 교체할 때 이 한 줄만 바뀐다. */
+	@Bean
+	ListingExtractor listingExtractor() {
+		return new RuleBasedListingExtractor();
 	}
 
 }
