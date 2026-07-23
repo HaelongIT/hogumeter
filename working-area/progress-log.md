@@ -1,3 +1,26 @@
+## 2026-07-23 — USED-05 배선 완료 → M2 core 전 구간 완성 (무중단, 이어서)
+
+- **USED-05 배선(`bb17ec5`)**: `listing_note`·`comparison_axis`·`listing_axis_value`는 V3부터
+  마이그레이션만 있고 소비처 0이었다. 네 유스케이스로 채웠다(AC-16·17·18):
+  - 메모(`AddListingNoteUseCase`, 구조 강제 없음) · 축 정의(`DefineComparisonAxesUseCase`, **추가
+    전용** — 축 삭제는 FK·유실 위험이라 별도 엔드포인트로 미룸) · 값 승격(`PromoteAxisValueUseCase`,
+    재승격은 갱신) · 비교표 데이터(`GetComparisonUseCase`, 소실 매물 제외 + **미확인 축은 키 자체가
+    없다**, null이 아니다 — "미확인"과 "빈 문자열"을 혼동하면 체크리스트가 거짓말한다).
+  - REST 4종. 렌더링(정렬·빈칸 표시)은 web 몫이라 범위 밖 — web 착수는 여전히 사용자 지시 대기.
+  - `UsedSearchRepository.findByProductId`도 첫 소비자를 얻어 낡은 면제 넷(테이블 3+메서드 1) 삭제.
+- **이로써 V3 스키마 7테이블 전부 배선 완료 — Q-72 완전 해소.** M2(중고)의 core 쪽 구현은 등록→
+  폴링→적재→접기→생애주기 알림→평가기→메모/비교표까지 전 구간이 코드·테스트·게이트로 섰다.
+- core 전체 GREEN(신규 15케이스 전부 1회 실행 GREEN), 감사 게이트 7종 통과, 스모크 PASS.
+
+**남은 것은 이제 딱 하나, 사람 손(정지조건)**: 번개 실 폴링 활성화(`COLLECTOR_ALLOW_NETWORK=1`).
+이걸 켜면 매물이 실제로 흐르고 M2 전체(적재→생애주기→알림)가 실데이터로 살아 움직인다.
+(루리웹 `view=` 없는 fixture는 별개 — 신품 3사 교차검증 부활용, M2와 무관.)
+
+**막힌 것 없이 계속 진행 가능한 다음 후보**: web(React) 쪽 UI(제품 등록 화면 등)는 이전 세션의
+plan(`melodic-sparking-micali` — "판정을 주인공으로" 히어로 재구성 + Q-15 버튼)이 대기 중이나,
+기억(memory)에 "프론트 착수는 지시 시에만" 규칙이 있어 사용자 지시 없이 자율 착수하지 않는다.
+그 밖에 docs/91 남은 항목들(Q-31 PUR-03 상대평가, Q-58 PERF 미측정 등)은 대부분 "결정 필요" 성격.
+
 ## 2026-07-23 — USED-04 평가기 배선 (무중단, 이어서)
 
 - **USED-04 배선(`605dce3`)**: `ListingExtractor`(v1 규칙)·`UsedRiskSignals`가 순수 도메인으로
