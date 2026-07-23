@@ -3,6 +3,7 @@ package dev.hogumeter.core.adapter.web;
 import dev.hogumeter.core.application.DemandAxisValueRequiredException;
 import dev.hogumeter.core.application.InvalidRegistrationException;
 import dev.hogumeter.core.application.ComparisonAxisNotFoundException;
+import dev.hogumeter.core.application.InvalidCoupangObservationException;
 import dev.hogumeter.core.application.ListingNotFoundException;
 import dev.hogumeter.core.application.ReviewItemNotFoundException;
 import dev.hogumeter.core.application.UnclassifiedPromoteNotSupportedException;
@@ -77,6 +78,24 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.NOT_FOUND)
 	public ApiError comparisonAxisNotFound(ComparisonAxisNotFoundException e) {
 		return new ApiError(ComparisonAxisNotFoundException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(InvalidCoupangObservationException.class)
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	public ApiError invalidCoupangObservation(InvalidCoupangObservationException e) {
+		return new ApiError(InvalidCoupangObservationException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(ExtensionAuthException.class)
+	@ResponseStatus(HttpStatus.UNAUTHORIZED)
+	public ApiError extensionAuthFailed(ExtensionAuthException e) {
+		return new ApiError(ExtensionAuthException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(RateLimitExceededException.class)
+	@ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+	public ApiError rateLimitExceeded(RateLimitExceededException e) {
+		return new ApiError(RateLimitExceededException.CODE, e.getMessage());
 	}
 
 	public record ApiError(String code, String message) {
