@@ -28,6 +28,8 @@ from datetime import datetime, timedelta, timezone
 from collections.abc import Callable
 
 from .db.raw_deal_sink import RawDealSink, connect_from_env
+from .db.used_listing_sink import UsedListingSink
+from .db.used_search_source import UsedSearchSource
 from .observability import counters, event
 from .pipeline.ingest import oversized, to_raw_records
 from .scheduler.drift import DriftHistory, DriftPolicy, observe
@@ -38,6 +40,7 @@ from .scheduler.fetcher import (
     urllib_opener,
 )
 from .scheduler.loop import SiteSpec, run_cycle
+from .scheduler.market import market_spec
 from .scheduler.policy import BackoffPolicy, effective_interval
 from .scheduler.sites import hotdeal_boards
 
@@ -72,6 +75,8 @@ def main(
     should_stop=_never,
     max_cycles: int | None = None,
     boards=None,
+    used_sink=None,
+    search_source=None,
 ) -> int:
     now = clock()
     if os.environ.get(ALLOW_NETWORK_ENV) != "1":
@@ -83,11 +88,16 @@ def main(
     robots = RobotsGate(opener=opener or urllib_opener)
     fetch = _build_fetcher(opener or urllib_opener, robots)
     interval_for = _interval_port(robots)
-    sink = sink or _build_sink()
+    # 게시판 sink와 중고 sink·검색 소스는 **한 커넥션**을 공유한다(같은 DB, 커넥션 하나면 족하다).
+    connection = _connect_if_needed(sink, used_sink, search_source)
+    sink = sink or (RawDealSink(connection) if connection else None)
+    used_sink = used_sink or (UsedListingSink(connection) if connection else None)
+    search_source = search_source or (UsedSearchSource(connection) if connection else None)
     # 기본은 레지스트리(robots가 허용한 곳만). 테스트는 여기에 자기 스펙을 주입해 **루프의
     # 멀티사이트 의미**(영향받은 사이트만 알림 등)를 폴링 대상과 무관하게 검증한다.
     specs = hotdeal_boards() if boards is None else list(boards)
     states: dict = {}
+    market_states: dict = {}
     drift = DriftHistory()
     cycles = 0
     sink_failures = 0
@@ -135,6 +145,13 @@ def main(
             for alert in drift_alerts:
                 _log("alert", alert.at, kind="drift", site=alert.site, reason=alert.reason)
 
+        # 중고 마켓 폴링(USED-02). 검색은 DB에 있고 URL이 검색어별로 동적이라 게시판 레지스트리와 다르다 —
+        # 각 검색을 SiteSpec으로 번역해 같은 run_cycle에 태운다(robots·백오프·주기 하한을 공유).
+        # sink·source가 둘 다 있을 때만 돈다(DB 미설정이면 게시판만 로그로 남기던 기존 동작 유지).
+        if used_sink is not None and search_source is not None:
+            market_states, sink_failures = _poll_market(
+                search_source, used_sink, market_states, now, fetch, interval_for, sink_failures)
+
         cycles += 1
 
         if sink_failures >= SINK_FAILURE_LIMIT:
@@ -150,6 +167,36 @@ def main(
         if max_cycles is None or cycles < max_cycles:
             sleep(TICK_SECONDS)
     return 0
+
+
+def _poll_market(search_source, used_sink, market_states, now, fetch, interval_for, sink_failures):
+    """등록된 중고 검색을 각각 1회(due면) 폴링·적재. 게시판 루프와 같은 격리·주기 규약을 따른다.
+
+    검색당 `run_cycle`을 부른다 — 한 번에 다 넣으면 `CycleResult.deals`가 통합돼 어느 검색에서
+    나왔는지 잃는다(검색별로 다른 sink 행에 들어가야 한다). 검색이 몇 개뿐인 1인용이라 부담 없다.
+    """
+    for search in search_source.all_searches():
+        spec = market_spec(search)
+        result = run_cycle([spec], market_states, now, fetch, BACKOFF, interval_for=interval_for)
+        market_states = {**market_states, **result.states}
+
+        for alert in result.alerts:  # 차단 감지 = 자동 중지 신호. 이미 아는 사실이어도 남긴다.
+            _log("alert", alert.at, kind="blocked", site=alert.site, reason=alert.reason)
+
+        if not result.observations:
+            continue  # due가 아니라 폴링 안 함 — 적재할 것도 로그할 것도 없다
+
+        try:
+            batch = used_sink.insert_batch(search.id, result.deals, now)
+            sink_failures = 0
+            # 0도 센다(OBS-02): "매물 0건"과 "적재 못 함"은 다른 사건이다. 후자는 아래 sink_error다.
+            _log("used_cycle", now, search_id=search.id, site=spec.name,
+                 inserted=batch.inserted, skipped_no_price=batch.skipped_no_price)
+        except Exception as failure:
+            sink_failures += 1
+            _log("sink_error", now, error=f"{type(failure).__name__}: {failure}",
+                 search_id=search.id, dropped=len(result.deals), consecutive=sink_failures)
+    return market_states, sink_failures
 
 
 def _log(name: str, at: datetime, **fields) -> None:
@@ -178,9 +225,15 @@ def _interval_port(robots: RobotsGate) -> Callable[[SiteSpec], timedelta]:
     return interval_for
 
 
-def _build_sink() -> RawDealSink | None:
-    connection = connect_from_env()
-    return RawDealSink(connection) if connection else None
+def _connect_if_needed(sink, used_sink, search_source):
+    """주입되지 않은 게 하나라도 있으면 커넥션을 연다. 전부 주입됐으면(테스트) DB를 안 만진다.
+
+    게시판·중고가 한 커넥션을 공유하므로 여기서 한 번만 연다 — 각자 `connect_from_env`를 부르면
+    커넥션이 둘로 갈린다.
+    """
+    if sink is not None and used_sink is not None and search_source is not None:
+        return None
+    return connect_from_env()
 
 
 class SignalStopper:

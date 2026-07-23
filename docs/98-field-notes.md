@@ -425,3 +425,18 @@
 - **Q-64("실물인데 배송 무표기")의 위험은 뽐뿌에서 사실상 없다**(1.8%, 그나마 둘 다 0이 진실). 그 문제는 **루리웹(제목 잘림)·펨코**에 집중돼 있었고 둘 다 robots로 제외됐다 — 즉 **현재 수집 구성에서 Q-64는 실질적으로 닫혀 있다.**
 - **⚠️ 한계**: 한 사이트·한 시점 스냅샷 111건이다. 시간대·요일에 따라 딜 종류가 달라지므로 며칠 관측이 더 필요하다. 그리고 **테스트 삽입분이 실측을 오염시킨다** — 측정 시 반드시 `url`로 걸러라(처음에 116건으로 세다 10건이 우리 합성 딜이어서 Q-64 수치가 4→2로 바뀌었다).
 - **`~만원대` 표기**: `(189만원대/무료배송)` → 1,890,000으로 저장. "대"는 근사인데 정확한 수로 굳는다 — 하한 해석이라 합리적이나 정밀도는 지어낸 것이다(0.5% 이내 오차라 실용상 무해).
+
+### 2026-07-23 robots 실 대조 — 번개 ALLOW(robots 부재)·루리웹 ALLOW(view= 없는 URL)·펨코 DISALLOW
+
+사용자가 `ALLOW_REAL_ROBOTS=1 bash scripts/check-robots.sh`를 직접 실행(에이전트는 실 네트워크 금지).
+
+| 사이트 | 판정 | status | 요청 URL |
+|---|---|---|---|
+| ppomppu | ALLOW | 200 | `zboard.php?id=ppomppu` (변화 없음) |
+| **ruliweb** | **ALLOW** | 200 | `bbs.ruliweb.com/market/board/1020` (**`view=` 없는 경로**) |
+| fmkorea | DISALLOW | 200 | `/hotdeal` (변화 없음 — `Disallow: /hotdeal`) |
+| **bunjang** | **ALLOW** | **404** | `api.bunjang.co.kr/api/1/find_v2.json?...` |
+
+- **번개 `404`는 "명시적 허용"이 아니라 `api.bunjang.co.kr`에 robots.txt가 **없다**는 뜻이다.** RFC 9309상 4xx는 "제약 없음(allow all)"으로 처리되므로 진행 가능하나, robots가 나중에 생길 수 있음에 유의. 우리가 실제로 요청하는 호스트는 API(`api.bunjang.co.kr`) 하나뿐이다 — 매물 상세(`m.bunjang.co.kr/products/{pid}`)는 **요청하지 않고 URL만 저장**하므로 그 호스트 robots는 무관하다. 원칙 5: 공식 앱이 쓰는 JSON API + 차단 없음 + 저빈도(10분)·개인용 = 수용.
+- **루리웹이 되살아날 길이 실측으로 확정됐다**: `view=thumbnail`은 `Disallow: /*view=`에 걸리지만 `/market/board/1020`(뷰 미지정, 기본 뷰)은 허용이다. 다만 `parse_ruliweb`은 **thumbnail 뷰 HTML 기준**으로 작성됐다 — 기본 뷰의 DOM 구조가 다르면 파서가 조용히 0건을 낸다(파서 실패 모드는 침묵). **기본 뷰 HTML 1장을 fixture로 받아 파서를 맞추는 것이 선행.**
+- **다음 갈림**: 번개는 파서·fixture가 있으니 마켓 폴링 루프를 지금 배선 가능(fixture 검증, opt-in은 사람). 루리웹은 fixture 대기.
