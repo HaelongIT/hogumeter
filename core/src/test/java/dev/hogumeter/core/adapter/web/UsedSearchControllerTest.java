@@ -1,6 +1,7 @@
 package dev.hogumeter.core.adapter.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -60,5 +61,27 @@ class UsedSearchControllerTest {
 		assertThat(saved).hasSize(1);
 		assertThat(saved.get(0).getRequiredKeywords()).containsExactly("아이폰17", "256");
 		assertThat(bonusGroups.findByUsedSearchId(saved.get(0).getId())).hasSize(1);
+	}
+
+	@Test
+	void getListsRegisteredSearchesAndEmptyForUnknownProduct() throws Exception {
+		long productId = products.save(new ProductEntity("갤럭시 25", "스마트폰", DemandAxisMode.GROUPED)).getId();
+		String body = """
+				{"required": ["갤럭시25"], "bonusGroups": [], "exclude": [], "targetPrice": 500000,
+				 "pollIntervalMin": 10}
+				""";
+		mockMvc.perform(post("/api/v1/products/{productId}/used-searches", productId)
+				.contentType(MediaType.APPLICATION_JSON).content(body));
+
+		mockMvc.perform(get("/api/v1/products/{productId}/used-searches", productId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].platform").value("BUNJANG"))
+				.andExpect(jsonPath("$[0].required[0]").value("갤럭시25"))
+				.andExpect(jsonPath("$[0].targetPrice").value(500000));
+
+		mockMvc.perform(get("/api/v1/products/{productId}/used-searches", 999_999))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$").isArray())
+				.andExpect(jsonPath("$").isEmpty());
 	}
 }
