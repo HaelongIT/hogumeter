@@ -15,4 +15,3 @@ deal_event.confidence                 Q-68  매칭이 연속 신뢰도 점수를
 alert_policy.demand_axis_filter       Q-48  수요축 필터 손잡이 — 소비 기능(Q-66 ① SPLIT 필터)이 생겨야 매핑. 벌크 UPDATE가 보존한다.
 price_history.fetched_at              Q-3   네이버 어댑터(키 미발급)가 쓸 죽은 테이블. 키 발급 시 배선.
 raw_deal_post.body_text               Q-18  잘린 제목 복구용 본문 자리 — collector가 목록만 폴링해 항상 null. 본문 fetch 배선 시 채워진다.
-listing_axis_value.axis_id            Q-72  M2 중고 — 생산자(번개 실 폴링)가 정지조건 뒤라 미배선.

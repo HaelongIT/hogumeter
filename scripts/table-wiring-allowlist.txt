@@ -8,6 +8,3 @@
 #   - 배선된 테이블을 여기 남겨 두면 차단된다(낡은 면제는 다음 결함을 숨긴다).
 
 price_history   Q-3    네이버 쇼핑 API 키 미발급 - 현재가 수집기가 없다(StubCurrentPriceProvider가 0을 반환)
-listing_note              Q-72  메모 REST(USED-05) 미배선 - 다음 증분(막히지 않음)
-comparison_axis           Q-72  비교축 REST(USED-05) 미배선 - 다음 증분(막히지 않음)
-listing_axis_value        Q-72  축값 승격 REST(USED-05) 미배선 - 다음 증분(막히지 않음)

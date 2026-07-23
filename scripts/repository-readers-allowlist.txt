@@ -10,4 +10,3 @@
 #
 # **테스트는 호출자가 아니다.** 두 메서드 다 테스트에서만 불린다.
 
-UsedSearchRepository.findByProductId              Q-72  M2 등록은 쓰기만 — 제품별 UsedSearch 조회 소비처(GET/collector 검색어 소스)가 아직 없다.

@@ -2,6 +2,8 @@ package dev.hogumeter.core.adapter.web;
 
 import dev.hogumeter.core.application.DemandAxisValueRequiredException;
 import dev.hogumeter.core.application.InvalidRegistrationException;
+import dev.hogumeter.core.application.ComparisonAxisNotFoundException;
+import dev.hogumeter.core.application.ListingNotFoundException;
 import dev.hogumeter.core.application.ReviewItemNotFoundException;
 import dev.hogumeter.core.application.UnclassifiedPromoteNotSupportedException;
 import dev.hogumeter.core.application.UsedSearchNotFoundException;
@@ -63,6 +65,18 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.NOT_FOUND)
 	public ApiError usedSearchNotFound(UsedSearchNotFoundException e) {
 		return new ApiError(UsedSearchNotFoundException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(ListingNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ApiError listingNotFound(ListingNotFoundException e) {
+		return new ApiError(ListingNotFoundException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(ComparisonAxisNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ApiError comparisonAxisNotFound(ComparisonAxisNotFoundException e) {
+		return new ApiError(ComparisonAxisNotFoundException.CODE, e.getMessage());
 	}
 
 	public record ApiError(String code, String message) {
