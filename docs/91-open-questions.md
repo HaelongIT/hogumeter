@@ -541,7 +541,7 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **재개 트리거**(무엇이 참이 되어야 하는가): ① 네이버 키 발급(Q-3) — 그 순간 겹침 여부를 판단해 반영. ② 사용자가 실 쿠팡 상품 페이지 HTML(또는 스크린샷 기반 DOM 구조)을 fixture로 제공 — 그러면 파싱 로직을 TDD로(fixture golden) 만들고, manifest/content script는 그 위에 얹는다.
 - **관련**: Q-3(네이버 키), Q-78(레이트리밋 잠정치).
 
-## [열림] Q-81. DIGEST(docs/18) — 창 계산까지만 배선, 저장물 쓰기·섹션 조립·발송은 후속
+## [부분해소] Q-81. DIGEST(docs/18) — ④(WATCH 대기) 제외 전 경로 배선 완료
 - **맥락**: M5 마지막 조각. `DigestWindow`/`DigestRules`(DIG-03 창·규칙, 순수)는 이미 있었지만 **호출자가 0**이었다(테스트만 불렀다 — CLAUDE.md "호출자 0인 순수 함수" 감사로 발견). `docs/18`은 6개 섹션·저장물 원자성·quiet 존중까지 요구하는 밀도 높은 스펙이라 한 증분에 다 하면 위험이 크다.
 - **✅ 해소(2026-07-24, 부분)**: `ComputeDigestWindowUseCase`가 첫 소비자다. **활성 시각** = variant가 속한 product의 `created_at`(variant 자신은 생성 시각이 없다, V1 스키마) — "이 variant를 언제부터 추적했는가"의 실측 대리값. **직전 성공 발송** = 신규 `digest_state`(V16) 테이블의 `last_sent_at` — 행이 없으면(한 번도 발송 안 함) 활성 시각을 그 자리에 대신 넣어 `DigestWindow.of`가 "첫 창 = 활성 시각부터"를 자연히 내도록 했다.
 - **저장물 3성분 해석 확정(working-area/2nd-plan-intake.md#98·146 원문 대조)**: `stored_context`는 PUR-05 `ObservationContext.mode`(ACTIVE_DEAL/NO_ACTIVE_DEAL/REPORT_PENDING — "Purchase별 1줄"). `stored_basis_mode`는 그 variant가 속한 product의 `DemandAxisMode`(GROUPED/SPLIT — "SPLIT은 목록 셀 집계로 variant당 1벌"과 짝). 둘 다 색 자체를 바꾸지 않는 "전환 억제 신호"라 `DigestRules.isReportableTransition`은 색만 비교한다(스펙 그대로).
@@ -563,12 +563,12 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   2. **⑤ "N회째" 카운터 없음**: 아래 항목 그대로(발송 배선과 함께).
   3. **basis 표기는 딜 단위**: `demandAxisValue`가 없으면(GROUPED 등) "전체"로 쓴다 — DIG-04가 요구하는 "실제 축값"의 최소 해석.
 - **✅ 발송 배선 해소(2026-07-25)**: `DigestSplitter`(순수, 줄 경계 분할·연번·절단 금지) + `DigestSender` 포트(다른 발송 포트와 달리 **성공 여부를 bool로 반환** — 원자성 판단 재료, `TelegramAlertSender`·`StubAlertSender` 둘 다 구현) + `SendDigestUseCase`(렌더→분할→발송→집계). **전 분할 성공 시에만** variant마다 `RecordDigestSentUseCase.recordSent` 호출 — 색은 조립이 이미 구한 `row.transition().to()`를 재사용(재계산 없음), basis 모드는 product의 `DemandAxisMode`, 문맥은 그 variant의 **가장 최근 Purchase**의 `ObservationContext.mode`로 근사(구매 없으면 null). **한계**: variant당 Purchase가 여럿 공존 가능한데(PUR-01 "독립 관찰") 다중 구매의 대표값 규약이 미정이라 "최신 1건"으로 근사했다 — `DigestRules.isReportableTransition`은 색만 비교하므로 이 근사가 지금은 판정에 영향 없다(문맥·basis는 억제 신호 부가정보).
-- **여전히 없는 것**: quiet hours 게이트(다이제스트는 variant별 정책이 아니라 전역 개념인데 전역 quiet hours 설정 자체가 없다 — 스케줄이 일요일 20시 KST 고정이라 당장의 위험은 낮음, 되돌리기 쉬운 채로 남김).
-- **남은 것(다음 무중단 증분, 권장 순서)**:
-  1. 스케줄(`@Scheduled`, 일요일 20시 KST 고정 상수). 이게 붙어야 `SendDigestUseCase.send()`가 실제로 주기 실행되고 저장물이 매주 전진한다 — 지금은 유스케이스만 있고 아무도 안 부른다(또 다른 "호출자 0").
-  2. ⑤ "N회째 미확인" 카운터(`review_queue_item.digest_appearances`, 발송 시 +1) — 발송 배선이 생겼으니 죽은 컬럼이 안 된다.
-  - ④ 핀 결말은 WATCH(M6) 대기라 지금 손대지 않는다.
-- **재개 트리거**: 없음 — 설계 결정이 다 확정됐으니 순수하게 구현 분량 문제. 다음 무중단 증분에서 위 순서로 이어간다.
+- **✅ 스케줄 해소(2026-07-25)**: `DigestScheduler`(`@Scheduled(cron = "0 0 20 * * SUN", zone = "Asia/Seoul")`) — `PipelineScheduler`와 같은 opt-out 관례(`core.digest.enabled`, 기본 true, 테스트 전역 false). `SendDigestUseCase.send()`가 이제 실제로 주기 실행돼 `digest_state`가 매주 전진한다.
+- **✅ ⑤ N회째 미확인 카운터 해소(2026-07-25)**: `V17__review_queue_digest_appearances.sql`(`review_queue_item.digest_appearances`, 기본 0, `ReviewQueueItemEntity`에 매핑하지 않음 — 다른 writer의 `save()`가 안 건드리게) + `IncrementDigestQueueAppearancesUseCase`(벌크 UPDATE, `SendDigestUseCase`가 전 분할 성공 시에만 호출) + `GetReviewQueueUseCase`가 읽어 `PendingItem.digestAppearances`로 노출 + `DigestFormatter` ⑤가 "최다 N회째 미확인"으로 렌더(+1로 이번 발송 몫을 미리 반영, 전부 첫 등장이면 생략).
+- **DIG-04 6섹션 중 ①②③⑤⑥ 전부 구현 완료** — 조립·렌더링·발송(분할)·스케줄·저장물 갱신까지 전 경로가 배선됐다. 남은 건 ④ 하나뿐.
+- **여전히 없는 것(문서화된 한계, 정지조건 아님)**: quiet hours 게이트(다이제스트는 variant별 정책이 아니라 전역 개념인데 전역 quiet hours 설정 자체가 없다 — 스케줄이 일요일 20시 KST 고정이라 당장의 위험은 낮음). ① 검토 대기 딱지(큐→variant id 연결 없음). 다중 Purchase의 문맥 대표값 규약(현재 "최신 1건"으로 근사, 전환 판정엔 영향 없음).
+- **남은 것**: ④ 핀 결말은 WATCH(M6) 대기라 지금 손대지 않는다 — 그게 채택되기 전까지 DIGEST는 이 상태로 실사용 가능.
+- **재개 트리거**: ④는 WATCH(M6) 채택 시. 그 외 문서화된 한계들은 사람이 "이제 정확히 하자"고 판단할 때(예: 전역 quiet hours 설정 도입, 다중 구매 대표값 정책 확정).
 - **관련**: `docs/18`, `working-area/2nd-plan-intake.md`(원문 근거).
 
 ## [열림] Q-80. D-6 루리웹 상세 fetch — 후보 선정은 배선됨, 실 fetch·파서는 fixture 대기

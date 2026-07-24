@@ -1,3 +1,17 @@
+## 2026-07-25 (4) — DIGEST 스케줄 + ⑤ N회째 카운터 → M5 사실상 완료 (무중단, "끝날때 푸쉬")
+
+- **스케줄**: `DigestScheduler`(`@Scheduled(cron = "0 0 20 * * SUN", zone = "Asia/Seoul")`),
+  `PipelineScheduler`와 같은 opt-out 관례(`core.digest.enabled`). 이제 `SendDigestUseCase`가
+  실제로 주기 실행된다 — 전엔 유스케이스만 있고 아무도 안 부르는 "호출자 0"이었다.
+- **⑤ N회째 미확인**: `V17` `review_queue_item.digest_appearances`(엔티티 미매핑, 벌크 UPDATE 전용)
+  + `IncrementDigestQueueAppearancesUseCase`(전 분할 성공 시에만) + `GetReviewQueueUseCase` 읽기
+  배선 + `DigestFormatter` ⑤ "최다 N회째 미확인" 렌더링(+1로 이번 발송 몫 반영, 전부 첫 등장이면
+  생략). check-dead-columns·check-table-wiring·check-board-references 통과.
+  Q-81 헤딩을 [부분해소]로 승격(④ WATCH 대기 제외 전 경로 완료).
+- 전부 뮤테이션 검증(스케줄 등록·카운터 원자성·렌더링·읽기 배선).
+- 남은 건 ④ 핀 결말(WATCH M6 대기)뿐. DIGEST는 이 상태로 실사용 가능(실 텔레그램 토큰 발급 후
+  `telegram.enabled=true`만 켜면 매주 일요일 20시에 실제로 발송된다).
+
 ## 2026-07-25 (3) — DIGEST 발송 배선 + 저장물 갱신 연동 (무중단, "끝날때 푸쉬")
 
 - **발송 메커니즘**: `DigestSplitter`(순수, 줄 경계 분할·연번·절단 금지), `DigestSender` 포트
