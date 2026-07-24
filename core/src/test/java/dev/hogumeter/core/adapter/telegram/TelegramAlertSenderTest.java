@@ -104,4 +104,31 @@ class TelegramAlertSenderTest {
 
 		assertThatCode(() -> new TelegramAlertSender(api, "555000").send(firstAlert())).doesNotThrowAnyException();
 	}
+
+	/** DIGEST(DIG-02): sendDigest는 성공 여부를 그대로 돌려준다 — 호출자가 "전 분할 성공"을 판단할 재료. */
+	@Test
+	void sendDigestReturnsTrueOnSuccess() {
+		FakeApi api = new FakeApi();
+
+		boolean ok = new TelegramAlertSender(api, "555000").sendDigest("다이제스트 본문");
+
+		assertThat(ok).isTrue();
+		assertThat(api.sentText).isEqualTo("다이제스트 본문");
+	}
+
+	@Test
+	void sendDigestReturnsFalseOnRejection() {
+		FakeApi api = new FakeApi();
+		api.status = 403;
+
+		assertThat(new TelegramAlertSender(api, "555000").sendDigest("본문")).isFalse();
+	}
+
+	@Test
+	void sendDigestReturnsFalseOnTransportFailure() {
+		FakeApi api = new FakeApi();
+		api.transport = new RuntimeException("connection reset");
+
+		assertThat(new TelegramAlertSender(api, "555000").sendDigest("본문")).isFalse();
+	}
 }

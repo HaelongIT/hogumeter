@@ -2,6 +2,7 @@ package dev.hogumeter.core.adapter.telegram;
 
 import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.application.port.out.AlertSender;
+import dev.hogumeter.core.application.port.out.DigestSender;
 import dev.hogumeter.core.application.port.out.UsedAlertMessage;
 import dev.hogumeter.core.application.port.out.UsedAlertSender;
 import java.util.List;
@@ -26,7 +27,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnProperty(name = "telegram.enabled", havingValue = "true")
-public class TelegramAlertSender implements AlertSender, UsedAlertSender {
+public class TelegramAlertSender implements AlertSender, UsedAlertSender, DigestSender {
 
 	private static final Logger log = LoggerFactory.getLogger(TelegramAlertSender.class);
 
@@ -87,8 +88,19 @@ public class TelegramAlertSender implements AlertSender, UsedAlertSender {
 		post(usedFormatter.format(message), List.of());
 	}
 
-	/** 전송·상태 분류는 알림 부류와 무관하다 — 한 곳에 둔다(SEC-08 처리가 갈라지지 않게). */
-	private void post(String text, List<TelegramApi.Button> buttons) {
+	/** DIGEST(docs/18) — 성공 여부를 돌려준다(DIG-02 "전 분할 성공 시 갱신"의 판단 재료, 클래스 javadoc). */
+	@Override
+	public boolean sendDigest(String text) {
+		return post(text, List.of());
+	}
+
+	/**
+	 * 전송·상태 분류는 알림 부류와 무관하다 — 한 곳에 둔다(SEC-08 처리가 갈라지지 않게).
+	 *
+	 * @return 실제로 나갔는가(2xx). {@code send}·{@code sendUsed}는 이 값을 무시한다(기존 계약대로 던지지
+	 *     않고 삼킨다) — {@code sendDigest}만 이 값을 그대로 돌려준다.
+	 */
+	private boolean post(String text, List<TelegramApi.Button> buttons) {
 		int status;
 		try {
 			status = api.sendMessage(chatId, text, buttons);
@@ -96,7 +108,7 @@ public class TelegramAlertSender implements AlertSender, UsedAlertSender {
 		catch (RuntimeException transport) {
 			// 네트워크가 닿지 못함 — 일시장애로 다룬다. 던지지 않는다(틱을 죽이지 않게).
 			log.warn("SEC-08 텔레그램 전송 실패(일시장애·transport) — 이 알림은 이번엔 못 갔습니다", transport);
-			return;
+			return false;
 		}
 		switch (classify(status)) {
 			case OK -> { /* 발송됨 */ }
@@ -105,6 +117,7 @@ public class TelegramAlertSender implements AlertSender, UsedAlertSender {
 					status);
 			case TRANSIENT -> log.warn("SEC-08 텔레그램 일시장애 status={} — 이 알림은 이번엔 못 갔습니다", status);
 		}
+		return classify(status) == Disposition.OK;
 	}
 
 	/** 순수 분류(테스트 대상). 2xx=성공, 5xx=일시장애(재시도 가능), 그 외(4xx)=거절(재시도 금지). */

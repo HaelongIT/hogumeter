@@ -2,6 +2,7 @@ package dev.hogumeter.core.adapter.telegram;
 
 import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.application.port.out.AlertSender;
+import dev.hogumeter.core.application.port.out.DigestSender;
 import dev.hogumeter.core.application.port.out.UsedAlertMessage;
 import dev.hogumeter.core.application.port.out.UsedAlertSender;
 import org.slf4j.Logger;
@@ -20,7 +21,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnProperty(name = "telegram.enabled", havingValue = "false", matchIfMissing = true)
-public class StubAlertSender implements AlertSender, UsedAlertSender {
+public class StubAlertSender implements AlertSender, UsedAlertSender, DigestSender {
 
 	private static final Logger log = LoggerFactory.getLogger(StubAlertSender.class);
 
@@ -43,5 +44,12 @@ public class StubAlertSender implements AlertSender, UsedAlertSender {
 	public void sendUsed(UsedAlertMessage message) {
 		log.info("[STUB usedAlert] kind={} | {}", message.kind(),
 				usedFormatter.format(message).replace("\n", " ⏎ "));
+	}
+
+	/** 스텁은 실전송이 없으니 실패할 수가 없다 — 항상 성공으로 본다(DIG-02 저장물 갱신이 막히지 않게). */
+	@Override
+	public boolean sendDigest(String text) {
+		log.info("[STUB digest] {}", text.replace("\n", " ⏎ "));
+		return true;
 	}
 }
