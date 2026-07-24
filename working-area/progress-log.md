@@ -1,3 +1,30 @@
+## 2026-07-24 (2) — D-3~D-6 결정 구현 + DIGEST 착수 (무중단, 사용자와 결정 확인 후)
+
+사용자와 D-3~D-6을 하나씩 확인해 전부 AI 권고안대로 확정한 뒤 순서대로 구현했다.
+
+- **D-3(collector+core)**: 차단 사이트 재개 = 설정/DB 값 수동 수정. `site_poll_state`(V15)에
+  연속 실패 수·next_attempt_at·stopped 영속화, `SitePollStateSink.load_states/persist_states`,
+  `__main__.main()`이 기동 시 커서 복원. 재개는 "DB 행 수정 → 재시작"(라이브 리로드 아님).
+  종단 테스트(main() 두 번 호출로 재시작 시뮬레이션)로 전체 계약 증명.
+- **D-5(collector+core)**: 0원(무료) 딜 = 스킵 대신 가격 0 + `FREE_PRICE` 태그. `_PAREN_FREE_PRICE`
+  (`(무료/무료)`)·`_BARE_FREE`(괄호 없는 `... 무료`, 한글 경계로 복합어 구분) 인식.
+  `DealSets.pricingSet`이 제외(표본 보호), 발생·신호·알림엔 남김. `check-tag-contract.sh` 확장.
+- **D-6(collector, 부분)**: 루리웹 잘린 가격 = 등록 제품 별칭 걸리는 것만 상세 fetch. **후보 선정만**
+  배선(`AliasSource`+`detail_fetch.needs_detail_fetch`, `detail_fetch_candidate` 이벤트) —
+  실 fetch·파서는 루리웹 상세 페이지 fixture 대기(Q-80, 사람이 캡처해야 함).
+- **D-4(infra)**: HTTPS = Caddy. `Caddyfile`+`public` 프로파일로 격리(기본 `up -d`엔 영향 없음).
+  실 활성화(도메인+방화벽)는 여전히 사람 몫(pre-deploy-checklist §C).
+- **CI 사고 1건 수습**: D-6 푸시 후 스모크 5-4b(중고 알림 링크 확인)가 CI에서만 실패 — 로컬 재현
+  안 됨. 단발 grep이 로그 드라이버 플러시 타이밍과 별개로 도는 레이스로 판단, 재시도 루프로 수정.
+- **M5 DIGEST 착수**: `DigestWindow`/`DigestRules`(순수, 이전 세션 작성)가 호출자 0이던 것을
+  `ComputeDigestWindowUseCase`+`digest_state`(V16)로 해소. 저장물 3성분 해석을
+  2nd-plan-intake.md 원문 대조로 확정(관찰 문맥=PUR ObservationContext.mode 재사용, basis
+  모드=DemandAxisMode 재사용). 저장물 쓰기·섹션 조립·발송·스케줄은 Q-81로 다음 증분 예약
+  (스펙 밀도가 높아 한 증분에 다 하면 위험).
+- 매 증분 core/collector 전체 스위트 GREEN, 뮤테이션 검증, 롤백 드릴, 스모크 확인 후 커밋·푸시.
+  GitHub API 무인증 한도(시간당 60회)에 걸려 마지막 푸시는 CI 상태를 직접 확인 못함 — 로컬
+  검증(스모크·전체 테스트·rollback-drill)은 전부 통과.
+
 ## 2026-07-24 — 1차 검증 착수: 배포 사고 수습 + 테스트 데이터 정리 + 실 제품 등록
 
 - **CI 사고**: CMP-01 커밋(e7a2170) 이후 gitleaks가 스모크의 합성 토큰(`wrong-token`)을 오탐,
