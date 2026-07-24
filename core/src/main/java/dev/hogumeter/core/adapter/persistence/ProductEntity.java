@@ -64,4 +64,8 @@ public class ProductEntity {
 	public DemandAxisMode getDemandAxisMode() {
 		return demandAxisMode;
 	}
+
+	public Instant getCreatedAt() {
+		return createdAt;
+	}
 }

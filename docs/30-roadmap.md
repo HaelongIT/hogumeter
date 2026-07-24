@@ -75,7 +75,7 @@
 - 기반: 딜 집합 명명·시간 좌표계·가격 3분법(`docs/03`) 순수 규칙 이식.
 - **SIG + CAD**(`docs/16`): 신호등·딜 주기 read-model(가장 저비용, 나머지가 소비할 표면 선확보).
 - **PUR**(`docs/15`): 구매 기록·관찰 모드·성적표(구매 이후 루프).
-- **DIGEST**(`docs/18`): 주간 요약(④ 핀 결말은 WATCH 배치 전까지 비활성).
+- **DIGEST**(`docs/18`): 주간 요약(④ 핀 결말은 WATCH 배치 전까지 비활성). **2026-07-24 착수**: DIG-03 창 계산 배선(`ComputeDigestWindowUseCase` + `digest_state` V16 — DigestWindow/DigestRules가 호출자 0이던 것 해소). 남은 것(저장물 쓰기·6섹션 조립·발송·스케줄)은 `docs/91` Q-81.
 
 ## M6 — 보관함·우선순위 (2차, 조건부)
 - **WATCH**(`docs/17`): 딜 보관함 — 개념 채택·M6 배치(DN-W). 배치 착수 시 유보 해제 확정 + DealEvent 재개 전이(DN-C1) 배선.
