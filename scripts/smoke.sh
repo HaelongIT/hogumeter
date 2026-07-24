@@ -47,6 +47,19 @@ fail() {
 	exit 1
 }
 
+# core 로그에 패턴(ERE)이 나타날 때까지 재시도한다. **docker 로그 드라이버의 stdout 플러시는
+# 애플리케이션의 커밋·로그 순서와 별개다** — DB 상태(API·psql)로 먼저 기다린 뒤의 단발 로그 grep은
+# 드물게 그 사이 좁은 틈에 걸린다(CI 실측 2026-07-24: 로컬은 통과, GH Actions 러너에서 간헐 실패).
+# tick 카운터·스텁 알림처럼 "로그에 나타났는가"를 보는 단언은 전부 이 헬퍼로 감싼다.
+log_has() { # <ERE 패턴>
+	local pat="$1" _
+	for _ in $(seq 15); do
+		compose logs --no-log-prefix core 2>&1 | grep -qE "$pat" && return 0
+		sleep 1
+	done
+	return 1
+}
+
 echo "--- 빌드 ---"
 compose build --quiet
 
@@ -336,8 +349,9 @@ done
 
 # OBS-02: 조용히 도는 스케줄러는 아무것도 처리하지 않는 스케줄러와 구별되지 않는다.
 # 매 틱 카운터를 남기고, 딜을 하나 만든 틱은 그렇게 말해야 한다.
+# (위 tier 대기는 DB 상태를 봤다 — 그 틱의 로그 줄은 아직 안 플러시됐을 수 있으므로 log_has로 기다린다.)
+log_has 'pipeline tick.*dealsCreated=1' || fail "파이프라인 틱 카운터에 dealsCreated=1이 없다"
 tick=$(compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep 'dealsCreated=1' | tail -1)
-[ -n "$tick" ] || fail "파이프라인 틱 카운터에 dealsCreated=1이 없다"
 echo "$tick" | grep -q 'merged=0' || fail "병합이 아닌데 merged가 0이 아니다: $tick"
 echo "$tick" | grep -q 'pending=0' || fail "원문을 다 처리했는데 pending이 남았다: $tick"
 # Q-57 ②③: 매칭 tier 카운터가 종단 로그에 도달한다. 이 틱엔 confirmed 원문 1건뿐이라 나머지는 0이다.
@@ -803,8 +817,7 @@ for _ in $(seq 20); do
 done
 [ -n "$verified_tick" ] ||
 	fail "병합됐는데 틱 로그에 followUpsSent[...verified=1...]이 없다 (Q-13 미배선?)"
-compose logs --no-log-prefix core 2>&1 | grep -q 'STUB alert.*followUp=VERIFIED' ||
-	fail "VERIFIED 후속 알림 본문이 스텁 로그에 없다 (Q-13)"
+log_has 'STUB alert.*followUp=VERIFIED' || fail "VERIFIED 후속 알림 본문이 스텁 로그에 없다 (Q-13)"
 # 중복 발송 방지의 핵심 단언: 이 제품 이름(고유하게 지었다)으로 나간 **첫 알림**(intensity=)은
 # 정확히 1번이어야 한다 — 병합이 같은 트리거를 재평가해 두 번째 SEND_NOW를 냈다면 2가 잡힌다.
 merge_first_alerts=$(compose logs --no-log-prefix core 2>&1 |
@@ -918,10 +931,8 @@ echo "$observations" | grep -q '"state":"OBSERVING"' || fail "관찰 중인 구�
 
 # OBS-02: 조용히 도는 만료·발급은 안 도는 것과 구별되지 않는다. 발급이 REPORT_PENDING을 드레인하므로
 # purchasesExpired는 Δ+발급으로 재구성된다 — 같은 틱에 만료+발급이면 둘 다 1이다.
-compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep -q 'purchasesExpired=1' ||
-	fail "틱 카운터에 purchasesExpired=1이 없다"
-compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep -q 'reportCardsIssued=1' ||
-	fail "틱 카운터에 reportCardsIssued=1이 없다 (성적표 발급 미배선)"
+log_has 'pipeline tick.*purchasesExpired=1' || fail "틱 카운터에 purchasesExpired=1이 없다"
+log_has 'pipeline tick.*reportCardsIssued=1' || fail "틱 카운터에 reportCardsIssued=1이 없다 (성적표 발급 미배선)"
 
 echo "--- 5-3) 최초부터 품절인 원문은 같은 틱에 ENDED로 닫힌다 (Q-27 ③ 자가치유) ---"
 # ⚠️ `IngestDealsUseCase:137`은 원문 상태와 무관하게 딜을 ACTIVE로 만들고 :110에서 곧바로
@@ -976,8 +987,7 @@ for _ in $(seq 20); do
 done
 [ "${folded:-0}" = 1 ] || fail "중고 목록이 접히지 않았다 (listing=$(used_state))"
 # OBS-02: 조용히 도는 접기는 안 도는 것과 구별되지 않는다. 두 배치를 접었어야 한다.
-compose logs --no-log-prefix core 2>&1 | grep 'pipeline tick' | grep -q 'usedBatchesFolded=2' ||
-	fail "틱 카운터에 usedBatchesFolded=2가 없다 (접기 미배선?)"
+log_has 'pipeline tick.*usedBatchesFolded=2' || fail "틱 카운터에 usedBatchesFolded=2가 없다 (접기 미배선?)"
 
 echo "--- 5-4b) 중고 생애주기 알림 (USED-03, AC-7·8·9 — 3계층 필터가 종단에서 실제로 거른다) ---"
 # 알림 수와 생애주기 사건 수는 **부류가 다르다**. a3은 exclude('부품')에 걸려 매물로는 서지만
