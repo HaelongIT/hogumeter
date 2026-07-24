@@ -110,8 +110,13 @@ else
 	fail=1
 fi
 
-# 면제가 실제로 집계되는지 — 0이면 allowlist가 죽은 것이다. 개수는 allowlist 따라 변하므로 "1 이상"만 본다.
-if bash "$CHECK" | grep -qE '미사용 선언 [1-9][0-9]*'; then
+# 면제가 실제로 집계되는지 — 카운트가 안 늘면 allowlist가 죽은 것이다. **실제 저장소가 아니라
+# 합성 시나리오**로 본다(위 "호출자 0이지만 열린 Q로 선언됨"과 같은 fixture 재사용) — 실제 저장소는
+# 완전히 배선돼 면제가 0건일 수 있고(2026-07-24 실측: 그랬다), 그때 이 메타 테스트가 "allowlist가
+# 안 읽힌다"고 오판하면 안 된다. 저장소가 좋아질수록 게이트가 깨지는 건 거꾸로 된 계약이다.
+excused_root=$(fake "$REPO" 'class Consumer {}' \
+	'ThingRepository.findByProductId  Q-9  아직 소비자가 없다')
+if bash "$CHECK" "$excused_root" | grep -qE '미사용 선언 [1-9][0-9]*'; then
 	printf '  PASS  exit=0  면제가 실제로 집계된다(allowlist가 읽힌다)\n'
 else
 	printf '  FAIL  allowlist가 읽히지 않는다\n'
