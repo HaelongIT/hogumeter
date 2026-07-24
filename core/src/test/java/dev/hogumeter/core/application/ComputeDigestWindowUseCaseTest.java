@@ -82,10 +82,15 @@ class ComputeDigestWindowUseCaseTest {
 		// 근거는 DigestWindow 자체가 최댓값을 취한다는 사실이다(순수 함수 쪽에서 이미 잠갔다).
 		// 여기서는 digest_state가 아예 없을 때도 활성 시각이 두 자리 모두에 들어가 정확히 그 값이
 		// 창 시작이 됨을 재확인한다(half-open 경계 포함 여부까지).
+		// product.created_at은 @PrePersist가 실 벽시계로 찍는다 — 클래스 상수 NOW를 쓰면 실행 시각이
+		// 그 상수를 지나치는 순간(달력이 넘어가면) createdAt > NOW가 되어 창이 뒤집힌다(from > to).
+		// windowStartsAtLastSentWhenDigestStateExists와 같은 이유로 등록 시각을 읽은 뒤 그 이후로 시계를 고정한다.
 		ProductEntity product = products.save(new ProductEntity("다이제스트 테스트", "test", DemandAxisMode.GROUPED));
 		VariantEntity variant = variants.save(new VariantEntity(product.getId(), "256GB", Map.of()));
+		Clock thisSend = Clock.fixed(product.getCreatedAt().plusSeconds(1), ZoneOffset.UTC);
 
-		DigestWindow window = useCase().window(variant.getId());
+		DigestWindow window = new ComputeDigestWindowUseCase(variants, products, digestStates, thisSend)
+				.window(variant.getId());
 
 		assertThat(window.contains(product.getCreatedAt())).isTrue();
 	}
