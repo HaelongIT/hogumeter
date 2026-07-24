@@ -989,8 +989,16 @@ for counter in 'usedLifecycle\[appeared=3' 'disappeared=2\]' 'usedAlerts\[new=2'
 		fail "중고 알림 카운터 '$counter'가 틱에 없다 (USED-03 미배선?): $used_tick"
 done
 # 스텁 본문에 원문 링크가 실렸는가 — 링크 없는 알림은 사람을 원문으로 못 보낸다(절대 원칙 2).
-compose logs --no-log-prefix core 2>&1 | grep -q 'STUB usedAlert.*https://example.invalid/u/a1' ||
-	fail "중고 알림 본문에 원문 링크가 없다"
+# 위 카운터 확인이 이미 통과했다는 건 이 틱이 로그에 실렸다는 뜻이지만, docker의 로그 드라이버가
+# stdout을 파일로 플러시하는 타이밍은 애플리케이션의 커밋·로그 호출 순서와 별개다 — 단발 grep은
+# 드물게 그 사이의 좁은 틈에 걸린다(CI 실측 2026-07-24). 다른 사이클 의존 검증과 같은 재시도로 맞춘다.
+linked=0
+for _ in $(seq 10); do
+	compose logs --no-log-prefix core 2>&1 | grep -q 'STUB usedAlert.*https://example.invalid/u/a1' &&
+		linked=1 && break
+	sleep 1
+done
+[ "$linked" = 1 ] || fail "중고 알림 본문에 원문 링크가 없다"
 
 echo "--- 5-4c) 중고 평가·비교 REST 계약 (USED-04·05 필드 드리프트) ---"
 # 계약 드리프트: web(used/*)이 읽는 필드가 core 응답에 전부 있는가. a1 listing은 5-4가 이미
