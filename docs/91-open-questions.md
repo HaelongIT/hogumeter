@@ -550,12 +550,18 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   1. **가시화 시각 근사**: 정확히는 "occurrenceSet 자격을 최초/재획득한 시각"이지만 그 전이 이력을 저장하지 않아 `firstSeen`으로 대신한다 — 자격을 잃었다 되찾는 재진입 케이스(늦확정·백필)는 지금 다르게 안 잡힌다(더 이른 firstSeen 그대로 씀).
   2. **SPLIT 미분리**: "SPLIT은 목록 셀 집계로 variant당 1벌"을 "수요축 값 무관하게 그 variant의 딜을 전부 합산"으로 해석했다 — `VariantDemandScope`를 안 부른다(다른 유스케이스와 다른 의도적 차이).
 - **✅ 섹션 ② 전환 해소(2026-07-24)**: `ComputeDigestTransitionUseCase.transition(variantId)` — 저장 색(`digest_state.stored_color`) vs 현재 색(`GetSignalUseCase`) 비교. `DigestRules.isReportableTransition`(호출자 0이던 순수 규칙)의 첫 소비자. 색만 본다(억제 신호 2종은 색을 못 바꾸므로 저장만 하고 계산엔 안 씀 — 스펙 그대로). 첫 다이제스트(저장 색 없음)는 전환이 아니라 기준선(`from=null`). 손상된 저장 색은 예외로 막지 않고 기준선으로 되돌린다(다이제스트 전체를 막지 않는다).
-- **남은 것(진짜 코드 밖 아님 — 다음 증분 대상)**:
-  1. DIG-04 나머지 4개 섹션(① 딜 요약·④ 핀 결말〔WATCH 유보 종속〕·⑤ 큐·⑥ 조용한 주) — ⑥ 조용한 주는 "관측 공백"(anyGap) 정의가 아직 없어(SIG-02 관측시계와 연결 필요) 다른 섹션보다 어렵다. ④는 WATCH(M6) 대기라 지금 손대지 않는다.
-  2. 조립 결과(색·문맥·basis 모드)를 `RecordDigestSentUseCase`에 넘기는 배선.
-  3. 발송(텔레그램, quiet hours 존중, 분할 발송 시 절단 금지·연번). 발송 성공 후에만 저장물을 갱신(원자성).
-  4. 스케줄(기본 일요일 20시 KST, 사용자 설정 가능).
-- **재개 트리거**: 없음 — 순수하게 구현 분량 문제라 다음 무중단 증분에서 이어간다(사람 결정·외부 키 대기 아님).
+- **설계 결정 3건 확정(2026-07-25, decision-log 참조)** — 이전엔 "판단 필요"로 남겼던 것:
+  - **⑥ 관측 공백**: 지금은 **"공백 없음" 고정**(관측시계 연결은 후속). ⑥의 나머지 두 조건(플로우 0·전환 0)만 판정하고 anyGap은 항상 false로 둔다 — 되돌리기 쉬운 seam(`DigestRules.isQuietWeek`의 세 번째 인자에 false 상수). 한계: 수집이 실제로 멈춘 주에도 "조용한 주"로 보고될 수 있다(관측시계 연결 시 해소).
+  - **스케줄**: **고정 상수 일요일 20시 KST 먼저**. 사용자 설정은 refactor seam(상수 1곳)으로 격리하고 지금은 안 만든다.
+  - **⑤ "N회째 미확인"**: `review_queue_item`에 카운터 컬럼(예: `digest_appearances`) 추가 — 다이제스트에 담길 때마다 +1. 별도 발송 로그 테이블은 안 만든다.
+- **남은 것(다음 무중단 증분, 권장 순서)**:
+  1. 섹션 ① 딜 요약(`ComputeDigestBestOpportunityUseCase` — occurrenceSet 창 안 최고 기회, 활성 priceLast/종료 priceMin) — ②③과 같은 패턴이라 판단 없이 가능.
+  2. 섹션 ⑥ 조용한 주(`DigestRules.isQuietWeek` 배선, anyGap=false 고정) + 섹션 ⑤ 큐(`review_queue_item.digest_appearances` 마이그레이션 + 집계).
+  3. 조립: 색·문맥·basis 모드를 SIG(색)·PUR(`ObservationContext.mode`)·product(`DemandAxisMode`)에서 모아 섹션들과 합쳐 한 다이제스트로. 결과를 `RecordDigestSentUseCase`에 넘긴다.
+  4. 발송(텔레그램 스텁 경로 재사용, quiet hours 존중, 분할 발송 절단 금지·연번). 발송 성공 후에만 저장물 갱신(원자성).
+  5. 스케줄(`@Scheduled`, 일요일 20시 KST 고정 상수, quiet 겹침 시 종료 후).
+  - ④ 핀 결말은 WATCH(M6) 대기라 지금 손대지 않는다.
+- **재개 트리거**: 없음 — 설계 결정이 다 확정됐으니 순수하게 구현 분량 문제. 다음 무중단 증분에서 위 순서로 이어간다.
 - **관련**: `docs/18`, `working-area/2nd-plan-intake.md`(원문 근거).
 
 ## [열림] Q-80. D-6 루리웹 상세 fetch — 후보 선정은 배선됨, 실 fetch·파서는 fixture 대기
