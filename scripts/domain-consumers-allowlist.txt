@@ -11,4 +11,4 @@
 #
 # **테스트는 호출자가 아니다.**
 
-DigestRules           Q-33  다이제스트(docs/18)는 M1 범위 밖.
+# (DigestRules — 2026-07-24 소비됨: ComputeDigestTransitionUseCase가 isReportableTransition을 쓴다. 면제 제거.)
