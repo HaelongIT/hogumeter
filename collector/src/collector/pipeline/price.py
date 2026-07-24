@@ -166,13 +166,22 @@ def normalize_price(text: str) -> NormalizedPrice | None:
     return NormalizedPrice(headline_price=main + shipping, applied_conditions=conditions)
 
 
+def is_truncated(title: str) -> bool:
+    """목록이 긴 제목을 자르는 관례(루리웹 실측)를 감지한다. `...`는 ASCII 3점이다
+
+    (U+2026 말줄임표가 아니다 — 실측). D-6(등록 제품 별칭이 걸리는 잘린 제목만 상세 fetch)의
+    판단 재료로도 쓴다(`pipeline/detail_fetch.py`) — 트렁케이션의 정의를 한 곳에 둔다.
+    """
+    return title.rstrip().endswith("...")
+
+
 def _shipping_was_truncated(text: str) -> bool:
     """제목이 잘렸고(`...`) 배송 표기를 하나도 못 찾았는가.
 
     잘리지 않은 무표기 딜은 여기 들지 않는다 — 스팀·플레이스토어·CGV 같은 **디지털 재화는
-    배송 자체가 없다**(docs/91 Q-64). `...`는 ASCII 3점이다(U+2026이 아니다 — 실측).
+    배송 자체가 없다**(docs/91 Q-64).
     """
-    if not text.rstrip().endswith("..."):
+    if not is_truncated(text):
         return False
     if _PAREN_PRICE_SHIPPING.search(text) or _FREE_SHIPPING.search(text) or _SHIPPING.search(text):
         return False  # 잘렸어도 배송 표기는 온전히 읽었다

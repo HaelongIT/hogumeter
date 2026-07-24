@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from collector.__main__ import ALLOW_NETWORK_ENV, main
+from collector.db.alias_source import AliasSource
 from collector.db.raw_deal_sink import RawDealSink
 from collector.db.site_poll_state_sink import SitePollStateSink
 from boards import all_board_specs
@@ -232,6 +233,43 @@ def test_a_blocked_site_stays_stopped_across_restart_until_manually_resumed(monk
         (stopped_after_resume,) = cursor.fetchone()
     assert ruliweb_rows > 0  # 재개 후엔 실제로 딜이 들어온다
     assert stopped_after_resume is False
+
+
+@pytest.mark.integration
+def test_detail_fetch_candidate_is_logged_for_a_truncated_aliased_priceless_deal(
+        monkeypatch, connection, golden_opener, capsys):
+    """D-6(2026-07-24): 실 fetch는 아직 없다(fixture 부재) — 지금은 **무엇을 놓치고 있는지**만
+
+    보이게 한다. golden 실측: 루리웹 `[11번가] MSI PRO MP273QW ... (163,...`는 잘렸고 가격이 없다.
+    "MP273QW"를 등록 별칭으로 넣으면 이 딜이 상세 fetch 후보로 로그에 남아야 한다.
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    with connection.cursor() as cursor:
+        cursor.execute("insert into alias_dictionary (product_id, alias) values (null, 'MP273QW')")
+    connection.commit()
+
+    main(opener=golden_opener, boards=all_board_specs(), sink=RawDealSink(connection),
+         alias_source=AliasSource(connection), sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
+
+    events = _events(capsys.readouterr().out)
+    cycle = next(e for e in events if e["event"] == "cycle")
+    assert cycle["detail_fetch_candidates"] == 1
+
+    candidates = [e for e in events if e["event"] == "detail_fetch_candidate"]
+    assert len(candidates) == 1
+    assert candidates[0]["site"] == "ruliweb"
+
+
+@pytest.mark.integration
+def test_no_detail_fetch_candidates_when_no_alias_is_registered(monkeypatch, connection, golden_opener, capsys):
+    """등록된 게 없으면 아무리 잘려도 후보가 안 나온다 — ①안(전부 fetch)이 아니다."""
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+
+    main(opener=golden_opener, boards=all_board_specs(), sink=RawDealSink(connection),
+         alias_source=AliasSource(connection), sleep=lambda _: None, clock=lambda: NOW, max_cycles=1)
+
+    cycle = next(e for e in _events(capsys.readouterr().out) if e["event"] == "cycle")
+    assert cycle["detail_fetch_candidates"] == 0
 
 
 def _events(out: str) -> list[dict]:

@@ -28,11 +28,13 @@ from datetime import datetime, timedelta, timezone
 
 from collections.abc import Callable
 
+from .db.alias_source import AliasSource
 from .db.raw_deal_sink import RawDealSink, connect_from_env
 from .db.site_poll_state_sink import SitePollStateSink
 from .db.used_listing_sink import UsedListingSink
 from .db.used_search_source import UsedSearchSource
 from .observability import counters, event
+from .pipeline.detail_fetch import deals_needing_detail_fetch
 from .pipeline.ingest import oversized, to_raw_records
 from .scheduler.drift import DriftHistory, DriftPolicy, observe
 from .scheduler.fetcher import (
@@ -80,6 +82,7 @@ def main(
     used_sink=None,
     search_source=None,
     poll_sink=None,
+    alias_source=None,
 ) -> int:
     now = clock()
     if os.environ.get(ALLOW_NETWORK_ENV) != "1":
@@ -92,11 +95,12 @@ def main(
     fetch = _build_fetcher(opener or urllib_opener, robots)
     interval_for = _interval_port(robots)
     # 게시판 sink와 중고 sink·검색 소스는 **한 커넥션**을 공유한다(같은 DB, 커넥션 하나면 족하다).
-    connection = _connect_if_needed(sink, used_sink, search_source, poll_sink)
+    connection = _connect_if_needed(sink, used_sink, search_source, poll_sink, alias_source)
     sink = sink or (RawDealSink(connection) if connection else None)
     used_sink = used_sink or (UsedListingSink(connection) if connection else None)
     search_source = search_source or (UsedSearchSource(connection) if connection else None)
     poll_sink = poll_sink or (SitePollStateSink(connection) if connection else None)
+    alias_source = alias_source or (AliasSource(connection) if connection else None)
     # 기본은 레지스트리(robots가 허용한 곳만). 테스트는 여기에 자기 스펙을 주입해 **루프의
     # 멀티사이트 의미**(영향받은 사이트만 알림 등)를 폴링 대상과 무관하게 검증한다.
     specs = hotdeal_boards() if boards is None else list(boards)
@@ -125,6 +129,18 @@ def main(
             _log("oversized", now, site=violation.site, post_id=violation.post_id,
                  field=violation.field, size=violation.size, limit=violation.limit)
 
+        # D-6(2026-07-24): 잘렸고·등록 별칭이 걸리고·가격을 못 읽은 딜만 골라낸다. **실제 상세
+        # fetch·파싱은 아직 없다**(fixture 부재, docs/91 Q-80) — 지금은 무엇을 놓치고 있는지
+        # 보이게만 한다. 0건이어도 로그에 남긴다(OBS-02, "0건"과 "안 쟀다"는 다른 사건).
+        detail_candidates = (
+            deals_needing_detail_fetch(result.deals, alias_source.all_aliases())
+            if alias_source is not None else []
+        )
+        for candidate in detail_candidates:
+            _log("detail_fetch_candidate", now, site=candidate.site, post_id=candidate.post_id,
+                 url=candidate.url,
+                 message="등록 별칭이 걸린 잘린 제목 — 상세 fetch가 아직 없어 가격을 못 얻는다")
+
         # sink가 있으면 0도 센다 — "딜이 0건이라 안 썼다"와 "적재를 못 했다"는 다른 사건이고,
         # 후자는 written 부재 + sink_error로 나타난다. 카운터에서 0을 생략하지 않는다(OBS-02).
         written = 0 if sink is not None else None
@@ -147,7 +163,7 @@ def main(
 
         # written은 실패 시 부재다. "0건 적재"와 "적재 못 함"은 다른 사건이다.
         _log("cycle", now, written=written, skipped=len(skipped), polls_recorded=polls_recorded,
-             **counters(result))
+             detail_fetch_candidates=len(detail_candidates), **counters(result))
 
         for alert in result.alerts:
             _log("alert", alert.at, kind="blocked", site=alert.site, reason=alert.reason)
@@ -259,13 +275,13 @@ def _interval_port(robots: RobotsGate) -> Callable[[SiteSpec], timedelta]:
     return interval_for
 
 
-def _connect_if_needed(sink, used_sink, search_source, poll_sink):
+def _connect_if_needed(sink, used_sink, search_source, poll_sink, alias_source):
     """주입되지 않은 게 하나라도 있으면 커넥션을 연다. 전부 주입됐으면(테스트) DB를 안 만진다.
 
-    게시판·중고·폴링 상태가 한 커넥션을 공유하므로 여기서 한 번만 연다 — 각자 `connect_from_env`를
-    부르면 커넥션이 여러 개로 갈린다.
+    게시판·중고·폴링 상태·별칭이 한 커넥션을 공유하므로 여기서 한 번만 연다 — 각자
+    `connect_from_env`를 부르면 커넥션이 여러 개로 갈린다.
     """
-    if all(x is not None for x in (sink, used_sink, search_source, poll_sink)):
+    if all(x is not None for x in (sink, used_sink, search_source, poll_sink, alias_source)):
         return None
     return connect_from_env()
 
