@@ -1,3 +1,24 @@
+## 2026-07-24 (3) — DIGEST 섹션 배선 계속 (무중단, "선택 필요 없는 것만")
+
+사용자가 "내가 골라줄 필요 없이 진행 가능한 것"을 물어, 설계 판단이 없는 조각만 골라 이어갔다.
+
+- **저장물 writer(`RecordDigestSentUseCase`)**: `digest_state`(V16)에 production writer가 없던 것
+  (읽기만 있고 쓰기 없는 테이블)을 해소. 색·문맥·basis 모드는 계산하지 않고 파라미터로 받는다
+  (섹션 조립의 몫). variant_id 수동 @Id라 save()가 upsert. `ComputeDigestWindowUseCase`가 그
+  시각을 다음 창 시작으로 되읽는 왕복을 테스트로 증명.
+- **섹션 ③ 관찰 경과(`ComputeDigestOpportunityCountUseCase`)**: "이번 창 +k / 누적 N". DealSets.
+  occurrenceSet의 첫 종단 소비처. 한계 둘 명시(가시화 시각=firstSeen 근사, SPLIT 미분리) → Q-81.
+- **섹션 ② 전환(`ComputeDigestTransitionUseCase`)**: `DigestRules.isReportableTransition`(호출자
+  0이던 순수 규칙) 첫 소비자. 저장 색 vs 현재 색(GetSignalUseCase, 판단 화면과 같은 색) 비교,
+  색만 본다(스펙). 첫 다이제스트·손상된 색은 기준선으로.
+- **CI 사고 1건 수습**: ② 커밋으로 DigestRules에 소비자가 생기자 `check-domain-consumers` 게이트가
+  "낡은 면제" 로 CI를 막았다(의도대로 동작). allowlist에서 그 줄 제거 + 비게 된 allowlist로
+  메타체크가 깨지는 것을 합성 fixture 검증으로 수정(repository-readers가 며칠 전 받은 것과 동일).
+- 세 증분 모두 뮤테이션 검증·전체 스위트·스모크·롤백 드릴 통과. CI 최종 그린 확인.
+- **여기서 코드로 무조건 갈 수 있는 일감이 소진됐다**: DIGEST 남은 섹션(① 딜 요약·⑤ 큐·⑥ 조용한
+  주)은 표시 형식·"관측 공백" 정의 등 **설계 판단**이 필요하고, ④ 핀 결말은 WATCH(M6) 대기,
+  발송·스케줄은 quiet hours 겹침 처리 등 정책 선택이 걸린다. 사용자 판단이 한 번은 필요.
+
 ## 2026-07-24 (2) — D-3~D-6 결정 구현 + DIGEST 착수 (무중단, 사용자와 결정 확인 후)
 
 사용자와 D-3~D-6을 하나씩 확인해 전부 AI 권고안대로 확정한 뒤 순서대로 구현했다.
