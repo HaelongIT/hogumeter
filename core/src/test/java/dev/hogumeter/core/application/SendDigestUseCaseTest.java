@@ -42,6 +42,8 @@ class SendDigestUseCaseTest {
 	@Autowired
 	RecordDigestSentUseCase recordSent;
 	@Autowired
+	IncrementDigestQueueAppearancesUseCase incrementQueueAppearances;
+	@Autowired
 	VariantRepository variants;
 	@Autowired
 	ProductRepository products;
@@ -51,10 +53,23 @@ class SendDigestUseCaseTest {
 	DigestStateRepository digestStates;
 	@Autowired
 	RecordingDigestSender recordingSender;
+	@Autowired
+	org.springframework.jdbc.core.JdbcTemplate jdbc;
 
 	private SendDigestUseCase useCase(int maxLength) {
-		return new SendDigestUseCase(assembler, render, recordingSender, recordSent, variants, products,
-				observations, maxLength);
+		return new SendDigestUseCase(assembler, render, recordingSender, recordSent, incrementQueueAppearances,
+				variants, products, observations, maxLength);
+	}
+
+	private long enqueueReviewItem() {
+		return jdbc.queryForObject("""
+				insert into review_queue_item (type, payload, status, created_at, last_seen_at)
+				values ('UNCLASSIFIED', '{}'::jsonb, 'PENDING', now(), now()) returning id
+				""", Long.class);
+	}
+
+	private int appearancesOf(long id) {
+		return jdbc.queryForObject("select digest_appearances from review_queue_item where id = ?", Integer.class, id);
 	}
 
 	@Test
@@ -111,6 +126,29 @@ class SendDigestUseCaseTest {
 		useCase(SendDigestUseCase.TELEGRAM_MAX_LENGTH).send();
 
 		assertThat(digestStates.findById(variant.getId())).isEmpty();
+	}
+
+	@Test
+	void successfulSendIncrementsDigestAppearancesForEveryQueueItem() {
+		recordingSender.results.clear();
+		recordingSender.sent.clear();
+		long itemId = enqueueReviewItem();
+
+		useCase(SendDigestUseCase.TELEGRAM_MAX_LENGTH).send();
+
+		assertThat(appearancesOf(itemId)).isEqualTo(1);
+	}
+
+	@Test
+	void failedSendDoesNotIncrementDigestAppearances() {
+		recordingSender.results.clear();
+		recordingSender.sent.clear();
+		recordingSender.results.add(false);
+		long itemId = enqueueReviewItem();
+
+		useCase(SendDigestUseCase.TELEGRAM_MAX_LENGTH).send();
+
+		assertThat(appearancesOf(itemId)).isZero();
 	}
 
 	static class RecordingSenderConfig {

@@ -78,15 +78,39 @@ class DigestFormatterTest {
 
 	@Test
 	void queueSectionCountsItemsAndFlagsUnassignedOnes() {
-		PendingItem withSubject = new PendingItem(1, ReviewQueueType.OUTLIER_LOWER, 1, Instant.now(), Instant.now(),
+		PendingItem withSubject = new PendingItem(1, ReviewQueueType.OUTLIER_LOWER, 1, 0, Instant.now(), Instant.now(),
 				null, "아이폰 17 — 256GB", List.of(), List.of(), Map.of());
-		PendingItem unassigned = new PendingItem(2, ReviewQueueType.UNCLASSIFIED, 1, Instant.now(), Instant.now(),
+		PendingItem unassigned = new PendingItem(2, ReviewQueueType.UNCLASSIFIED, 1, 0, Instant.now(), Instant.now(),
 				null, null, List.of(), List.of(), Map.of());
 
 		String out = formatter.format(new Digest(List.of(), List.of(withSubject, unassigned), true), Map.of());
 
 		assertThat(out).contains("검토 대기 2건");
 		assertThat(out).contains("대상 미상 1건 포함");
+	}
+
+	/** digestAppearances는 "지금까지 성공한 발송 횟수"라 +1로 이번 발송의 몫을 미리 반영한다. */
+	@Test
+	void queueSectionShowsTheWorstMissedStreak() {
+		PendingItem freshItem = new PendingItem(1, ReviewQueueType.UNCLASSIFIED, 1, 0, Instant.now(), Instant.now(),
+				null, null, List.of(), List.of(), Map.of());
+		PendingItem repeatOffender = new PendingItem(2, ReviewQueueType.OUTLIER_LOWER, 1, 3, Instant.now(),
+				Instant.now(), null, "아이폰 17 — 256GB", List.of(), List.of(), Map.of());
+
+		String out = formatter.format(new Digest(List.of(), List.of(freshItem, repeatOffender), true), Map.of());
+
+		assertThat(out).contains("최다 4회째 미확인"); // 3(이미 성공) + 1(이번 발송)
+	}
+
+	/** 전부 첫 등장(0회)이면 "N회째"는 잡음이라 안 낸다. */
+	@Test
+	void queueSectionOmitsTheStreakLineWhenEveryItemIsFirstSeen() {
+		PendingItem freshItem = new PendingItem(1, ReviewQueueType.UNCLASSIFIED, 1, 0, Instant.now(), Instant.now(),
+				null, null, List.of(), List.of(), Map.of());
+
+		String out = formatter.format(new Digest(List.of(), List.of(freshItem), true), Map.of());
+
+		assertThat(out).doesNotContain("회째");
 	}
 
 	@Test

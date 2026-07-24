@@ -6,6 +6,7 @@ import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
 import dev.hogumeter.core.application.AssembleDigestUseCase.Digest;
 import dev.hogumeter.core.application.AssembleVariantDigestUseCase.VariantDigestRow;
+import dev.hogumeter.core.application.GetReviewQueueUseCase.PendingItem;
 import dev.hogumeter.core.application.port.out.DigestSender;
 import dev.hogumeter.core.domain.digest.DigestSplitter;
 import java.util.Comparator;
@@ -29,6 +30,9 @@ import org.springframework.stereotype.Service;
  * "가장 최근 구매 하나"로 근사했다 — 다중 구매의 대표값 규약은 아직 확정되지 않았다. 구매가 없으면 null.
  * </ul>
  *
+ * <p>⑤ 큐도 <b>전 분할 성공 시에만</b> {@link IncrementDigestQueueAppearancesUseCase}로
+ * {@code digest_appearances}를 +1 한다 — DIG-02 원자성이 저장물뿐 아니라 이 카운터에도 그대로 적용된다.
+ *
  * <p><b>여전히 없는 것</b>: quiet hours 게이트(다이제스트는 전역 개념인데 전역 quiet hours 설정이
  * 아직 없다 — 스케줄이 일요일 20시 KST 고정이라 당장의 위험은 낮다).
  */
@@ -42,6 +46,7 @@ public class SendDigestUseCase {
 	private final RenderDigestUseCase render;
 	private final DigestSender sender;
 	private final RecordDigestSentUseCase recordSent;
+	private final IncrementDigestQueueAppearancesUseCase incrementQueueAppearances;
 	private final VariantRepository variants;
 	private final ProductRepository products;
 	private final GetPurchaseObservationsUseCase observations;
@@ -49,19 +54,22 @@ public class SendDigestUseCase {
 
 	@Autowired
 	public SendDigestUseCase(AssembleDigestUseCase assembler, RenderDigestUseCase render, DigestSender sender,
-			RecordDigestSentUseCase recordSent, VariantRepository variants, ProductRepository products,
-			GetPurchaseObservationsUseCase observations) {
-		this(assembler, render, sender, recordSent, variants, products, observations, TELEGRAM_MAX_LENGTH);
+			RecordDigestSentUseCase recordSent, IncrementDigestQueueAppearancesUseCase incrementQueueAppearances,
+			VariantRepository variants, ProductRepository products, GetPurchaseObservationsUseCase observations) {
+		this(assembler, render, sender, recordSent, incrementQueueAppearances, variants, products, observations,
+				TELEGRAM_MAX_LENGTH);
 	}
 
 	/** 테스트 seam — 작은 한도로 분할·연번을 실제로 유발해 검증한다. */
 	SendDigestUseCase(AssembleDigestUseCase assembler, RenderDigestUseCase render, DigestSender sender,
-			RecordDigestSentUseCase recordSent, VariantRepository variants, ProductRepository products,
-			GetPurchaseObservationsUseCase observations, int maxLength) {
+			RecordDigestSentUseCase recordSent, IncrementDigestQueueAppearancesUseCase incrementQueueAppearances,
+			VariantRepository variants, ProductRepository products, GetPurchaseObservationsUseCase observations,
+			int maxLength) {
 		this.assembler = assembler;
 		this.render = render;
 		this.sender = sender;
 		this.recordSent = recordSent;
+		this.incrementQueueAppearances = incrementQueueAppearances;
 		this.variants = variants;
 		this.products = products;
 		this.observations = observations;
@@ -83,6 +91,7 @@ public class SendDigestUseCase {
 				recordSent.recordSent(row.variantId(), row.transition().to().name(), contextFor(row.variantId()),
 						basisModeFor(row.variantId()));
 			}
+			incrementQueueAppearances.increment(digest.queue().stream().map(PendingItem::id).toList());
 		}
 		return new DigestSendReport(parts.size(), sent, allSucceeded);
 	}

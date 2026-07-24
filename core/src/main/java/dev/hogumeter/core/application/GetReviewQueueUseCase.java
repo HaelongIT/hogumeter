@@ -56,6 +56,7 @@ public class GetReviewQueueUseCase {
 			select q.id,
 			       q.type,
 			       q.occurrences,
+			       q.digest_appearances,
 			       q.created_at  as first_seen_at,
 			       q.last_seen_at,
 			       q.payload::text as payload,
@@ -134,6 +135,7 @@ public class GetReviewQueueUseCase {
 				row.getLong("id"),
 				ReviewQueueType.valueOf(row.getString("type")),
 				row.getInt("occurrences"),
+				row.getInt("digest_appearances"),
 				row.getTimestamp("first_seen_at").toInstant(),
 				row.getTimestamp("last_seen_at").toInstant(),
 				row.getString("source_url"),
@@ -151,8 +153,9 @@ public class GetReviewQueueUseCase {
 	}
 
 	/** 이름을 붙이기 전의 한 행. `payload`에서 후보 id를 꺼내는 책임도 여기 있다. */
-	private record Row(long id, ReviewQueueType type, int occurrences, Instant firstSeenAt, Instant lastSeenAt,
-			String sourceUrl, String subject, List<String> conditions, Map<String, Object> payload) {
+	private record Row(long id, ReviewQueueType type, int occurrences, int digestAppearances, Instant firstSeenAt,
+			Instant lastSeenAt, String sourceUrl, String subject, List<String> conditions,
+			Map<String, Object> payload) {
 
 		/** payload는 jsonb다 — 기대한 타입이 온다는 보장이 없다. 숫자가 아닌 값은 무시한다. */
 		List<Long> candidateIds() {
@@ -170,8 +173,8 @@ public class GetReviewQueueUseCase {
 			List<String> candidates = candidateIds().stream()
 				.map(candidateId -> names.getOrDefault(candidateId, "#" + candidateId))
 				.toList();
-			return new PendingItem(id, type, occurrences, firstSeenAt, lastSeenAt, sourceUrl, subject, candidates,
-					conditions, payload);
+			return new PendingItem(id, type, occurrences, digestAppearances, firstSeenAt, lastSeenAt, sourceUrl,
+					subject, candidates, conditions, payload);
 		}
 	}
 
@@ -192,6 +195,9 @@ public class GetReviewQueueUseCase {
 	 * @param id 접힌 행들 중 가장 이른 것. 승격·기각(쓰기)이 생기면 <b>이 id로는 부족하다</b> —
 	 *     그때는 접힌 행 전부를 처리해야 한다(docs/91 Q-15·Q-27 ④).
 	 * @param occurrences 같은 근거가 큐에 들어간 횟수. <b>1보다 크면 재처리 멱등이 없다는 뜻</b>이다.
+	 * @param digestAppearances DIG-04 ⑤ "N회째 미확인"의 재료 — 이 항목이 <b>지금까지 성공한 다이제스트
+	 *     발송에 실린 횟수</b>(발송 성공 후에만 +1, {@code SendDigestUseCase}). 사람이 계속 놓치고 있다는
+	 *     신호다. 아직 한 번도 안 실렸으면 0.
 	 * @param sourceUrl 원문 링크. 잇지 못하면 {@code null}.
 	 * @param subject 이 항목이 **무엇에 대한 것인가**("제품 — variant"). 미상 항목은 정의상 대상이 없어
 	 *     {@code null}이다. 이상치인데 딜이 미상이면 역시 {@code null} — 화면이 그 사실을 말한다.
@@ -201,8 +207,8 @@ public class GetReviewQueueUseCase {
 	 *     `카할`이면 특정 카드 보유자만 그 가격이고, `배송비미상`이면 저장된 값이 하한이다.
 	 *     즉 이상치가 아니라 <b>정상</b>일 수 있다. 미상 항목은 딜이 없으므로 항상 빈 목록이다.
 	 */
-	public record PendingItem(long id, ReviewQueueType type, int occurrences, Instant firstSeenAt,
-			Instant lastSeenAt, String sourceUrl, String subject, List<String> candidateProducts,
-			List<String> conditions, Map<String, Object> payload) {
+	public record PendingItem(long id, ReviewQueueType type, int occurrences, int digestAppearances,
+			Instant firstSeenAt, Instant lastSeenAt, String sourceUrl, String subject,
+			List<String> candidateProducts, List<String> conditions, Map<String, Object> payload) {
 	}
 }

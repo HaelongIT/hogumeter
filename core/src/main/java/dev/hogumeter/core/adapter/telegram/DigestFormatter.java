@@ -24,9 +24,8 @@ import java.util.Map;
  * 정작 중요한 한 줄이 묻힌다.
  *
  * <p><b>이번 판의 한계</b>(docs/91 Q-81에 기록): ① "검토 대기 딱지"는 큐 항목→variant 연결이 아직 없어
- * 렌더링하지 않는다(지어내느니 생략). ⑤ "N회째 미확인" 카운터는 발송 성공 시 증가하는 컬럼이 필요해
- * 발송 배선과 함께 붙인다(지금 붙이면 쓰는 사람 없는 컬럼이 된다). basis는 {@code demandAxisValue}가
- * 없으면(GROUPED 등) "전체"로 표기한다.
+ * 렌더링하지 않는다(지어내느니 생략). basis는 {@code demandAxisValue}가 없으면(GROUPED 등) "전체"로
+ * 표기한다.
  */
 public class DigestFormatter {
 
@@ -108,17 +107,27 @@ public class DigestFormatter {
 		};
 	}
 
-	/** ⑤ 전역 스톡. 대상 미상(미귀속) 건수를 병기한다 — "N회째" 카운터는 다음 증분(발송 배선과 함께). */
+	/**
+	 * ⑤ 전역 스톡. 대상 미상(미귀속) 건수를 병기하고, 가장 오래 놓친 항목의 "N회째 미확인"을 낸다
+	 * (DIG-04). {@code digestAppearances}는 <b>지금까지 성공한</b> 발송 횟수라 이번 발송이 성공하면
+	 * 그만큼 하나 늘어난다 — 그래서 +1로 이번 발송의 몫을 미리 반영한다(저장은 발송 성공 후에
+	 * {@code SendDigestUseCase}가 한다, 이 함수는 문구만 만든다). 전부 첫 등장(0회)이면 "N회째"가
+	 * 잡음이라 생략한다.
+	 */
 	private static String queueLine(List<PendingItem> queue) {
 		if (queue.isEmpty()) {
 			return "⑤ 검토 대기: 없음";
 		}
 		long unassigned = queue.stream().filter(item -> item.subject() == null).count();
-		String line = "⑤ 검토 대기 " + queue.size() + "건";
+		int worstStreak = queue.stream().mapToInt(item -> item.digestAppearances() + 1).max().orElse(1);
+		StringBuilder line = new StringBuilder("⑤ 검토 대기 ").append(queue.size()).append("건");
 		if (unassigned > 0) {
-			line += "(대상 미상 " + unassigned + "건 포함)";
+			line.append("(대상 미상 ").append(unassigned).append("건 포함)");
 		}
-		return line;
+		if (worstStreak > 1) {
+			line.append(" · 최다 ").append(worstStreak).append("회째 미확인");
+		}
+		return line.toString();
 	}
 
 	private static String won(long value) {
