@@ -133,9 +133,15 @@ def test_successful_polls_land_in_site_poll_state(monkeypatch, connection, golde
 
 @pytest.mark.integration
 def test_a_failed_poll_does_not_advance_the_observation_clock(monkeypatch, connection):
-    """실패한 폴링은 시계를 밀지 않는다 — 밀면 "봤는데 딜이 없다"는 거짓 근거가 된다.
+    """실패한 폴링은 시계(last_successful_poll_at)를 밀지 않는다 — 밀면 "봤는데 딜이 없다"는
 
-    한 사이트만 실패시키면 나머지는 기록되고 그 사이트만 빠진다(부분 실패가 전체를 가리지 않는다).
+    거짓 근거가 된다. 한 사이트만 실패시키면 그 사이트만 시계가 안 밀리고, 나머지는 밀린다
+    (부분 실패가 전체를 가리지 않는다).
+
+    ⚠️ V15(REL-03 Q-59) 전에는 "실패한 사이트는 행 자체가 없다"였다 — 그때는 성공만 적었다.
+    이제는 커서(연속 실패 수 등) 전체를 영속해야 재시작 후 복원되므로, 실패한 사이트도 **행은
+    생기되 last_successful_poll_at만 null**이다. "행이 아예 없다"에서 "행은 있는데 시계 값이
+    null이다"로 계약이 바뀌었다.
     """
     monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
     ok = GoldenOpener()
@@ -152,11 +158,80 @@ def test_a_failed_poll_does_not_advance_the_observation_clock(monkeypatch, conne
          max_cycles=1)
 
     with connection.cursor() as cursor:
-        cursor.execute("select site from site_poll_state")
-        sites = {site for (site,) in cursor.fetchall()}
+        cursor.execute(
+            "select site, last_successful_poll_at, consecutive_failures from site_poll_state"
+        )
+        rows = {site: (at, failures) for site, at, failures in cursor.fetchall()}
 
-    assert "ruliweb" not in sites
-    assert {"ppomppu", "fmkorea"} <= sites
+    assert rows["ruliweb"] == (None, 1)
+    assert rows["ppomppu"] == (NOW, 0)
+    assert rows["fmkorea"] == (NOW, 0)
+
+
+@pytest.mark.integration
+def test_a_blocked_site_stays_stopped_across_restart_until_manually_resumed(monkeypatch, connection):
+    """decisions-needed D-3의 종단 계약 — 프로세스 재시작 시뮬레이션 셋:
+
+    ① 차단(403) → stopped=True 영속. ② "재시작"(새 `main()` 호출, 같은 DB) → 여전히 멈춰 있어
+    그 사이트를 다시 폴링하지 않는다(`sites_polled`에 안 잡힘). ③ 운영자가 DB 행을 직접 고친 뒤
+    "재시작" → 이번엔 폴링을 재개한다. 이게 D-3이 정한 재개 절차의 전부다 — 별도 명령·API 없음.
+    """
+    monkeypatch.setenv(ALLOW_NETWORK_ENV, "1")
+    ok = GoldenOpener()
+
+    def blocked_ruliweb(url: str):
+        if url.endswith("/robots.txt"):
+            return (404, b"")
+        if "ruliweb" in url:
+            return (403, b"")
+        return ok(url)
+
+    # ① 최초 기동 — ruliweb이 차단돼 stopped=True로 영속된다.
+    main(opener=blocked_ruliweb, boards=all_board_specs(), sink=RawDealSink(connection),
+         poll_sink=SitePollStateSink(connection), sleep=lambda _: None, clock=lambda: NOW,
+         max_cycles=1)
+
+    with connection.cursor() as cursor:
+        cursor.execute("select stopped from site_poll_state where site = 'ruliweb'")
+        (stopped,) = cursor.fetchone()
+    assert stopped is True
+
+    # ② "재시작" — poll_sink를 새로 만들어 붙인다(새 프로세스가 load_states로 커서를 읽는 것과 같다).
+    # ruliweb은 여전히 멈춰 있어야 하고, 그 사이 opener를 "전부 성공"으로 바꿔도 폴링되면 안 된다
+    # (멈춤을 무시하고 재시도하면 그건 D-3이 아니라 "재시도 강행"이고 SEC-08 위반이다).
+    main(opener=ok, boards=all_board_specs(), sink=RawDealSink(connection),
+         poll_sink=SitePollStateSink(connection), sleep=lambda _: None,
+         clock=lambda: NOW + timedelta(hours=1), max_cycles=1)
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "select count(*) from raw_deal_post where site = 'ruliweb' and captured_at > %s",
+            (NOW,),
+        )
+        (ruliweb_rows_after_restart,) = cursor.fetchone()
+    assert ruliweb_rows_after_restart == 0  # 여전히 멈춰 있어 새로 적재된 게 없다
+
+    # ③ 운영자가 D-3이 정한 그대로 DB 행을 직접 고친다.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "update site_poll_state"
+            "   set stopped = false, next_attempt_at = null, consecutive_failures = 0"
+            " where site = 'ruliweb'"
+        )
+    connection.commit()
+
+    # 다시 "재시작" — 이번엔 재개돼 ruliweb이 실제로 폴링·적재된다.
+    main(opener=ok, boards=all_board_specs(), sink=RawDealSink(connection),
+         poll_sink=SitePollStateSink(connection), sleep=lambda _: None,
+         clock=lambda: NOW + timedelta(hours=2), max_cycles=1)
+
+    with connection.cursor() as cursor:
+        cursor.execute("select count(*) from raw_deal_post where site = 'ruliweb'")
+        (ruliweb_rows,) = cursor.fetchone()
+        cursor.execute("select stopped from site_poll_state where site = 'ruliweb'")
+        (stopped_after_resume,) = cursor.fetchone()
+    assert ruliweb_rows > 0  # 재개 후엔 실제로 딜이 들어온다
+    assert stopped_after_resume is False
 
 
 def _events(out: str) -> list[dict]:

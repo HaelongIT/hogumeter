@@ -6,8 +6,9 @@
    환경변수 게이트로 강제한다 — `COLLECTOR_ALLOW_NETWORK=1` 없이는 opener를 한 번도 호출하지 않는다.
 2. **DB 적재**는 `DB_HOST`가 있을 때만. 없으면 수집 결과를 로그 이벤트로만 남기고 그 사실을 알린다.
 
-커서(사이트별 폴링 상태)는 아직 영속화하지 않는다 — 차단당한 사이트의 재개 경로가 미결이라
-(`decisions-needed` D-3) 지금 디스크에 남기면 영구 중지가 된다. 재시작하면 상태가 초기화된다.
+커서(사이트별 폴링 상태)는 `site_poll_state`에 영속한다(REL-03 Q-59). 차단(`stopped`)된 사이트의
+재개는 운영자가 그 행을 직접 UPDATE하는 것이다(`decisions-needed` D-3, 2026-07-24 확정) — 별도
+명령·API 없음. 재시작하면 기동 시 `load_states()`로 그 값을 그대로 복원한다(라이브 리로드 아님).
 
 **수명 계약**(compose의 `restart: on-failure`가 이 규약에 의존한다):
 
@@ -99,14 +100,19 @@ def main(
     # 기본은 레지스트리(robots가 허용한 곳만). 테스트는 여기에 자기 스펙을 주입해 **루프의
     # 멀티사이트 의미**(영향받은 사이트만 알림 등)를 폴링 대상과 무관하게 검증한다.
     specs = hotdeal_boards() if boards is None else list(boards)
-    states: dict = {}
-    market_states: dict = {}
+    # 기동 시 영속된 커서를 복원(REL-03 Q-59) — 재개(D-3)는 이 시점에 반영된다(운영자가 DB 행을
+    # 고친 뒤 재시작). 게시판·마켓은 같은 이름공간을 쓰는 한 테이블이라 **같은 스냅샷을 둘 다에
+    # 심는다** — run_cycle은 spec.name에 없는 키를 무시하므로 서로의 커서를 밟지 않는다.
+    persisted = poll_sink.load_states() if poll_sink else {}
+    states: dict = dict(persisted)
+    market_states: dict = dict(persisted)
     drift = DriftHistory()
     cycles = 0
     sink_failures = 0
 
     _log("started", now, boards=[s.name for s in specs], sink="postgres" if sink else None,
-         message=None if sink else "DB 미설정(DB_HOST 없음): 적재하지 않고 로그만 남깁니다.")
+         message=None if sink else "DB 미설정(DB_HOST 없음): 적재하지 않고 로그만 남깁니다.",
+         restored_cursors=len(persisted))
 
     while max_cycles is None or cycles < max_cycles:
         now = clock()
@@ -211,23 +217,19 @@ def _poll_market(search_source, used_sink, market_states, now, fetch, interval_f
 
 
 def _record_polls(poll_sink, states, now: datetime) -> int | None:
-    """성공한 폴링 시각을 `site_poll_state`에 올린다. 부재(sink 없음·실패)는 0과 구별해 `None`이다.
+    """이번 사이클의 사이트 커서 전체(성공 시각·연속 실패·다음 시도·중지)를 영속한다(REL-03 Q-59).
 
-    실패해도 수집 루프를 죽이지 않는다 — 딜 적재가 살아 있으면 표본은 계속 늘고, 이 값의 부재는
-    core 쪽에서 "수집 기록 없음" 딱지로 드러난다. 다만 조용히 넘기지 않고 이벤트로 남긴다.
+    부재(sink 없음·실패)는 0과 구별해 `None`이다. 실패해도 수집 루프를 죽이지 않는다 — 딜 적재가
+    살아 있으면 표본은 계속 늘고, 신선도 값의 부재는 core 쪽에서 "수집 기록 없음" 딱지로 드러난다.
+    다만 조용히 넘기지 않고 이벤트로 남긴다.
     """
     if poll_sink is None:
         return None
-    polled = {
-        name: state.last_successful_poll
-        for name, state in states.items()
-        if state.last_successful_poll is not None
-    }
     try:
-        return poll_sink.record_successes(polled)
+        return poll_sink.persist_states(states, now)
     except Exception as failure:
         _log("poll_state_error", now, error=f"{type(failure).__name__}: {failure}",
-             sites=sorted(polled))
+             sites=sorted(states))
         return None
 
 

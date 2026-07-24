@@ -80,10 +80,11 @@ def backoff_delay(failures: int, policy: BackoffPolicy) -> timedelta:
 
 @dataclass(frozen=True)
 class SiteState:
-    """사이트별 폴링 커서. **메모리에만 있다** — 영속화(REL-03)는 `docs/91` Q-59.
+    """사이트별 폴링 커서. 이 클래스 자체는 순수 값이고, 영속화는 `db/site_poll_state_sink.py`가
 
-    막고 있는 것은 DB가 아니다(적재기는 이미 있다). **차단당한 사이트의 재개 경로**가 미결이라
-    (`decisions-needed` D-3) 지금 디스크에 남기면 `stopped=True`가 영구히 굳는다.
+    한다(REL-03 Q-59) — 기동 시 그 값을 읽어 seed하고, 매 사이클 다시 써 넣는다. 차단당한 사이트의
+    재개는 운영자가 그 영속 행을 직접 UPDATE하는 것(`decisions-needed` D-3, 2026-07-24 확정) —
+    별도 명령·API 없이, 다음 재시작이 그 값을 그대로 읽어 반영한다.
 
     next_attempt_at=None은 두 가지 뜻이라 단독으로 읽지 말고 is_due()를 쓸 것:
     신규 상태(즉시 due) 또는 stopped(영구 미due). stopped가 우선한다.
@@ -109,7 +110,9 @@ def advance(
     interval: timedelta,
     policy: BackoffPolicy,
 ) -> SiteState:
-    """폴링 1회 결과를 상태에 반영. stopped는 종착 상태 — 재개 경로는 미결(decisions-needed D-3)."""
+    """폴링 1회 결과를 상태에 반영. stopped는 이 함수 안에서는 종착 상태 — 재개는 영속 행을
+
+    운영자가 직접 고쳐 다음 재시작에 반영하는 것이다(decisions-needed D-3)."""
     if state.stopped:
         return state
     if outcome is Outcome.OK:

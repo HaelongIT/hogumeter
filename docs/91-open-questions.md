@@ -313,12 +313,13 @@ _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildComm
 - **잠정값 (다층 방어)**: ① 네트워크로 나가는 스크립트는 **자기 자신에게도 opt-in 게이트를 건다**(`ALLOW_REAL_ROBOTS=1`, collector의 `COLLECTOR_ALLOW_NETWORK`와 같은 패턴). ② 스크립트 상단에 "에이전트가 이걸 opt-in과 함께 돌리면 정지조건 위반"임을 명시. ③ 정지조건은 결국 **지침의 몫**이다 — 훅은 실수를 막고, 고의를 막지는 못한다.
 - **재개 트리거**: 네트워크로 나가는 스크립트가 늘어나 opt-in 패턴이 흔들리면 — 그때 훅이 `bash *.sh` 실행을 **전부** 사람에게 확인받게 할지 검토(오차단 비용이 크다). seam = `.claude/hooks/guard.sh` 1곳.
 
-## [열림] Q-59. REL-03 폴링 커서 영속화 — 추적할 자리가 없었다
-- **맥락**: `SiteState`(연속 실패 횟수·`stopped` 플래그·`next_attempt_at`)가 **메모리에만** 있다. 컨테이너가 재시작하면 초기화된다. REL-03은 "재시작 내성: 폴링 커서 영속화"를 요구한다.
-- **왜 이 항목이 지금 생겼나**: 2026-07-10 전수 감사에서 발견 — `decisions-needed` D-3과 `pre-deploy §F`가 이걸 **"Q-36(커서 영속화)"**라고 불렀는데, Q-36은 사실 **"collector DB 적재기"**였고 이미 해소됐다. 즉 REL-03을 추적하는 항목이 어디에도 없었다.
-- **막고 있는 것은 DB가 아니다.** 적재기(`db/raw_deal_sink.py`)는 이미 있다. 진짜 선결 조건은 **차단당한 사이트의 재개 경로**(`decisions-needed` D-3)다 — 그 결정 없이 커서를 디스크에 남기면 `stopped=True`가 영구히 굳어 사이트가 죽는다.
-- **잠정값**: 메모리 상태 유지. 재시작하면 커서가 초기화되고, 그 덕에 차단된 사이트가 **우연히** 재개된다(설계가 아니라 사고다). `restart: on-failure`라 정상 종료 시엔 재시작하지 않으므로 이 우연도 보장되지 않는다.
-- **재개 트리거**: **D-3 확정 후.** 재개 경로가 정해지면 `SiteState`를 테이블 하나(`site_poll_state`)에 저장한다 — Flyway는 core 단독 소유이므로 **컬럼 추가는 상대와 조율**. seam = `collector/src/collector/scheduler/policy.py`의 `SiteState` + `advance()` 1곳.
+## [해소 2026-07-24] Q-59. REL-03 폴링 커서 영속화 — D-3 확정 후 배선 완료
+- **맥락**: `SiteState`(연속 실패 횟수·`stopped` 플래그·`next_attempt_at`)가 메모리에만 있어 컨테이너 재시작 시 초기화됐다. REL-03은 "재시작 내성: 폴링 커서 영속화"를 요구한다.
+- **막고 있던 것**은 DB가 아니라 **차단당한 사이트의 재개 경로**(`decisions-needed` D-3)였다 — 그 결정 없이 커서를 영속하면 `stopped=true`가 디스크에 굳어 사이트가 영구히 죽었다.
+- **✅ 해소**: D-3이 "설정/DB 값 수동 수정"으로 확정돼(2026-07-24) 착수. `site_poll_state`(V15, R15)에 `consecutive_failures`·`next_attempt_at`·`stopped` 컬럼 추가(`last_successful_poll_at`도 nullable로 완화 — 한 번도 성공 못 한 채 커서만 생기는 사이트가 있을 수 있다). core `SitePollStateEntity`는 이 세 컬럼을 매핑하지 않는다(core는 안 씀, 매핑하면 다음에 혼동만 준다) — 관측시계(`ObservationClock.earliestSuccessfulPoll`, SQL `min()`)는 nullable 완화에 영향받지 않는다.
+- collector `SitePollStateSink`가 `load_states()`(기동 시 복원)·`persist_states()`(매 사이클 전체 커서 저장, `last_successful_poll_at`만 단조 증가)를 제공하고 `__main__.main()`이 기동 시 이를 로드해 `states`/`market_states`를 seed한다. **재개는 재시작을 전제한다** — 운영자가 DB 행을 직접 `UPDATE ... SET stopped=false, next_attempt_at=null, consecutive_failures=0`한 뒤 컨테이너를 재시작해야 반영된다(라이브 리로드 아님). 별도 명령·API 없음.
+- **종단 검증**: `test_a_blocked_site_stays_stopped_across_restart_until_manually_resumed`(collector, `main()`을 두 번 호출해 재시작 시뮬레이션) — 차단 → 재시작해도 여전히 멈춤 → DB 수동 UPDATE → 재시작하면 실제로 재개돼 딜이 들어옴. `test_a_failed_poll_does_not_advance_the_observation_clock`은 계약이 바뀌어 갱신(예전: 실패 사이트는 행 자체가 없음 → 이제: 행은 있되 성공 시각만 null).
+- **관련**: `decisions-needed` D-3(해소·decision-log 참조).
 
 ## [열림] Q-58. PERF-01~04·OPS-01이 어느 보드에도 없었다 (측정 자체가 없다)
 - **맥락**: 2026-07-10 요구 문서 전수 대조에서 발견. `docs/20`의 다음 요구는 코드에도 보드에도 대응물이 없다.
