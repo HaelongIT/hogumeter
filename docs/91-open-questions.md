@@ -562,10 +562,11 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   1. **① 검토 대기 딱지 없음**: 큐 항목(`PendingItem`)이 어느 variant에 속하는지 `subject` 문자열만 갖고 있어(id 연결 없음) — 문자열 매칭으로 잇는 건 "지어내기"라 하지 않았다. 렌더링에 딱지를 붙이려면 `GetReviewQueueUseCase`가 variantId를 함께 내야 한다.
   2. **⑤ "N회째" 카운터 없음**: 아래 항목 그대로(발송 배선과 함께).
   3. **basis 표기는 딜 단위**: `demandAxisValue`가 없으면(GROUPED 등) "전체"로 쓴다 — DIG-04가 요구하는 "실제 축값"의 최소 해석.
+- **✅ 발송 배선 해소(2026-07-25)**: `DigestSplitter`(순수, 줄 경계 분할·연번·절단 금지) + `DigestSender` 포트(다른 발송 포트와 달리 **성공 여부를 bool로 반환** — 원자성 판단 재료, `TelegramAlertSender`·`StubAlertSender` 둘 다 구현) + `SendDigestUseCase`(렌더→분할→발송→집계). **전 분할 성공 시에만** variant마다 `RecordDigestSentUseCase.recordSent` 호출 — 색은 조립이 이미 구한 `row.transition().to()`를 재사용(재계산 없음), basis 모드는 product의 `DemandAxisMode`, 문맥은 그 variant의 **가장 최근 Purchase**의 `ObservationContext.mode`로 근사(구매 없으면 null). **한계**: variant당 Purchase가 여럿 공존 가능한데(PUR-01 "독립 관찰") 다중 구매의 대표값 규약이 미정이라 "최신 1건"으로 근사했다 — `DigestRules.isReportableTransition`은 색만 비교하므로 이 근사가 지금은 판정에 영향 없다(문맥·basis는 억제 신호 부가정보).
+- **여전히 없는 것**: quiet hours 게이트(다이제스트는 variant별 정책이 아니라 전역 개념인데 전역 quiet hours 설정 자체가 없다 — 스케줄이 일요일 20시 KST 고정이라 당장의 위험은 낮음, 되돌리기 쉬운 채로 남김).
 - **남은 것(다음 무중단 증분, 권장 순서)**:
-  1. 발송(텔레그램 스텁 경로 재사용, quiet hours 존중, 분할 발송 절단 금지·연번). 발송 성공 후에만 `RecordDigestSentUseCase`로 저장물 갱신(원자성) — 색·문맥·basis 모드를 SIG(색)·PUR(`ObservationContext.mode`)·product(`DemandAxisMode`)에서 모아 넘긴다.
-  2. 스케줄(`@Scheduled`, 일요일 20시 KST 고정 상수, quiet 겹침 시 종료 후).
-  3. ⑤ "N회째 미확인" 카운터(`review_queue_item.digest_appearances`, 발송 시 +1) — 발송 배선이 생겨야 죽은 컬럼이 안 된다.
+  1. 스케줄(`@Scheduled`, 일요일 20시 KST 고정 상수). 이게 붙어야 `SendDigestUseCase.send()`가 실제로 주기 실행되고 저장물이 매주 전진한다 — 지금은 유스케이스만 있고 아무도 안 부른다(또 다른 "호출자 0").
+  2. ⑤ "N회째 미확인" 카운터(`review_queue_item.digest_appearances`, 발송 시 +1) — 발송 배선이 생겼으니 죽은 컬럼이 안 된다.
   - ④ 핀 결말은 WATCH(M6) 대기라 지금 손대지 않는다.
 - **재개 트리거**: 없음 — 설계 결정이 다 확정됐으니 순수하게 구현 분량 문제. 다음 무중단 증분에서 위 순서로 이어간다.
 - **관련**: `docs/18`, `working-area/2nd-plan-intake.md`(원문 근거).

@@ -1,3 +1,16 @@
+## 2026-07-25 (3) — DIGEST 발송 배선 + 저장물 갱신 연동 (무중단, "끝날때 푸쉬")
+
+- **발송 메커니즘**: `DigestSplitter`(순수, 줄 경계 분할·연번·절단 금지), `DigestSender` 포트
+  (다른 발송 포트와 달리 성공 여부를 bool로 반환 — DIG-02 "전 분할 성공 시 갱신" 판단 재료),
+  `TelegramAlertSender`·`StubAlertSender` 둘 다 구현, `SendDigestUseCase`(렌더→분할→발송→집계).
+- **저장물 갱신 연동**: 전 분할 성공 시에만 variant마다 `RecordDigestSentUseCase.recordSent` 호출.
+  색은 조립이 이미 구한 값 재사용, basis=product의 `DemandAxisMode`, 문맥=가장 최근 Purchase의
+  `ObservationContext.mode`(다중 구매 대표값 규약 미정 — 지금 전환 판정은 색만 봐서 무해, Q-81 기록).
+- 전부 뮤테이션 검증(분할 2분기, DigestSender 반환값, SendDigestUseCase 원자성+3성분 배선).
+- 남은 것: 스케줄(`@Scheduled` 일요일 20시 KST — 이게 없으면 `SendDigestUseCase`는 아무도 안 부르는
+  "호출자 0"), ⑤ N회째 카운터, quiet hours 게이트(전역 설정 자체가 없어 보류, 문서화된 한계).
+  ④는 여전히 WATCH(M6) 대기.
+
 ## 2026-07-25 (2) — DIGEST 다이제스트 전체 조립 + 렌더링 1차 (무중단, "끝날때 푸쉬")
 
 사용자 지시: "계속 무중단으로 가고 끝날때 푸쉬 하자" — 커밋은 매 증분 GREEN 후 계속하되
