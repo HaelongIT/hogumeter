@@ -16,6 +16,7 @@ paths:
 - **Testcontainers 2.0 좌표·패키지가 바뀌었다**: 아티팩트는 `testcontainers-` 접두사(`testcontainers-junit-jupiter`·`testcontainers-postgresql`), 클래스는 `org.testcontainers.postgresql.PostgreSQLContainer`, self-type 제네릭 제거(`PostgreSQLContainer<?>` 아님). (99: 2026-07-04)
 - **`ddl-auto=validate`는 DDL 타입과 JPA 필드 타입을 정확히 맞춘다.** `smallint` 컬럼을 `Integer`로 매핑하면 검증 실패. `@JdbcTypeCode(SqlTypes.SMALLINT)`를 붙이거나 필드를 `Short`로. **컨텍스트 로드가 무더기로 깨지면 스키마 검증 불일치를 먼저 의심**하고 리포트에서 `Schema-validation` 라인을 볼 것. (99: 2026-07-08)
 - **`@SpringBootTest`는 컨테이너(postgres)를 공유하고 기본은 롤백이 없다.** 전역 count 단정은 다른 테스트의 커밋에 오염된다 → 특정 `variantId`로 스코프하거나 `@Transactional`로 tx 롤백. (99: 2026-07-08)
+- **`@PrePersist`로 실 벽시계가 찍히는 컬럼(예: `createdAt`, 시계 주입 불가)과 비교하는 테스트에 "미래의 어느 시각"을 클래스 상수로 하드코딩하지 않는다.** 달력이 그 상수를 추월하면 조용히 RED가 된다(원인이 이번 커밋과 무관해 보인다). 그 컬럼값을 먼저 읽고 그 값 기준으로 오프셋을 준다(`Clock.fixed(entity.getCreatedAt().plusSeconds(n), ...)`). 같은 세션에서 두 번째 발생이라 규칙으로 승격. (99: 2026-07-25)
 
 ## 도메인 규칙 (교훈에서 승격)
 

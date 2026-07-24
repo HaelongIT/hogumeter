@@ -1,3 +1,25 @@
+## 2026-07-25 (2) — DIGEST 다이제스트 전체 조립 + 렌더링 1차 (무중단, "끝날때 푸쉬")
+
+사용자 지시: "계속 무중단으로 가고 끝날때 푸쉬 하자" — 커밋은 매 증분 GREEN 후 계속하되
+`git push`는 이번 작업 구간이 끝날 때 한 번에. Q-81 권장 순서대로 이어감(전부 뮤테이션 검증):
+
+- **다이제스트 전체 조립**(`AssembleDigestUseCase`): 등록된 모든 variant를 순회해
+  `AssembleVariantDigestUseCase`로 행을 모으고 ⑤ 큐(`GetReviewQueueUseCase.pending()`) + ⑥
+  조용한 주(`ComputeDigestQuietWeekUseCase`)를 `Digest` 하나로 묶는다.
+- **렌더링 1차**(`DigestFormatter` 순수 + `RenderDigestUseCase` IO): 조용한 주는 한 줄 축약,
+  아니면 신호(기회·전환·관찰) 있는 variant만 개별 줄 + 무변동은 "나머지 N개 변동 없음"으로
+  합산(DIG-05 해석). 이름은 `VariantNaming`(AL-05와 같은 수법)으로 배선 단계에서 입힘.
+  세 분기(조용한 주 축약·무변동 합산·큐 미귀속 카운트)+이름 배선 뮤테이션 확인.
+  **명시적으로 미룬 것**(Q-81): ① 검토 대기 딱지(큐→variant id 연결 없음, 문자열 매칭으로
+  지어내지 않음), ⑤ "N회째" 카운터(발송 배선과 함께).
+- **부수 발견·수정**: 전체 스위트 실행 중 `ComputeDigestWindowUseCaseTest`가 무관한 원인으로
+  RED — 클래스 상수로 하드코딩한 "미래" 시각(2026-07-24T20:00)을 실제 달력(2026-07-25)이
+  추월해 `window.from() > window.to()`로 반개구간이 뒤집힘. `product.createdAt` 기준으로
+  시계를 재고정해 수정. 이번 세션 두 번째 발생이라 `docs/99`에 기록 + `.claude/rules/core-java.md`
+  규칙 승격("하드코딩된 미래 시각" 패턴 금지).
+- 남은 DIGEST: 발송(텔레그램, quiet hours, 분할발송) → 스케줄(`@Scheduled` 일요일 20시 KST) →
+  ⑤ N회째 카운터. ④는 WATCH(M6) 대기.
+
 ## 2026-07-25 — DIGEST 설계 결정 3건 + 섹션 ①⑥·조립 배선 (무중단, 사용자 결정 후 순서대로)
 
 사용자가 "판단 필요한 것 하나씩 골라 문서 반영 후 순서대로 무중단"을 지시. 원문(docs/18 +

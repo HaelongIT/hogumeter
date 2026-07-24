@@ -556,13 +556,16 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   - **⑤ "N회째 미확인"**: `review_queue_item`에 카운터 컬럼(예: `digest_appearances`) 추가 — 다이제스트에 담길 때마다 +1. 별도 발송 로그 테이블은 안 만든다.
 - **✅ 섹션 ① 딜 요약 해소(2026-07-25)**: `ComputeDigestBestOpportunityUseCase.bestOpportunity(variantId, window)` — occurrenceSet 중 창 안 딜에서 기회가 최저 하나. 상태별 잣대: 활성(ENDED 아님)=`priceLast`, 종료=`priceMin`. 딜 자체를 돌려줘 렌더링(아이콘·딱지·SPARSE 형식·basis)이 그대로 접근한다. 가시화 시각=firstSeen 근사는 ③과 같은 한계 상속.
 - **✅ 섹션 ⑥ 조용한 주 해소(2026-07-25)**: `ComputeDigestQuietWeekUseCase.isQuietWeek(variantIds)` — `DigestRules.isQuietWeek`(마지막 호출자 0이던 순수 규칙)의 첫 소비자. variant별 창을 구해(창·기회수·전환 유스케이스 조합) 어느 variant에도 플로우·전환이 없으면 조용한 주. **anyGap은 상수 false 고정**(결정대로) — `ANY_GAP` 한 상수가 관측시계 연결 seam. 한계: 수집이 멈춘 주도 "조용한 주"로 보고될 수 있다. 이로써 `DigestRules` 두 메서드가 모두 소비된다(domain-consumers 게이트 초록).
-- **✅ 조립 해소(2026-07-25, 부분)**: `AssembleVariantDigestUseCase.assemble(variantId)` → `VariantDigestRow`(창·① 최고 기회·③ 관찰 경과·② 전환). 여태 만든 섹션 유스케이스들이 **같은 창**으로 한 행에 묶이는 첫 소비자(각각은 테스트만 불렀다 — 소비자를 만들어 생산자를 검사). 렌더링·발송·저장물 갱신은 아직 없다.
-- **섹션 ⑤ 큐**: `GetReviewQueueUseCase.pending()`이 이미 전역 스톡을 낸다(web 미상 큐가 소비 중) — 재사용. "N회째 미확인" 카운터(`review_queue_item.digest_appearances`)는 **발송 시 +1 하는 쓰기와 함께** 넣는다(읽기만 하는 죽은 컬럼을 안 만들려고 발송 단계로 미룸).
+- **✅ 조립 해소(2026-07-25, 부분)**: `AssembleVariantDigestUseCase.assemble(variantId)` → `VariantDigestRow`(창·① 최고 기회·③ 관찰 경과·② 전환). 여태 만든 섹션 유스케이스들이 **같은 창**으로 한 행에 묶이는 첫 소비자(각각은 테스트만 불렀다 — 소비자를 만들어 생산자를 검사).
+- **✅ 다이제스트 전체 조립 해소(2026-07-25)**: `AssembleDigestUseCase.assemble()` — 등록된 모든 variant를 순회해 `VariantDigestRow` 리스트 + ⑤ `GetReviewQueueUseCase.pending()` + ⑥ `ComputeDigestQuietWeekUseCase.isQuietWeek()`를 `Digest` 하나로 묶는다. `AssembleVariantDigestUseCase`(variant 1건)의 배치판.
+- **✅ 렌더링 1차 해소(2026-07-25)**: `DigestFormatter`(adapter/telegram, 순수) + `RenderDigestUseCase`(이름 배선, IO). 조용한 주는 한 줄로 축약(DIG-01 안전망 취지 — "발생"이 아니라 "가시화"). 아니면 이번 창에 기회·전환·관찰 중 하나라도 있는 variant만 개별 줄, 완전 무변동은 "나머지 N개 항목은 변동 없음"으로 합산(DIG-05 "정보 가치순 + 무변동 합산"의 첫 해석). ⑤는 건수 + 대상 미상(미귀속) 건수 병기. **이번 판의 명시적 한계**(다음 항목에 이어 해소):
+  1. **① 검토 대기 딱지 없음**: 큐 항목(`PendingItem`)이 어느 variant에 속하는지 `subject` 문자열만 갖고 있어(id 연결 없음) — 문자열 매칭으로 잇는 건 "지어내기"라 하지 않았다. 렌더링에 딱지를 붙이려면 `GetReviewQueueUseCase`가 variantId를 함께 내야 한다.
+  2. **⑤ "N회째" 카운터 없음**: 아래 항목 그대로(발송 배선과 함께).
+  3. **basis 표기는 딜 단위**: `demandAxisValue`가 없으면(GROUPED 등) "전체"로 쓴다 — DIG-04가 요구하는 "실제 축값"의 최소 해석.
 - **남은 것(다음 무중단 증분, 권장 순서)**:
-  1. 디지스트-레벨 조립(모든 variant 행 + ⑤ 큐 + ⑥ 조용한 주를 한 다이제스트로) + 렌더링(섹션 문구·아이콘·basis 표시).
-  3. 조립: 색·문맥·basis 모드를 SIG(색)·PUR(`ObservationContext.mode`)·product(`DemandAxisMode`)에서 모아 섹션들과 합쳐 한 다이제스트로. 결과를 `RecordDigestSentUseCase`에 넘긴다.
-  4. 발송(텔레그램 스텁 경로 재사용, quiet hours 존중, 분할 발송 절단 금지·연번). 발송 성공 후에만 저장물 갱신(원자성).
-  5. 스케줄(`@Scheduled`, 일요일 20시 KST 고정 상수, quiet 겹침 시 종료 후).
+  1. 발송(텔레그램 스텁 경로 재사용, quiet hours 존중, 분할 발송 절단 금지·연번). 발송 성공 후에만 `RecordDigestSentUseCase`로 저장물 갱신(원자성) — 색·문맥·basis 모드를 SIG(색)·PUR(`ObservationContext.mode`)·product(`DemandAxisMode`)에서 모아 넘긴다.
+  2. 스케줄(`@Scheduled`, 일요일 20시 KST 고정 상수, quiet 겹침 시 종료 후).
+  3. ⑤ "N회째 미확인" 카운터(`review_queue_item.digest_appearances`, 발송 시 +1) — 발송 배선이 생겨야 죽은 컬럼이 안 된다.
   - ④ 핀 결말은 WATCH(M6) 대기라 지금 손대지 않는다.
 - **재개 트리거**: 없음 — 설계 결정이 다 확정됐으니 순수하게 구현 분량 문제. 다음 무중단 증분에서 위 순서로 이어간다.
 - **관련**: `docs/18`, `working-area/2nd-plan-intake.md`(원문 근거).
