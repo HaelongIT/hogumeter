@@ -549,8 +549,9 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **✅ 섹션 ③ 관찰 경과 해소(2026-07-24, 부분)**: `ComputeDigestOpportunityCountUseCase.count(variantId, window)` — "이번 창 +k / 누적 N"(기회 기준). **한계 둘, 명시적으로 남긴다**:
   1. **가시화 시각 근사**: 정확히는 "occurrenceSet 자격을 최초/재획득한 시각"이지만 그 전이 이력을 저장하지 않아 `firstSeen`으로 대신한다 — 자격을 잃었다 되찾는 재진입 케이스(늦확정·백필)는 지금 다르게 안 잡힌다(더 이른 firstSeen 그대로 씀).
   2. **SPLIT 미분리**: "SPLIT은 목록 셀 집계로 variant당 1벌"을 "수요축 값 무관하게 그 variant의 딜을 전부 합산"으로 해석했다 — `VariantDemandScope`를 안 부른다(다른 유스케이스와 다른 의도적 차이).
+- **✅ 섹션 ② 전환 해소(2026-07-24)**: `ComputeDigestTransitionUseCase.transition(variantId)` — 저장 색(`digest_state.stored_color`) vs 현재 색(`GetSignalUseCase`) 비교. `DigestRules.isReportableTransition`(호출자 0이던 순수 규칙)의 첫 소비자. 색만 본다(억제 신호 2종은 색을 못 바꾸므로 저장만 하고 계산엔 안 씀 — 스펙 그대로). 첫 다이제스트(저장 색 없음)는 전환이 아니라 기준선(`from=null`). 손상된 저장 색은 예외로 막지 않고 기준선으로 되돌린다(다이제스트 전체를 막지 않는다).
 - **남은 것(진짜 코드 밖 아님 — 다음 증분 대상)**:
-  1. DIG-04 나머지 5개 섹션(딜 요약·전환·핀 결말〔WATCH 유보 종속〕·큐·조용한 주) — ⑥ 조용한 주는 "관측 공백"(anyGap) 정의가 아직 없어(SIG-02 관측시계와 연결 필요) ③보다 어렵다.
+  1. DIG-04 나머지 4개 섹션(① 딜 요약·④ 핀 결말〔WATCH 유보 종속〕·⑤ 큐·⑥ 조용한 주) — ⑥ 조용한 주는 "관측 공백"(anyGap) 정의가 아직 없어(SIG-02 관측시계와 연결 필요) 다른 섹션보다 어렵다. ④는 WATCH(M6) 대기라 지금 손대지 않는다.
   2. 조립 결과(색·문맥·basis 모드)를 `RecordDigestSentUseCase`에 넘기는 배선.
   3. 발송(텔레그램, quiet hours 존중, 분할 발송 시 절단 금지·연번). 발송 성공 후에만 저장물을 갱신(원자성).
   4. 스케줄(기본 일요일 20시 KST, 사용자 설정 가능).
