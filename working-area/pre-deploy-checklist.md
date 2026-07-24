@@ -36,7 +36,12 @@
     2. `curl -s -o /dev/null -w '%{http_code}' http://<호스트>/` → **401**. `curl … /api/v1/products` → **401**(데이터는 전부 `/api` 뒤에 있다).
     3. `curl -s -o /dev/null -w '%{http_code}' http://<호스트>/healthz` → **200**(헬스체크는 인증 뒤에 숨지 않는다).
   - ⚠️ **인증은 nginx에만 있다.** core·postgres 포트가 `0.0.0.0`에 열려 있으면 이 인증은 아무것도 막지 못한다 — §C의 노출 범위 항목과 함께 확인할 것(`scripts/smoke.sh` 0-4가 로컬에선 그걸 단언한다).
-- **[필수]** **HTTPS**(SEC-02 나머지) — Caddy 또는 nginx+certbot. Basic Auth는 평문 HTTP에서 자격증명을 그대로 노출한다.
+- **[필수]** **HTTPS**(SEC-02 나머지, D-4 2026-07-24 확정: Caddy) — Basic Auth는 평문 HTTP에서 자격증명을 그대로 노출한다. Caddy 서비스·`Caddyfile`은 이미 있다 — **기본 `docker compose up -d`로는 안 뜬다**(`public` 프로파일로 격리, 실수로 열리지 않게). 사람이 준비할 것:
+  1. `.env`에 **`DOMAIN`**(실 도메인, 예: `hogumeter.example.com`)을 채운다. 비우면 `localhost` 자체서명 인증서라 브라우저가 경고한다(로컬 리허설 전용).
+  2. 서버 방화벽/보안그룹에서 **80·443 인바운드**를 연다(ACME는 80으로 소유권 검증 후 443으로 서빙).
+  3. `docker compose --profile public up -d` (일반 `up -d`는 caddy를 안 띄운다 — `--profile public`을 꼭 붙인다).
+  - **켰는지 확인하는 법**: `curl -I https://<DOMAIN>/` → `200`(자체서명이면 `curl -k`). `docker compose logs caddy | grep -i "certificate obtained"` → Let's Encrypt 발급 성공 로그. `docker compose --profile public ps caddy`로 뜬 것 자체를 확인(기본 `ps`엔 안 보인다 — 프로파일 없이 조회하면 "떠 있다고 착각"하는 사고를 피한다).
+  - `caddy_data` 볼륨에 인증서·ACME 계정이 있다 — 지우면 재발급(Let's Encrypt 쿼터 소모, 도메인당 주당 한도 있음).
 - **[필수]** core REST API 외부 노출 범위 확인 — 1인용이므로 기본 비공개(방화벽/보안그룹). compose는 `127.0.0.1:8080`으로만 개방한다.
 - **[권장]** EC2 보안그룹 최소화 — Postgres 포트는 외부 미개방(컨테이너 내부 네트워크만).
 

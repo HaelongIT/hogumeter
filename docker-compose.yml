@@ -96,6 +96,29 @@ services:
       # ⚠️ 접근 통제 없음(SEC-02). 로컬만 개방 — 공개망 노출 전 pre-deploy §C 확인.
       - "127.0.0.1:${WEB_PORT:-3000}:80"
 
+  # D-4(SEC-02 나머지, 2026-07-24 확정) — HTTPS 종단. `public` 프로파일이라 기본
+  # `docker compose up -d`로는 안 뜬다 — `--profile public up -d`로 명시해야 한다. 평문
+  # HTTP엔 Basic Auth 자격증명이 그대로 노출되므로, 공개망에 열 때만 이 겹을 추가한다.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["public"]
+    environment:
+      # 실 도메인이면 Let's Encrypt 자동 발급. 미설정(기본 localhost)이면 Caddy 내부 CA로
+      # 자체서명 — 로컬 리허설은 이걸로 충분하고 사람 설정이 필요 없다.
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      # 여기만 루프백 제한이 없다 — 공개망에 실제로 여는 유일한 진입점이다(나머지는 전부
+      # 127.0.0.1). pre-deploy-checklist.md가 방화벽·DOMAIN 준비를 사람 몫으로 추적한다.
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - web
+
   collector:
     build: ./collector
     environment:
@@ -122,3 +145,5 @@ services:
 
 volumes:
   pgdata:
+  caddy_data:    # ACME 인증서·계정 키. 지우면 Let's Encrypt 재발급(쿼터 소모) — 재생성 시 주의.
+  caddy_config:

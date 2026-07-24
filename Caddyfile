@@ -1,0 +1,13 @@
+# D-4(SEC-02 나머지, 2026-07-24 확정) — HTTPS 종단. Caddy가 web 앞에서 TLS를 맡는다.
+#
+# DOMAIN이 실 도메인이면 Let's Encrypt로 자동 발급·갱신한다(ACME, 80/443 아웃바운드 필요).
+# 미설정(기본값 localhost)이면 Caddy가 자동으로 **내부 CA 자체서명 인증서**를 쓴다 — 로컬·
+# 리허설에서 실 도메인·실 인증서 없이 HTTPS 경로 자체를 확인할 수 있다(운영 이관 없이 안전).
+#
+# 이 서비스는 docker-compose.yml에서 `public` 프로파일로 격리돼 있다 — 기본 `docker compose
+# up -d`로는 안 뜬다. 공개망에 실제로 열려면 `--profile public`을 명시하고 DOMAIN·방화벽
+# 80/443을 사람이 직접 준비한다(pre-deploy-checklist.md).
+
+{$DOMAIN:localhost} {
+	reverse_proxy web:80
+}
