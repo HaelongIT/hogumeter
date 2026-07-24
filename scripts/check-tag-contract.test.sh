@@ -12,7 +12,9 @@ trap 'rm -rf "$work"' EXIT
 
 fail=0
 
-# fake <python값> <java값> <web값> — 빈 문자열이면 그 모듈이 상수를 아예 쓰지 않는다.
+# fake <python값> <java값> <web값> [free_python값] [free_java값] — 빈 문자열이면 그 모듈이
+# 상수를 아예 쓰지 않는다. free_* 인자를 생략하면 SHIPPING_UNKNOWN과 무관하게 항상 일치하는
+# 기본값을 넣어(FREE_PRICE 케이스가 SHIPPING_UNKNOWN 케이스를 오차단하지 않는다).
 #
 # **`mktemp`로 매번 새 디렉토리.** `$(fake …)`는 명령 치환 = 서브셸이라 카운터 증가가 부모로
 # 돌아오지 않는다 — 카운터로 이름을 지으면 모든 케이스가 같은 디렉토리를 재사용한다(2026-07-10 실측).
@@ -21,16 +23,28 @@ fake() {
 	r=$(mktemp -d "$work/rXXXXXX")
 	mkdir -p "$r/collector/src/collector/pipeline" "$r/core/src/main/java/dev/hogumeter/core/domain/deal" \
 		"$r/web/src/review"
+	local free_py="${4-무료가}" free_java="${5-무료가}"
 	if [ -n "$1" ]; then
 		printf 'SHIPPING_UNKNOWN = "%s"\n' "$1" >"$r/collector/src/collector/pipeline/price.py"
 	else
 		printf '# 상수를 지웠다\n' >"$r/collector/src/collector/pipeline/price.py"
+	fi
+	if [ -n "$free_py" ]; then
+		printf 'FREE_PRICE = "%s"\n' "$free_py" >>"$r/collector/src/collector/pipeline/price.py"
+	else
+		printf '# FREE_PRICE 상수를 지웠다\n' >>"$r/collector/src/collector/pipeline/price.py"
 	fi
 	if [ -n "$2" ]; then
 		printf '\tpublic static final String SHIPPING_UNKNOWN = "%s";\n' "$2" \
 			>"$r/core/src/main/java/dev/hogumeter/core/domain/deal/DealTags.java"
 	else
 		printf '// 상수를 지웠다\n' >"$r/core/src/main/java/dev/hogumeter/core/domain/deal/DealTags.java"
+	fi
+	if [ -n "$free_java" ]; then
+		printf '\tpublic static final String FREE_PRICE = "%s";\n' "$free_java" \
+			>>"$r/core/src/main/java/dev/hogumeter/core/domain/deal/DealTags.java"
+	else
+		printf '// FREE_PRICE 상수를 지웠다\n' >>"$r/core/src/main/java/dev/hogumeter/core/domain/deal/DealTags.java"
 	fi
 	if [ -n "$3" ]; then
 		printf "const SHIPPING_UNKNOWN = '%s'\n" "$3" >"$r/web/src/review/present.ts"
@@ -74,7 +88,7 @@ check 1 "파일 자체가 없다" "$work/does-not-exist"
 # 옛 값이 주석으로 남아 있으면 게이트가 그것을 사본으로 읽고 **멀쩡한 저장소를 차단**한다(오차단).
 echo "── 주석은 코드가 아니다 (오차단 방지) ──"
 r=$(fake '배송비미상' '배송비미상' '배송비미상')
-printf '// 옛 값: public static final String SHIPPING_UNKNOWN = "배송비_미상";\n\tpublic static final String SHIPPING_UNKNOWN = "배송비미상";\n' \
+printf '// 옛 값: public static final String SHIPPING_UNKNOWN = "배송비_미상";\n\tpublic static final String SHIPPING_UNKNOWN = "배송비미상";\n\tpublic static final String FREE_PRICE = "무료가";\n' \
 	>"$r/core/src/main/java/dev/hogumeter/core/domain/deal/DealTags.java"
 check 0 "core: 주석 처리된 옛 상수는 무시한다" "$r"
 
@@ -84,9 +98,18 @@ printf "// const SHIPPING_UNKNOWN = '배송비_미상'\nconst SHIPPING_UNKNOWN =
 check 0 "web: 주석 처리된 옛 상수는 무시한다" "$r"
 
 r=$(fake '배송비미상' '배송비미상' '배송비미상')
-printf '# SHIPPING_UNKNOWN = "배송비_미상"\nSHIPPING_UNKNOWN = "배송비미상"\n' \
+printf '# SHIPPING_UNKNOWN = "배송비_미상"\nSHIPPING_UNKNOWN = "배송비미상"\nFREE_PRICE = "무료가"\n' \
 	>"$r/collector/src/collector/pipeline/price.py"
 check 0 "collector: 주석 처리된 옛 상수는 무시한다" "$r"
+
+echo "── FREE_PRICE(D-5): collector·core 둘만 — web 사본 없음 ──"
+check 0 "FREE_PRICE 둘이 같다" "$(fake '배송비미상' '배송비미상' '배송비미상' '무료가' '무료가')"
+check 1 "collector가 FREE_PRICE 이름을 바꿨다 (core는 영원히 못 걸러낸다)" \
+	"$(fake '배송비미상' '배송비미상' '배송비미상' '무료_가' '무료가')"
+check 1 "core FREE_PRICE 사본에서 상수가 사라졌다" \
+	"$(fake '배송비미상' '배송비미상' '배송비미상' '무료가' '')"
+check 1 "정본에서 FREE_PRICE 상수가 사라졌다" \
+	"$(fake '배송비미상' '배송비미상' '배송비미상' '' '무료가')"
 
 echo "── 실제 저장소 (exit 0) ──"
 if bash "$CHECK" >"$work/real" 2>&1; then

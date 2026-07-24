@@ -197,7 +197,7 @@ def test_ppomppu_adds_shipping_fee_from_title_convention():
 # BM-02의 저장 기준은 **실결제가 + 배송비**다. 배송비를 안 더하면 표본이 실제보다 낮아지고,
 # 태그조차 없어서 아무도 모른다 — `유배`와 달리 "모른다"고 말하지도 않는 **조용한 0**이다.
 
-from collector.pipeline.price import SHIPPING_UNKNOWN  # noqa: E402
+from collector.pipeline.price import FREE_PRICE, SHIPPING_UNKNOWN  # noqa: E402
 
 _FM_NOW = datetime(2026, 7, 10, 21, 30, tzinfo=timezone.utc)
 
@@ -361,13 +361,18 @@ def test_ppomppu_without_end2_is_active():
 #   ③ 나머지는 애초에 가격이 없는 글(공지·"가격다양").
 
 
-def test_free_items_are_skipped_not_priced_at_zero():
-    """`무료`를 0원으로 읽으면 그 0이 기준가 분포에 들어간다. 값 없음을 값으로 쓰지 않는다."""
+def test_free_items_are_priced_at_zero_and_tagged_not_skipped():
+    """D-5(2026-07-24): 무료 딜은 스킵이 아니라 가격 0 + FREE_PRICE 태그다.
+
+    예전엔 "0을 값으로 쓰지 않는다"는 이유로 스킵했다 — 그런데 여기 0은 값 없음의 대역이 아니라
+    원문이 실제로 말하는 값이다(무료 배포). 스킵하면 이 딜을 영원히 못 본다(절대 원칙 3). core의
+    pricingSet이 표본에서 빼는 몫이라, 여기 파서는 지어내지 않고 있는 그대로 낸다.
+    """
     deals = parse_ruliweb(_read("ruliweb/list_normal.html"), NOW)
 
-    free = [d for d in deals if '무료' in d.title and d.headline_price is None]
+    free = [d for d in deals if "무료" in d.title and d.headline_price == 0]
     assert len(free) >= 3
-    assert all(d.headline_price is None for d in free)
+    assert all(FREE_PRICE in d.applied_conditions for d in free)
 
 
 def test_truncated_titles_sometimes_lose_the_price():
@@ -383,11 +388,14 @@ def test_truncated_titles_sometimes_lose_the_price():
     assert sum(1 for d in truncated if d.headline_price is None) == 2
 
 
-def test_ruliweb_no_price_count_is_ten():
-    """숫자를 고정한다 — 파서를 고칠 때 이 수가 움직이면 무엇이 바뀌었는지 설명해야 한다."""
+def test_ruliweb_no_price_count_is_seven():
+    """숫자를 고정한다 — 파서를 고칠 때 이 수가 움직이면 무엇이 바뀌었는지 설명해야 한다.
+
+    2026-07-24 D-5로 10 → 7 갱신: 무료 딜 3건이 스킵(None)에서 가격 0으로 바뀌어 빠졌다.
+    """
     deals = parse_ruliweb(_read("ruliweb/list_normal.html"), NOW)
 
-    assert sum(1 for d in deals if d.headline_price is None) == 10
+    assert sum(1 for d in deals if d.headline_price is None) == 7
 
 
 # ── 번개: `free_shipping: false`는 "배송비 0"이 아니라 "금액 미상"이다 ────────

@@ -50,6 +50,18 @@ class DealSetsTest {
 	}
 
 	@Test
+	void pricingSetExcludesFreePrice() {
+		// D-5(2026-07-24): 0원 딜은 median/P25를 아래로 끌어 "있는 굿딜을 없다"고 말한다 → 값 통계 제외.
+		DealEvent free = aDealEvent().withPriceFirst(0).appliedConditions(DealTags.FREE_PRICE).build();
+		List<DealEvent> deals = List.of(normalActive, free);
+
+		assertThat(DealSets.pricingSet(deals)).containsExactly(normalActive);
+		// 그래도 실제 딜(무료 배포)이므로 발생·신호 집합·알림·표시엔 남는다(놓침 방지, 절대 원칙 3).
+		assertThat(DealSets.occurrenceSet(deals)).contains(free);
+		assertThat(DealSets.signalSet(deals)).contains(free);
+	}
+
+	@Test
 	void occurrenceSetKeepsIdentityDealsExcludingUpperAndRejectedLower() {
 		// 시간 통계: UPPER 제외, LOWER는 기각만 제외(미확정 포함), ENDED 포함
 		assertThat(DealSets.occurrenceSet(all)).containsExactly(lowerPending, normalActive, normalEnded);

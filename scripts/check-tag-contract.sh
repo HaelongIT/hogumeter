@@ -62,4 +62,23 @@ if [ "$owner" != "$web_copy" ]; then
 fi
 [ "$fail" -eq 0 ] || exit 1
 
-echo "TAG CONTRACT OK: SHIPPING_UNKNOWN 이 collector·core·web에서 일치한다"
+# FREE_PRICE(D-5, 2026-07-24): collector·core 둘만 — web엔 이 표식 전용 안내 문구가 없어 사본이 없다
+# (있게 되면 SHIPPING_UNKNOWN처럼 여기에 web 검사를 더한다).
+owner_free=$(code_only "$python_src" | grep -oP '^FREE_PRICE\s*=\s*"\K[^"]+' | head -1 || true)
+java_free=$(code_only "$java_src" | grep -oP 'String\s+FREE_PRICE\s*=\s*"\K[^"]+' | head -1 || true)
+
+[ -n "$owner_free" ] || {
+	echo "FAIL: 정본에서 FREE_PRICE 상수를 찾지 못했다: ${python_src#"$root/"}" >&2
+	exit 1
+}
+[ -n "$java_free" ] || {
+	echo "FAIL: core 사본에서 FREE_PRICE 상수를 찾지 못했다: ${java_src#"$root/"}" >&2
+	exit 1
+}
+if [ "$owner_free" != "$java_free" ]; then
+	echo "FAIL: core FREE_PRICE 표식이 어긋났다. pricingSet이 무료 딜을 영원히 못 걸러낸다." >&2
+	printf '  collector(정본): %s\n  core(사본)     : %s\n' "$owner_free" "$java_free" >&2
+	exit 1
+fi
+
+echo "TAG CONTRACT OK: SHIPPING_UNKNOWN·FREE_PRICE 가 각자의 정본·사본에서 일치한다"

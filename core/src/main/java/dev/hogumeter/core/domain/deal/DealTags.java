@@ -25,6 +25,14 @@ public final class DealTags {
 	 */
 	public static final String SHIPPING_UNKNOWN = "배송비미상";
 
+	/**
+	 * 딜 자체가 0원(무료 배포)이다(D-5, 2026-07-24). {@code SHIPPING_UNKNOWN}(하한, 모른다)과 반대로
+	 * 이건 <b>아는 값</b>이다 — 그래도 0은 median·P25를 무너뜨리므로 값 통계(pricingSet)에서는
+	 * 제외한다. 발생·신호 집합·알림·표시에는 남긴다(놓침 방지, 절대 원칙 3). web 사본은 없다
+	 * (미상 큐의 "실제 결제가는 더 높습니다" 같은 전용 안내가 이 표식엔 없다 — 있으면 그때 추가).
+	 */
+	public static final String FREE_PRICE = "무료가";
+
 	private DealTags() {
 	}
 }

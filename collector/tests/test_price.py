@@ -2,7 +2,7 @@
 
 import pytest
 
-from collector.pipeline.price import normalize_price
+from collector.pipeline.price import FREE_PRICE, normalize_price
 
 
 # ---- AC-1 실결제가 + 배송비 (무료배송=0으로 합산 통일) ----
@@ -106,11 +106,52 @@ def test_three_digit_price_with_won_suffix(text, expected):
         "[네이버페이] 라방 5원",  # 1자리 = 적립성 금액, 가격 아님
         "롯데마트 오프라인 매장 스위치2",  # 가격 표기 없음
         "[알리] iem ,amp 등등 가격다양",
-        "[플레이스토어]구글플레이패스 신규 1달 (무료/무료)",  # 무료 딜은 스킵 유지(Q-18)
     ],
 )
 def test_non_price_titles_stay_skipped(text):
     assert normalize_price(text) is None
+
+
+# ---- D-5(2026-07-24): 0원(무료) 딜은 스킵이 아니라 가격 0 + FREE_PRICE 태그 ------------------
+def test_paren_free_price_is_zero_not_skipped():
+    """(무료/무료) — 예전엔 AC-3 스킵이었다(Q-18). 이제는 "무료 배포"를 놓치지 않는다."""
+    result = normalize_price("[플레이스토어]구글플레이패스 신규 1달 (무료/무료)")
+
+    assert result is not None
+    assert result.headline_price == 0
+    assert FREE_PRICE in result.applied_conditions
+
+
+def test_paren_free_price_with_a_real_shipping_cost_still_adds_it():
+    """배송 자리는 무엇이든 받는다 — 무료가라도 배송비는 별개일 수 있다."""
+    result = normalize_price("(무료/2,500원)")
+
+    assert result is not None
+    assert result.headline_price == 2_500
+    assert FREE_PRICE in result.applied_conditions
+
+
+def test_bare_free_word_without_parens_is_zero_not_skipped():
+    """루리웹 실측: 괄호 관례 없이 "무료"가 제목 끝에 단어로 붙는다(`[GOG] ... 무료`)."""
+    result = normalize_price("[GOG] Nexus: The Jupiter Incident 무료")
+
+    assert result is not None
+    assert result.headline_price == 0
+    assert FREE_PRICE in result.applied_conditions
+
+
+def test_free_as_part_of_a_compound_word_is_not_mistaken_for_a_price():
+    """`무료배송`은 배송 어휘지 가격이 아니다 — 진짜 가격이 없으면 여전히 스킵돼야 한다."""
+    assert normalize_price("완전 무료배송 이벤트 참여") is None
+
+
+def test_a_real_price_is_never_shadowed_by_the_word_free():
+    """제목에 "무료"가 섞여 있어도 진짜 가격이 있으면 그 값을 쓴다 — 0으로 떨어지지 않는다."""
+    result = normalize_price("[무료나눔 이벤트 당첨자 발표] 실제 판매가 13,000원")
+
+    assert result is not None
+    assert result.headline_price == 13_000
+    assert FREE_PRICE not in result.applied_conditions
 
 
 def test_date_and_quantity_numbers_are_ignored():

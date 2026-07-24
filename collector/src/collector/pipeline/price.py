@@ -2,6 +2,8 @@
 
 저장 기준 = 실결제가 + 배송비(무료배송=0). 카드·쿠폰 조건가는 as-posted(역산 금지, 태그만 보존).
 가격 패턴이 아예 없으면 None을 돌려 "가격없음 스킵"을 표시한다(미상과 구분 — BM-02 AC-3).
+**딜 자체가 무료("(무료/무료)"·"... 무료")면 예외다** — 가격 0을 `FREE_PRICE` 태그와 함께 낸다
+(D-5, 2026-07-24). "패턴 없음"과 "패턴이 0을 말한다"는 다른 사건이다.
 
 핵심은 **후보 서열**이다. "4자리 이상 숫자 = 가격"으로 첫 매치를 취하면 함량·규격·주파수를 삼킨다
 (실측: `1,000mg` → 1000, `5600MHz` → 5600, `콘드로이친 1200` → 1200 — docs/91 Q-18). 그래서
@@ -108,6 +110,22 @@ PAID_SHIPPING_UNKNOWN = "유료배송(금액미상)"
 # **모른다는 사실을 값 옆에 실어 보낸다.**
 SHIPPING_UNKNOWN = "배송비미상"
 
+# **안정된 표식(D-5, 2026-07-24).** 딜 자체가 0원(무료 배포)이다 — `SHIPPING_UNKNOWN`(하한, 모른다)과
+# 반대로 이건 **아는 값**이다. 예전엔 가격 패턴이 아예 없다며 스킵했다(AC-3와 구분이 안 됐다) — 그러면
+# "무료 배포"라는 가장 좋은 딜을 영원히 못 본다(절대 원칙 3: 놓침 > 오알림과 정면 충돌). 이제 가격
+# 표본(core pricingSet)에서는 빼되(0은 median·P25를 무너뜨린다) 알림·표시에는 태워 낸다.
+FREE_PRICE = "무료가"
+
+# 결합 괄호에서 메인 자리가 숫자 없이 "무료"인 경우(`(무료/무료)`) — `_PAREN_PRICE_SHIPPING`은
+# `{AMOUNT}원`을 요구해 여기 안 걸린다. 배송 자리는 무엇이든 받는다(`classify_shipping`이 해석).
+_PAREN_FREE_PRICE = re.compile(r"\(\s*무료\s*/\s*([^)]+?)\s*\)")
+
+# 괄호 관례 없이 제목에 "무료"가 단어로 붙는 경우(루리웹 실측: `[GOG] ... 무료`, 괄호가 아예 없다).
+# 앞뒤가 한글 음절이면 다른 복합어의 일부다(`무료배송`은 이미 `_extract_shipping`이 먼저 걷어간다,
+# `조건부무료배송`도 마찬가지) — 그래서 한글 경계만 막는다. 숫자 가격이 이미 없는 채로(AC-3 폴백
+# 이후)만 검사하므로 "13,000원 무료나눔" 같은 진짜 가격이 있는 제목은 절대 안 걸린다.
+_BARE_FREE = re.compile(r"(?<![가-힣])무료(?![가-힣])")
+
 
 @dataclass
 class NormalizedPrice:
@@ -126,9 +144,19 @@ def normalize_price(text: str) -> NormalizedPrice | None:
         shipping, shipping_conditions = classify_shipping(paren.group(2))
         return NormalizedPrice(main + shipping, _dedupe(conditions + shipping_conditions))
 
+    free_paren = _PAREN_FREE_PRICE.search(text)
+    if free_paren:
+        shipping, shipping_conditions = classify_shipping(free_paren.group(1))
+        return NormalizedPrice(shipping, _dedupe(conditions + shipping_conditions + [FREE_PRICE]))
+
     shipping, remaining = _extract_shipping(text)
     main = _extract_main_price(remaining)
     if main is None:
+        if _BARE_FREE.search(remaining):
+            # D-5: 괄호 없이도 "무료"가 단어로 붙어 있으면 그게 가격이다 — 지어낸 값이 아니라
+            # 원문이 실제로 말하는 값이다(스킵하면 이 딜이 영원히 안 보인다).
+            return NormalizedPrice(headline_price=shipping,
+                                    applied_conditions=_dedupe(conditions + [FREE_PRICE]))
         return None  # AC-3: 가격 패턴 없음 → 스킵(호출자가 스킵 로그)
 
     if _shipping_was_truncated(text):

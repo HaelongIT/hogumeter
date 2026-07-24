@@ -41,6 +41,8 @@ public final class DealSets {
 	 * 값의 통계(기준가·P25·성적표). 이상치 미해당(승격 LOWER=NONE 자동 포함)·영구제외 제외.
 	 * <p>배송비미상 딜도 제외한다(Q-46 ②): 저장가가 실제보다 낮은 하한이라 median/P25를 아래로 끌어
 	 * <b>없는 굿딜을 있다고</b> 말하게 된다(놓침 아니라 오알림, 원칙3). 발생·신호 집합엔 남긴다 — 실제 딜이다.
+	 * <p>0원(무료) 딜도 제외한다(D-5): 반대 방향이지만 같은 문제다 — 0이 median·P25를 아래로 끌어
+	 * <b>있는 굿딜을 없다고</b> 말하게 된다. 무료 딜 자체는 발생·신호 집합·알림·표시엔 남는다(놓침 방지).
 	 */
 	public static List<DealEvent> pricingSet(List<DealEvent> deals) {
 		return deals.stream()
@@ -48,6 +50,7 @@ public final class DealSets {
 				.filter(d -> d.outlierFlag() == OutlierFlag.NONE)
 				.filter(d -> !d.permanentlyExcluded())
 				.filter(d -> !d.hasCondition(DealTags.SHIPPING_UNKNOWN))
+				.filter(d -> !d.hasCondition(DealTags.FREE_PRICE))
 				.toList();
 	}
 
