@@ -1,3 +1,21 @@
+## 2026-07-25 (5) — M6 착수: PRI 백엔드 완료 (무중단, 사용자 지시 "이어서 추천해주는걸어")
+
+DIGEST(M5) 완료 보고 후 사용자가 M6 진행을 지시. WATCH·PRI 중 저비용·신규개념 0인 PRI를 먼저:
+
+- **PriorityQueue**(순수): 대기 판정 = Purchase가 하나라도 있으면 비대기, 수동 완료 표시도 비대기.
+  docs/19 원문의 "ARCHIVED 아님"·"구매됨/완료" 표시 구분은 Q-82로 미룸(web 착수 시 필요하면 확장 —
+  데이터 진실은 "대기인가" 하나로 충분, 배지 문구는 표시 손잡이).
+- **V18**: `product.priority_rank`(부분 유니크 인덱스, null=미지정) + `manually_completed`(취소 가능).
+- **유스케이스 3개**: `SetProductPriorityUseCase`(중복 순번 409)·`SetProductManuallyCompletedUseCase`·
+  `GetPrioritizedProductsUseCase`(대기 우선 + 순번 오름차순 정렬).
+- **REST**: `PriorityController`(GET 정렬 목록, PUT 순번/수동완료) + `ApiExceptionHandler` 매핑 2건.
+- 전부 뮤테이션 검증 — 정렬 뮤테이션은 테스트가 우연히(id 오름차순 폴백과 겹쳐) 통과해버린 것을
+  발견하고 생성 순서를 바꿔 재확인(뮤테이션이 "돌았다"와 "제대로 걸렀다"는 다른 사실이라는 교훈의
+  실사례).
+- **결정 기록**: WATCH 유보 해제 = M6 착수 자체가 트리거(로드맵 문구대로, decision-log).
+- web PRI 표면(목록 정렬 1곳)은 **미착수** — web은 지시 시에만(기존 메모 [[web-ui-wait-for-instruction]]).
+- 다음: WATCH — DealEvent 재개 전이(DN-C1)부터(선행 의존, `docs/90` §6·C-1).
+
 ## 2026-07-25 (4) — DIGEST 스케줄 + ⑤ N회째 카운터 → M5 사실상 완료 (무중단, "끝날때 푸쉬")
 
 - **스케줄**: `DigestScheduler`(`@Scheduled(cron = "0 0 20 * * SUN", zone = "Asia/Seoul")`),
