@@ -152,7 +152,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("ingest가 병합한 딜 id를 VERIFIED 후속 알림으로 흘려보낸다 (Q-13)")
 	void mergedDealIdsFlowToVerifiedFollowUp() {
-		Supplier<IngestReport> ingestWithMerge = () -> new IngestReport(1, 0, 0, 0, 0, 0, 0, 0, List.of(7L, 8L));
+		Supplier<IngestReport> ingestWithMerge = () -> new IngestReport(1, 0, 0, 0, 0, 0, 0, 0, List.of(7L, 8L), List.of());
 		List<Long> verifiedCalledWith = new ArrayList<>();
 		BiFunction<List<Long>, FollowUpKind, Integer> capturing = (ids, kind) -> {
 			if (kind == FollowUpKind.VERIFIED) {
@@ -166,6 +166,31 @@ class PipelineSchedulerTest {
 
 		assertThat(verifiedCalledWith).containsExactly(7L, 8L);
 		assertThat(reported.get().followUpVerifiedSent()).isEqualTo(2);
+	}
+
+	/**
+	 * DN-C1 — ingest가 이번 틱에 되살린(ENDED→ACTIVE) 딜 id를 {@code IngestReport.reopenedDealIds()}로
+	 * 흘려보내고, 스케줄러가 그 목록을 <b>REOPENED</b> 종류로 후속 알림에 태운다. VERIFIED와 섞이면 사람이
+	 * "다시 살아났다"를 "교차검증됐다"로 읽는다 — 배선을 지우거나 엉뚱한 종류로 보내면 이 테스트가 잡는다.
+	 */
+	@Test
+	@DisplayName("ingest가 되살린 딜 id를 REOPENED 후속 알림으로 흘려보낸다 (DN-C1)")
+	void reopenedDealIdsFlowToReopenedFollowUp() {
+		Supplier<IngestReport> ingestWithReopen = () -> new IngestReport(1, 0, 0, 0, 0, 0, 0, 0, List.of(),
+				List.of(9L));
+		List<Long> reopenedCalledWith = new ArrayList<>();
+		BiFunction<List<Long>, FollowUpKind, Integer> capturing = (ids, kind) -> {
+			if (kind == FollowUpKind.REOPENED) {
+				reopenedCalledWith.addAll(ids);
+			}
+			return ids.size();
+		};
+
+		new PipelineScheduler(expire, ingestWithReopen, conditions, () -> List.of(), () -> List.of(),
+				capturing, () -> EMPTY, reported::set).tick();
+
+		assertThat(reopenedCalledWith).containsExactly(9L);
+		assertThat(reported.get().followUpReopenedSent()).isEqualTo(1);
 	}
 
 	@Test

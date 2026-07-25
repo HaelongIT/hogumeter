@@ -31,6 +31,10 @@ import dev.hogumeter.core.application.IngestReport;
  * 상태 변화가 아니다) 스케줄러가 세어 넘긴다 — 안 그러면 {@code sendFollowUps}가 낸 값이 조용히 버려진다
  * ("첫 알림은 세는데 후속은 안 세는" 절반 카운터).
  *
+ * <p>{@code followUpReopenedSent}는 <b>부활</b>(DN-C1) 후속 발송 수다. VERIFIED와 같은 병합 경로를 타지만
+ * 사실의 부류가 다르다 — "다른 사이트가 확인해 줬다"와 "죽은 줄 알았던 딜이 다시 살아났다"는 사람이 취할
+ * 행동이 다르다. 합쳐 세면 어느 쪽이 몰렸는지 알 수 없다.
+ *
  * <p>{@code reportCardsIssued}는 이번 틱에 발급한 성적표 수다(PUR-04). 발급은 REPORT_PENDING을 CLOSED로
  * 드레인하므로, 그냥 두면 {@code purchasesExpired}(= REPORT_PENDING 증가분)가 <b>"만료 − 발급"으로 오염</b>돼
  * 음수가 될 수 있다("카운터는 오염되지 않는 쪽을 센다"). 그래서 발급 수를 스케줄러가 직접 세어 넘기고,
@@ -60,6 +64,7 @@ public record PipelineTickReport(
 		int followUpPriceChangedSent,
 		int followUpEndedSent,
 		int followUpVerifiedSent,
+		int followUpReopenedSent,
 		int stepsFailed,
 		int heldAlertsFlushed,
 		int heldAlertsDropped,
@@ -67,7 +72,8 @@ public record PipelineTickReport(
 
 	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest,
 			int reportCardsIssued, int followUpPriceChangedSent, int followUpEndedSent, int followUpVerifiedSent,
-			int stepsFailed, int heldAlertsFlushed, int heldAlertsDropped, FoldReport usedFold) {
+			int followUpReopenedSent, int stepsFailed, int heldAlertsFlushed, int heldAlertsDropped,
+			FoldReport usedFold) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
 		// 발급이 REPORT_PENDING을 드레인하므로 Δ만으로는 만료 수가 아니다 — 발급 수를 더해 재구성한다.
@@ -89,6 +95,7 @@ public record PipelineTickReport(
 				followUpPriceChangedSent,
 				followUpEndedSent,
 				followUpVerifiedSent,
+				followUpReopenedSent,
 				stepsFailed,
 				heldAlertsFlushed,
 				heldAlertsDropped,
@@ -120,7 +127,8 @@ public record PipelineTickReport(
 				+ " heldAlerts=" + ingest.heldAlerts()
 				+ " followUpsSent[priceChanged=" + followUpPriceChangedSent
 				+ " ended=" + followUpEndedSent
-				+ " verified=" + followUpVerifiedSent + "]"
+				+ " verified=" + followUpVerifiedSent
+				+ " reopened=" + followUpReopenedSent + "]"
 				+ " heldFlushed[sent=" + heldAlertsFlushed + " dropped=" + heldAlertsDropped + "]"
 				+ " usedBatchesFolded=" + usedFold.batches()
 				// 관측한 사건과 **알린** 수를 따로 낸다 — 둘의 차이가 곧 "3계층 필터·목표가가 얼마나

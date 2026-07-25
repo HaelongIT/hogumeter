@@ -70,6 +70,7 @@ public class AlertMessageFormatter {
 			case VERIFIED -> "✅ 교차검증됨";
 			case PRICE_CHANGED -> "🔁 가격 변동";
 			case ENDED -> "⛔ 종료됨";
+			case REOPENED -> "↩️ 다시 살아남"; // DN-C1 부활 — 잠정 종료였던 딜이 재관측됐다
 		};
 	}
 

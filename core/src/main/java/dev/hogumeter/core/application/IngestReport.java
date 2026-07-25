@@ -26,16 +26,22 @@ import java.util.List;
  * 재평가하면 매번 다시 발화할 위험이 있다. 대신 이 id들은 VERIFIED 후속 알림(AL-03) 대상으로만 흐른다
  * ({@code PipelineScheduler}가 {@code FollowUpAlertUseCase}에 종류 VERIFIED로 넘긴다) — 그 발송도
  * "첫 알림이 이미 나간 딜에만·종류당 1회"로 멱등이라 중복 병합에도 안전하다.
+ *
+ * <p>{@code reopenedDealIds}는 <b>잠정 종료(ENDED)였다가 되살아난</b> 딜의 id다(DN-C1, docs/90 §6 v1.3).
+ * 같은 병합 경로를 타지만 {@code mergedDealIds}와 <b>부류가 다르다</b> — 전자는 "다른 사이트가 같은 딜을
+ * 확인해 줬다"이고 이쪽은 "죽은 줄 알았던 딜이 다시 살아났다"다. 합쳐 흘리면 사람이 부활 알림을
+ * "✅ 교차검증됨"으로 읽는다. REOPENED 후속으로 따로 흐른다.
  */
 public record IngestReport(int confirmed, int candidate, int unknown, int rejected,
 		int skippedNoPrice, int firstAlertsSent, int heldAlerts, int skippedForeignSource,
-		List<Long> mergedDealIds) {
+		List<Long> mergedDealIds, List<Long> reopenedDealIds) {
 
 	public IngestReport {
 		mergedDealIds = List.copyOf(mergedDealIds);
+		reopenedDealIds = List.copyOf(reopenedDealIds);
 	}
 
 	public static IngestReport empty() {
-		return new IngestReport(0, 0, 0, 0, 0, 0, 0, 0, List.of());
+		return new IngestReport(0, 0, 0, 0, 0, 0, 0, 0, List.of(), List.of());
 	}
 }

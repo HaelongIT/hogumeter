@@ -111,6 +111,40 @@ class DealMergePolicyTest {
 		assertThat(merged.status()).isEqualTo(DealStatus.VERIFIED); // 새 첫 알림 유발하는 NEW 리셋 없음
 	}
 
+	// ---- DN-C1 재개: ENDED가 살아있는 가격과 함께 재관측되면 ACTIVE로 복귀 ----
+	@Test
+	void reopensAnEndedDealWhenReobservedWithALivePrice() {
+		DealEvent existing = deal(1, 1_000_000, "ppomppu", "2026-06-01T00:00:00Z", DealStatus.ENDED);
+		DealEvent incoming = deal(1, 1_005_000, "ppomppu", "2026-06-01T12:00:00Z", DealStatus.ACTIVE);
+
+		assertThat(policy.canMerge(existing, incoming, params)).isTrue();
+		DealEvent merged = policy.merge(existing, incoming);
+
+		assertThat(merged.status()).isEqualTo(DealStatus.ACTIVE);
+	}
+
+	/** 재관측 글 자체가 이미 죽은 상태(중복 크롤링 등)면 재개하지 않는다 — 여전히 ENDED. */
+	@Test
+	void doesNotReopenWhenTheReobservationIsAlsoEnded() {
+		DealEvent existing = deal(1, 1_000_000, "ppomppu", "2026-06-01T00:00:00Z", DealStatus.ENDED);
+		DealEvent incoming = deal(1, 1_000_000, "ppomppu", "2026-06-01T12:00:00Z", DealStatus.ENDED);
+
+		DealEvent merged = policy.merge(existing, incoming);
+
+		assertThat(merged.status()).isEqualTo(DealStatus.ENDED);
+	}
+
+	/** 재개 + 동시에 2번째 사이트면 ACTIVE를 거치지 않고 곧장 VERIFIED — 일반 2사이트 병합과 같은 규칙. */
+	@Test
+	void reopeningWithASecondSiteAtTheSameTimeGoesStraightToVerified() {
+		DealEvent existing = deal(1, 1_000_000, "ppomppu", "2026-06-01T00:00:00Z", DealStatus.ENDED);
+		DealEvent incoming = deal(1, 1_005_000, "ruliweb", "2026-06-01T12:00:00Z", DealStatus.ACTIVE);
+
+		DealEvent merged = policy.merge(existing, incoming);
+
+		assertThat(merged.status()).isEqualTo(DealStatus.VERIFIED);
+	}
+
 	// ---- 다른 variant는 병합 안 됨 ----
 	@Test
 	void differentVariantDoesNotMerge() {

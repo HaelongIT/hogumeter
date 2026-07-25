@@ -11,13 +11,13 @@ import org.junit.jupiter.params.provider.CsvSource;
 /** BM-04 AC-6 상태기계 전이 전수 — 허용 전이 통과 + 비허용 전이 거부. */
 class DealEventStateMachineTest {
 
-	// 허용: NEW→ACTIVE, ACTIVE→VERIFIED, ACTIVE→ENDED, VERIFIED→ENDED. 나머지 전부 거부.
+	// 허용: NEW→ACTIVE, ACTIVE→VERIFIED, ACTIVE→ENDED, VERIFIED→ENDED, ENDED→ACTIVE(재개, DN-C1). 나머지 거부.
 	@ParameterizedTest(name = "{0} → {1} : allowed={2}")
 	@CsvSource({
 			"NEW, ACTIVE, true", "NEW, VERIFIED, false", "NEW, ENDED, false", "NEW, NEW, false",
 			"ACTIVE, VERIFIED, true", "ACTIVE, ENDED, true", "ACTIVE, NEW, false", "ACTIVE, ACTIVE, false",
 			"VERIFIED, ENDED, true", "VERIFIED, NEW, false", "VERIFIED, ACTIVE, false", "VERIFIED, VERIFIED, false",
-			"ENDED, NEW, false", "ENDED, ACTIVE, false", "ENDED, VERIFIED, false", "ENDED, ENDED, false"
+			"ENDED, NEW, false", "ENDED, ACTIVE, true", "ENDED, VERIFIED, false", "ENDED, ENDED, false"
 	})
 	void transitionAllowMatrix(DealStatus from, DealStatus to, boolean allowed) {
 		assertThat(from.canTransitionTo(to)).isEqualTo(allowed);

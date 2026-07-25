@@ -12,6 +12,12 @@ import java.util.Set;
  * BM-04 딜 병합·교차검증(순수 도메인). 병합 조건 = 동일 대상 + 가격 차 ≤ 허용폭 + 시간 차 ≤ 윈도.
  * 허용폭 = max(기존 딜가 × ratio, 절대 하한). 경계는 포함(≤). 병합 시 사이트 합집합으로 교차검증·상태 전이.
  * 수치는 주입받은 {@link BenchmarkParams}에서만 읽는다.
+ *
+ * <p><b>DN-C1 재개</b>(docs/90 §6, v1.3): {@code existing}이 {@link DealStatus#ENDED}인데 {@code
+ * incoming}(재관측 글)이 살아있으면(ENDED 아니면) {@link DealStatus#ACTIVE}로 복귀한다 — ENDED는
+ * "영구 종료"가 아니라 "잠정 종료"다. 재관측 글 자체도 이미 죽은 상태(중복 크롤링 등)면 재개하지
+ * 않는다. 재개와 2번째 사이트 흡수가 겹치면(같은 병합 호출에서) ACTIVE를 거치지 않고 곧장 VERIFIED —
+ * 신규 딜의 2사이트 동시 병합과 같은 규칙이다.
  */
 public class DealMergePolicy {
 
@@ -35,8 +41,11 @@ public class DealMergePolicy {
 				? Origin.LIVE : Origin.BACKFILL;
 
 		DealStatus status = existing.status();
+		if (status == DealStatus.ENDED && incoming.status() != DealStatus.ENDED) {
+			status = DealStatus.ACTIVE; // DN-C1 재개: 잠정 종료였던 딜이 살아있는 가격과 함께 재관측됨
+		}
 		if (sites.size() >= 2 && status == DealStatus.ACTIVE) {
-			status = DealStatus.VERIFIED; // 2번째 사이트 흡수 → 교차검증 전이
+			status = DealStatus.VERIFIED; // 2번째 사이트 흡수(재개와 동시여도 동일) → 교차검증 전이
 		}
 
 		return new DealEvent(

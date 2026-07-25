@@ -133,9 +133,17 @@ public class IngestDealsUseCase {
 				sources.save(new DealEventSourceEntity(existing.getId(), post.getId(), post.getSite()));
 				// Q-13: 흡수는 첫 알림을 다시 내지 않는다 — priceFirst는 병합으로 안 바뀌므로 같은 트리거를
 				// 재평가하면 매번 다시 SEND_NOW가 날 수 있었다(텔레그램이 켜지면 중복 문자로 드러날 결함).
-				// 대신 VERIFIED 후속(AL-03) 대상으로만 기록한다 — PipelineScheduler가 FollowUpAlertUseCase로
-				// 넘기고, 그쪽은 "첫 알림이 이미 나간 딜에만·종류당 1회"로 멱등이라 중복 병합에도 안전하다.
-				tally.mergedDealIds.add(existing.getId());
+				// 대신 후속(AL-03) 대상으로만 기록한다 — PipelineScheduler가 FollowUpAlertUseCase로 넘기고,
+				// 그쪽은 "첫 알림이 이미 나간 딜에만·종류당 1회"로 멱등이라 중복 병합에도 안전하다.
+				//
+				// DN-C1: 잠정 종료였던 딜이 되살아난 것(ENDED→ACTIVE)은 **교차검증이 아니라 부활**이다.
+				// 부류가 다른 사실을 한 목록으로 흘리면 사람이 "다시 살아났다"를 "검증됐다"로 읽는다.
+				if (existingDomain.status() == DealStatus.ENDED && merged.status() != DealStatus.ENDED) {
+					tally.reopenedDealIds.add(existing.getId());
+				}
+				else {
+					tally.mergedDealIds.add(existing.getId());
+				}
 				return DispatchOutcome.NO_ALERT;
 			}
 		}
@@ -245,10 +253,11 @@ public class IngestDealsUseCase {
 		int heldAlerts;
 		int skippedForeignSource;
 		final List<Long> mergedDealIds = new ArrayList<>();
+		final List<Long> reopenedDealIds = new ArrayList<>();
 
 		IngestReport toReport() {
 			return new IngestReport(confirmed, candidate, unknown, rejected, skippedNoPrice, firstAlertsSent,
-					heldAlerts, skippedForeignSource, mergedDealIds);
+					heldAlerts, skippedForeignSource, mergedDealIds, reopenedDealIds);
 		}
 	}
 }

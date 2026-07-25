@@ -169,6 +169,28 @@ class IngestDealsUseCaseTest {
 				.containsExactly(dealId);
 	}
 
+	/**
+	 * DN-C1 부활 — 잠정 종료(ENDED)됐던 딜에 살아있는 원문이 흡수되면 ACTIVE로 복귀하고,
+	 * <b>VERIFIED가 아니라 REOPENED 후속</b> 대상이 된다. 부류가 다른 사실을 한 목록으로 흘리면
+	 * 사람은 "다시 살아났다"를 "교차검증됐다"로 읽는다.
+	 */
+	@Test
+	void reopeningAnEndedDealIsReportedAsRevivalNotVerification() {
+		savePost("ppomppu", "아이폰 17 256기가 89만", 890_000L, T);
+		useCase.ingestPending();
+		DealEventEntity deal = dealEvents.findByVariantId(variantId).get(0);
+		deal.applyStatusChange(DealStatus.ENDED, deal.getLastSeen()); // 종료 재처리가 한 것과 같은 상태
+		dealEvents.saveAndFlush(deal);
+
+		savePost("ppomppu", "아이폰 17 256기가 재입고 89만", 890_000L, T.plus(Duration.ofHours(6)));
+		IngestReport report = useCase.ingestPending();
+
+		assertThat(dealEvents.findByVariantId(variantId)).hasSize(1); // 새 딜이 아니라 같은 딜
+		assertThat(dealEvents.findByVariantId(variantId).get(0).getStatus()).isEqualTo(DealStatus.ACTIVE);
+		assertThat(report.reopenedDealIds()).as("부활은 REOPENED 후속 대상").containsExactly(deal.getId());
+		assertThat(report.mergedDealIds()).as("부활을 VERIFIED로 흘리지 않는다").doesNotContain(deal.getId());
+	}
+
 	@Test
 	void noPricePostIsSkipped() {
 		savePost("ppomppu", "아이폰 17 256기가 팝니다 문의", null, T);

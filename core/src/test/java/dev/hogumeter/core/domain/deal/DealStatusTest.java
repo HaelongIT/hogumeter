@@ -22,4 +22,13 @@ class DealStatusTest {
 		assertThat(DealStatus.fromRawPostStatus(null)).isEqualTo(DealStatus.ACTIVE);
 		assertThat(DealStatus.fromRawPostStatus("무엇이든")).isEqualTo(DealStatus.ACTIVE);
 	}
+
+	/** DN-C1(docs/90 §6, v1.3) — ENDED는 잠정 종료다. 동일 딜이 가격과 함께 재관측되면 ACTIVE로 복귀한다. */
+	@Test
+	void endedCanReopenToActiveButNowhereElse() {
+		assertThat(DealStatus.ENDED.canTransitionTo(DealStatus.ACTIVE)).isTrue();
+		assertThat(DealStatus.ENDED.canTransitionTo(DealStatus.VERIFIED)).isFalse();
+		assertThat(DealStatus.ENDED.canTransitionTo(DealStatus.NEW)).isFalse();
+		assertThat(DealStatus.ENDED.canTransitionTo(DealStatus.ENDED)).isFalse();
+	}
 }

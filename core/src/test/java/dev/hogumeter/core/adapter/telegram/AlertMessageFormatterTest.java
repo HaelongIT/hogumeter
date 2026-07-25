@@ -114,6 +114,21 @@ class AlertMessageFormatterTest {
 		assertThat(out).contains("최신가 880,000원");
 	}
 
+	/** DN-C1 부활: 잠정 종료됐던 딜이 다시 살아났다 — "새 첫 알림이 아니라 후속"이므로 후속 포맷을 탄다. */
+	@Test
+	void reopenedFollowUpShowsRevivalHeadlineAndLatestPrice() {
+		DealEvent deal = aDealEvent().withPriceFirst(700_000).withPrices(700_000, 700_000, 690_000)
+				.withSourceUrl("https://ppomppu.test/7").build();
+		AlertMessage m = new AlertMessage(deal, null, null, FollowUpKind.REOPENED, "아이폰 17", "256GB", null);
+
+		String out = formatter.format(m);
+
+		assertThat(out).contains("↩️ 다시 살아남");
+		assertThat(out).contains("아이폰 17 256GB");
+		assertThat(out).contains("690,000원");
+		assertThat(out).contains("https://ppomppu.test/7");
+	}
+
 	/** 이름을 못 찾으면 "대상 미상" — 지어내지 않고 그 사실을 그린다(원문 링크로 넘긴다). */
 	@Test
 	void missingNameShowsUnknownSubject() {

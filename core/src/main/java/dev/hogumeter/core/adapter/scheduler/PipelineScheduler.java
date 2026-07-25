@@ -55,10 +55,10 @@ import org.springframework.stereotype.Component;
  * <li>가격: 이미 링크된 원문의 새 가격을 딜에 반영한다(BM-01 AC-2, Q-27 ①).</li>
  * <li>종료: 링크된 원문이 전부 종료됐으면 딜을 ENDED로. <b>가격보다 뒤에 온다</b> — 종료된 딜의
  * 가격은 더 이상 갱신되지 않으므로, 종료 직전의 마지막 가격까지 반영하고 닫는다.</li>
- * <li>후속알림: 이번 틱에 가격변화·종료·<b>병합(교차검증)</b>한 딜 중 <b>첫 알림이 나갔던 것</b>에만 후속을
- * 보낸다(AL-03, Q-67·Q-13). 가격·종료 재처리·ingest의 병합 결과가 낸 전이 id를 그대로 종류별로 흘려보낸다 —
- * 종료가 마지막이라 닫히기 직전 값까지 반영된다. VERIFIED는 ingest 단계에서 이미 정해지므로 순서상
- * 앞당겨도 되지만, 세 후속을 한자리에 모아 두는 게 읽기 쉬워 여기 둔다.</li>
+ * <li>후속알림: 이번 틱에 가격변화·종료·<b>병합(교차검증)</b>·<b>부활(DN-C1)</b>한 딜 중 <b>첫 알림이
+ * 나갔던 것</b>에만 후속을 보낸다(AL-03, Q-67·Q-13). 가격·종료 재처리·ingest의 병합/재개 결과가 낸 전이
+ * id를 그대로 종류별로 흘려보낸다 — 종료가 마지막이라 닫히기 직전 값까지 반영된다. VERIFIED·REOPENED는
+ * ingest 단계에서 이미 정해지므로 순서상 앞당겨도 되지만, 후속을 한자리에 모아 두는 게 읽기 쉬워 여기 둔다.</li>
  * </ol>
  *
  * <p>기동 직후에는 돌지 않는다({@code initialDelay = interval}). {@code fixedDelay}는 기본적으로
@@ -178,6 +178,10 @@ public class PipelineScheduler {
 		// sendFollowUps의 멱등("첫 알림 나간 딜에만·종류당 1회")이 중복 병합에도 안전하게 만든다.
 		int followUpVerified = runStepReturning("follow-up-verified",
 				() -> followUp.apply(ingestReport.mergedDealIds(), FollowUpKind.VERIFIED), 0);
+		// REOPENED 후속(DN-C1) — 잠정 종료였다가 이번 틱에 되살아난 딜. 같은 병합 경로를 타지만
+		// "교차검증됨"이 아니라 "다시 살아남"이다 — 부류가 다른 사실을 한 문구로 알리지 않는다.
+		int followUpReopened = runStepReturning("follow-up-reopened",
+				() -> followUp.apply(ingestReport.reopenedDealIds(), FollowUpKind.REOPENED), 0);
 		// 방해금지가 끝난 보류분을 재평가해 보낸다(Q-20 ②) — 밤새 바뀐 상황을 발송 시점에 다시 판정한다.
 		FlushReport flush = runStepReturning("flush-held", flushHeld, FlushReport.empty());
 		// 중고 목록 접기는 신품 경로와 독립이다 — 순서 계약이 없어 끝에 둔다(한 단계 실패는 runStep이 격리).
@@ -189,7 +193,8 @@ public class PipelineScheduler {
 		if (before != null && after != null) {
 			// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다. stepsFailed로 그 사실도 싣는다.
 			report.accept(PipelineTickReport.between(before, after, ingestReport, reportCardsIssued, followUpPrice,
-					followUpEnded, followUpVerified, stepFailures, flush.flushed(), flush.dropped(), usedFold));
+					followUpEnded, followUpVerified, followUpReopened, stepFailures, flush.flushed(), flush.dropped(),
+					usedFold));
 		}
 		healthTick.accept(healthy); // 연속 실패면 관리 알림(PipelineHealthMonitor)
 	}

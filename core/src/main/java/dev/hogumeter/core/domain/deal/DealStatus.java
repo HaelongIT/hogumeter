@@ -5,7 +5,9 @@ import java.util.Set;
 
 /**
  * DealEvent 상태기계(docs/02-domain-model.md). 허용 전이만 통과, 나머지는 거부(BM-04 AC-6).
- * NEW→ACTIVE(수집) / ACTIVE→VERIFIED(2번째 사이트) / ACTIVE·VERIFIED→ENDED(품절·삭제·종료).
+ * NEW→ACTIVE(수집) / ACTIVE→VERIFIED(2번째 사이트) / ACTIVE·VERIFIED→ENDED(품절·삭제·종료) /
+ * <b>ENDED→ACTIVE(재개, DN-C1)</b> — ENDED는 잠정 종료다. 동일 dealEventId가 가격과 함께 재관측되면
+ * ACTIVE로 복귀한다(전이 이력은 이 상태 필드 자체가 아니라 알림 계열의 "부활" 후속이 대신 남긴다).
  * PRICE_CHANGED는 상태가 아니라 이벤트(상태 불변)라 여기 없다.
  */
 public enum DealStatus {
@@ -18,7 +20,7 @@ public enum DealStatus {
 			NEW, Set.of(ACTIVE),
 			ACTIVE, Set.of(VERIFIED, ENDED),
 			VERIFIED, Set.of(ENDED),
-			ENDED, Set.of());
+			ENDED, Set.of(ACTIVE));
 
 	public boolean canTransitionTo(DealStatus target) {
 		return ALLOWED.get(this).contains(target);
