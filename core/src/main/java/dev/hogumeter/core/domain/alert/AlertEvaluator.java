@@ -1,12 +1,12 @@
 package dev.hogumeter.core.domain.alert;
 
 import dev.hogumeter.core.domain.BenchmarkParams;
+import dev.hogumeter.core.domain.benchmark.BenchmarkCalculator;
 import dev.hogumeter.core.domain.benchmark.BenchmarkView;
 import dev.hogumeter.core.domain.benchmark.Tier;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -16,6 +16,8 @@ import java.util.List;
  * 최고 강도 1발 + 나머지 병기 + 딱지 라벨을 담은 {@link AlertDecision}을 낸다. 발송·시간은 여기서 다루지 않는다.
  */
 public class AlertEvaluator {
+
+	private final BenchmarkCalculator benchmark = new BenchmarkCalculator();
 
 	public AlertDecision evaluate(DealEvent deal, BenchmarkView view, AlertPolicy policy, BenchmarkParams params) {
 		return evaluate(deal, view, policy, params, false);
@@ -55,7 +57,7 @@ public class AlertEvaluator {
 				}
 			}
 			case NONE -> {
-				if (qualifiesColdStart(price, view.currentPrice(), params)) {
+				if (benchmark.qualifiesAsColdStartJackpot(price, view.currentPrice(), params)) {
 					satisfied.add(AlertIntensity.GOOD); // 기준 미확립 폴백
 				}
 			}
@@ -80,15 +82,6 @@ public class AlertEvaluator {
 				.stream().boxed()
 				.findFirst()
 				.orElse(null);
-	}
-
-	private static boolean qualifiesColdStart(long price, Long currentPrice, BenchmarkParams params) {
-		if (currentPrice == null) {
-			return false; // 현재가 미확립(Q-53) — 잭팟은 현재가 대비 판정이라 근거 없이 발화하지 않는다
-		}
-		BigDecimal threshold = BigDecimal.valueOf(currentPrice)
-				.multiply(BigDecimal.ONE.subtract(params.coldStartJackpotRatio()));
-		return BigDecimal.valueOf(price).compareTo(threshold) <= 0;
 	}
 
 	private static List<String> labels(DealEvent deal, BenchmarkView view) {

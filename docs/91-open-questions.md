@@ -55,10 +55,13 @@ _(Q-5. 뽐뿌 golden fixture 재채취 — **해소됨 2026-07-09**: 재채취 *
 - **잠정값**: 월 연산은 Clock의 `ZoneId` 기준 `ZonedDateTime.minusMonths`. `expandedToMonths` = **실제로 딜이 추가된 최원거리 개월**(데이터 확보 span). 과거 딜이 없어 표본이 안 늘면 미발동(null) — 경계 테스트가 이를 no-op으로 격리. 12개월 상한 밖 딜은 절대 미포함.
 - **재개 트리거**: 표시 계층에서 "최근 N개월 기준" 문구가 필요하거나 월 경계(캘린더 vs 30일)가 실데이터와 어긋나면 재정의.
 
-## [열림] Q-10. 콜드스타트 잭팟은 BenchmarkView 필드 아님 (독립 술어)
+## [해소 2026-07-25] Q-10. 콜드스타트 잭팟은 BenchmarkView 필드 아님 (독립 술어)
 - **맥락**: `docs/benchmark/03` 응답 계약에 잭팟 필드가 없고, AC-4는 잭팟을 "알림 대상"으로 규정. 뷰에 넣을지 별도로 뺄지.
-- **잠정값**: `BenchmarkCalculator.qualifiesAsColdStartJackpot(dealPriceFirst, currentPrice, params)` 순수 술어로 분리 — 뷰는 tier=NONE만 표기. seam = 이 메서드 1곳.
-- **재개 트리거**: AL 모듈(기능3)이 NONE 구간 알림을 배선할 때 이 술어를 호출 — 시그니처·소비 지점 확정.
+- **잠정값(당시)**: `BenchmarkCalculator.qualifiesAsColdStartJackpot(dealPriceFirst, currentPrice, params)` 순수 술어로 분리 — 뷰는 tier=NONE만 표기.
+- **재개 트리거는 참이었지만 거짓 봉인이었다**: "AL 모듈이 NONE 구간 알림을 배선할 때 이 술어를 호출"이 트리거였는데, `AlertEvaluator.evaluate`의 NONE 분기는 이미 오래전부터 그 판정을 하고 있었다 — 다만 이 메서드를 **호출하지 않고** `AlertEvaluator` 안에 `private static qualifiesColdStart`로 **바이트 단위로 동일한 공식을 재구현**해 뒀다(실측 2026-07-25, "호출자 0" 감사). 도메인 어휘(콜드스타트 잭팟 판정)를 두 곳이 각자 해석한 것과 같은 모양 — 사본이 둘이면 한쪽이 조용히 갈릴 수 있었다.
+- **해소 내용**: `BenchmarkCalculator.qualifiesAsColdStartJackpot`의 `currentPrice`를 `long`→`Long`으로 바꿔 "현재가 미확립(null)이면 항상 false"(Q-53 해석)까지 이 메서드 안에 가뒀다(예전엔 그 null 처리도 `AlertEvaluator`의 사본에만 있었다). `AlertEvaluator`가 `BenchmarkCalculator` 인스턴스를 들고 이 메서드를 직접 호출하도록 바꾸고, 사본 메서드는 삭제했다.
+- **검증**: `BenchmarkCalculatorTest`에 null 케이스 추가(뮤테이션 확인), `AlertEvaluator`의 호출 자체를 지우는 뮤테이션으로 기존 `AlertEvaluatorTest`(NONE 구간 잭팟 테스트)가 RED가 됨을 확인 — 배선이 실제로 걸려 있다.
+- **관련**: `BenchmarkCalculator.java`, `AlertEvaluator.java`, `check-domain-consumers.sh`(통과).
 
 ## [해소 2026-07-23] Q-11. includeOutliers 토글은 계산 진실 밖
 - **맥락**: `docs/benchmark/03` line 9의 `includeOutliers`(기본 false)는 표시 손잡이 — "계산 진실은 불변". 순수 계산기는 항상 이상치를 제외한다.

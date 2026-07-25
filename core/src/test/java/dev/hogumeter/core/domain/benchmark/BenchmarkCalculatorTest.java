@@ -364,6 +364,19 @@ class BenchmarkCalculatorTest {
 		assertThat(qualifies).isEqualTo(expected);
 	}
 
+	/**
+	 * Q-53: 현재가 미확립(null)이면 잭팟은 현재가 대비 판정이라 근거가 없다 — 아무리 싼 딜이라도 발화 금지.
+	 * 이 null 해석을 여기 한 곳에 가둔다 — 예전엔 {@code AlertEvaluator}가 같은 공식을 사본으로 재구현하며
+	 * 이 null 처리까지 따로 들고 있었다(도메인 어휘 이중 해석, 실측 2026-07-25).
+	 */
+	@Test
+	void coldStartJackpotNeverQualifiesWhenCurrentPriceIsUnestablished() {
+		boolean qualifies = calculator.qualifiesAsColdStartJackpot(
+				1L, null, BenchmarkParamsFixtures.defaultParams());
+
+		assertThat(qualifies).isFalse();
+	}
+
 	// ---- 무효 기간 방어(BM_INVALID_PERIOD seam) ----
 	@Test
 	void rejectsNonPositivePeriod() {

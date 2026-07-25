@@ -975,3 +975,11 @@
 - **왜 못 미리 봤나**: 작성 당시엔 "미래의 어느 시각"이면 충분해 보였다 — 그러나 이 프로젝트는 실행 시각이 무중단으로 계속 흐르고, 테스트는 여러 날에 걸쳐 재실행된다. **"지금보다 미래"는 하드코딩된 상수에게는 유효기간이 있는 조건이다.**
 - **교훈(규칙화)**: **실 벽시계로 찍히는 값(`@PrePersist` 등, 주입 불가)과 비교해야 하는 테스트는 그 값을 먼저 읽은 뒤 그 값을 기준으로 오프셋을 준다** — 클래스 상수·리터럴로 "미래의 어느 날짜"를 하드코딩하지 않는다. `windowStartsAtLastSentWhenDigestStateExists`는 이미 이 수법(등록 시각을 읽고 그 이후로 시계 고정)을 쓰고 있었는데 같은 파일의 다른 테스트(`reactivationAfterLastSentResetsToRegistrationNewbie`)는 안 쓰고 있었다 — **같은 파일 안에서도 패턴이 적용 안 된 테스트가 있는지 훑는다.** 이 결함 유형은 이번 세션에 `AssembleVariantDigestUseCaseTest` 작성 중에도 한 번 나왔다(요약 참조) — **두 번째 발생이라 규칙으로 승격한다.**
 - **관련**: `ComputeDigestWindowUseCaseTest#reactivationAfterLastSentResetsToRegistrationNewbie`(product.getCreatedAt() 기준으로 시계 재고정해 수정).
+
+## 2026-07-25 — "호출자 0" 감사가 "도메인 어휘 이중 해석"과 겹친 사례 (Q-10)
+
+- **맥락**: M6(WATCH·PRI) 완료 후 다음 증분을 찾으려 "호출자 0인 순수 함수" 감사를 다시 돌렸다(CLAUDE.md 축적 규칙). `BenchmarkCalculator.qualifiesAsColdStartJackpot`(NONE 구간 콜드스타트 잭팟 판정)이 프로덕션 호출자 0으로 나왔다.
+- **증상**: Q-10의 재개 트리거("AL 모듈이 NONE 구간 알림을 배선할 때 이 술어를 호출")는 오래전에 참이 됐어야 했다 — `AlertEvaluator.evaluate`의 NONE 분기가 실제로 그 판정을 하고 있었기 때문이다. 그런데 호출한 게 아니라 `AlertEvaluator` 안에 `private static qualifiesColdStart`로 **바이트 단위로 동일한 공식을 재구현**해 뒀다. Q-11·Q-13·Q-46·Q-48·Q-67과 같은 모양의 거짓 봉인이지만, 이번엔 그냥 "안 부른다"가 아니라 **"안 부르고 대신 사본을 만들었다"**는 점이 다르다 — CLAUDE.md의 "같은 도메인 어휘를 두 모듈이 각자 해석하면 한쪽이 반드시 조용히 먹는다"는 축적 규칙의 실사례다.
+- **실제로 갈려 있던 지점**: `BenchmarkCalculator`판은 `currentPrice`가 원시 `long`이라 null(Q-53 "현재가 미확립")을 표현할 수 없었다 — 그래서 그 null 해석("현재가 없으면 항상 false")은 `AlertEvaluator`의 사본에**만** 존재했다. 만약 다른 소비처가 `BenchmarkCalculator` 판을 그대로 불렀다면 null을 못 받아 컴파일이 막히거나(원시 타입이라), 억지로 0을 채워 넣었다면 "현재가 0원"이라는 **정상 응답 모양의 거짓말**(CLAUDE.md "조용한 0" 규칙)이 됐을 것이다.
+- **교훈(규칙화 — 기존 규칙의 강화)**: **"호출자 0" 감사에서 나온 함수는, 그 기능이 이미 다른 곳에서 동작하고 있다면 "사본이 있는가"부터 확인한다.** 호출자가 0인 이유가 "아직 안 썼다"가 아니라 "다시 만들었다"일 수 있다 — 이 경우 단순히 호출을 이어 붙이는 게 아니라, **두 구현이 실제로 같은 결과를 내는지**(이번엔 null 처리가 갈려 있었다) 먼저 대조한 뒤 하나로 합친다. 합칠 때 nullable 여부처럼 시그니처가 갈린 이유 자체가 힌트다.
+- **관련**: `BenchmarkCalculator.qualifiesAsColdStartJackpot`(`Long currentPrice`로 시그니처 변경, null 해석을 이 안으로 흡수), `AlertEvaluator`(사본 삭제, `BenchmarkCalculator` 인스턴스로 위임), `BenchmarkCalculatorTest#coldStartJackpotNeverQualifiesWhenCurrentPriceIsUnestablished`, `docs/91` Q-10(해소).

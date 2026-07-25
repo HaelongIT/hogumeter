@@ -117,8 +117,15 @@ public class BenchmarkCalculator {
 	/**
 	 * NONE(n=0) 구간의 유일 알림 트리거(BM-06 AC-4): 현재가 대비 coldStartJackpotRatio 이상 싼 딜.
 	 * dealPriceFirst ≤ currentPrice·(1−ratio) 이면 "기준 미확립·참고용" 대상.
+	 *
+	 * <p><b>{@code currentPrice}가 {@code null}(Q-53 현재가 미확립)이면 항상 {@code false}다</b> — 잭팟은
+	 * 현재가 대비 판정이라 근거가 없으면 아무리 싼 딜이라도 발화하지 않는다. 이 해석을 여기 한 곳에
+	 * 가둔다 — 호출자마다 null을 따로 해석하면(예: 사본으로 재구현) 한쪽이 조용히 다르게 판정한다.
 	 */
-	public boolean qualifiesAsColdStartJackpot(long dealPriceFirst, long currentPrice, BenchmarkParams params) {
+	public boolean qualifiesAsColdStartJackpot(long dealPriceFirst, Long currentPrice, BenchmarkParams params) {
+		if (currentPrice == null) {
+			return false;
+		}
 		BigDecimal threshold = BigDecimal.valueOf(currentPrice)
 				.multiply(ONE.subtract(params.coldStartJackpotRatio()));
 		return BigDecimal.valueOf(dealPriceFirst).compareTo(threshold) <= 0;

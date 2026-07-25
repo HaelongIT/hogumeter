@@ -1,3 +1,17 @@
+## 2026-07-25 (8) — Q-10 해소: 콜드스타트 잭팟 판정 이중 구현 제거 (무중단)
+
+M6 완료 후 "호출자 0" 감사를 다시 돌려 발견. `BenchmarkCalculator.qualifiesAsColdStartJackpot`은
+호출자 0이었는데, 이유가 "안 썼다"가 아니라 `AlertEvaluator`가 **바이트 단위로 같은 공식을
+사본으로 재구현**해서였다(Q-10 거짓 봉인). 두 구현을 대조해 보니 null 처리(Q-53 현재가 미확립)가
+`AlertEvaluator` 사본에만 있어 실제로 갈려 있었다 — 도메인 어휘 이중 해석의 실사례.
+
+- `BenchmarkCalculator.qualifiesAsColdStartJackpot`의 `currentPrice`를 `long`→`Long`으로 바꿔
+  null 해석("현재가 없으면 항상 false")을 이 메서드 안으로 흡수.
+- `AlertEvaluator`가 `BenchmarkCalculator` 인스턴스로 위임, 사본 메서드 삭제.
+- 뮤테이션 검증(null 케이스 + 호출 자체를 지우는 뮤테이션으로 기존 `AlertEvaluatorTest` RED 확인).
+- `docs/99`에 교훈 기록("호출자 0" 감사에서 사본 여부부터 확인), Q-10 해소.
+- check-domain-consumers 통과(39개 클래스 전부 소비됨).
+
 ## 2026-07-25 (7) — WATCH 핀 생명주기 핵심 배선 완료 (무중단)
 
 DN-C1 완료 후 곧바로 WatchItem 본체로 이어감. docs/17 골자를 거의 전부 구현:
