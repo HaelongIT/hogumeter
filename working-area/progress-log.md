@@ -1,3 +1,23 @@
+## 2026-07-25 (6) — WATCH 선행 의존 DN-C1(DealEvent 재개 전이) 배선 (무중단)
+
+PRI 백엔드 완료 후 WATCH로 이어감. WATCH 본체(WatchItem)는 DN-C1(재개 전이)에 의존한다고
+docs/17이 명시 — 실측해 보니 **진짜 결함**이었다: `DealMergePolicy.merge()`가 기존 딜의 status를
+그대로 승계해, ENDED 딜에 살아있는 재관측 글이 merge window 내로 들어와도 영원히 ENDED로
+방치되고 있었다(`DealEventEntity.applyMerge`도 상태기계를 안 거치고 raw 대입이라 아무도 못 잡음).
+
+- `DealStatus.ALLOWED`: ENDED→ACTIVE 추가.
+- `DealMergePolicy.merge()`: existing=ENDED ∧ incoming≠ENDED(재관측 글 자체가 죽은 게 아님)면
+  ACTIVE로 재개. 재개+2번째 사이트 동시면 곧장 VERIFIED(기존 규칙과 대칭).
+- `FollowUpKind.REOPENED`("↩️ 다시 살아남") — 확정본 "재개는 새 첫 알림이 아니라 후속 부활"을
+  그대로 구현. `IngestDealsUseCase`가 병합 시 existing이 ENDED였는지로 VERIFIED/REOPENED를 가름
+  (부류가 다른 사실을 한 목록으로 안 흘림 — Q-13과 같은 교훈의 적용).
+  `PipelineScheduler`에 follow-up-reopened 스텝 + `PipelineTickReport.followUpReopenedSent` 추가.
+- 전부 뮤테이션 검증(상태기계 전체 매트릭스 갱신 포함). 기존 exhaustive 전이 테스트
+  (`DealEventStateMachineTest`)의 ENDED→ACTIVE 기대값을 false→true로 갱신(스펙 변경 반영, 회귀 아님).
+- docs/17·docs/30 갱신: DN-C1 완료 표시, WATCH 남은 것 = WatchItem 개체·핀 자격·결말 전이·5번째 표면.
+- 다음: WatchItem 개체(V19 마이그레이션) — 핀 자격·유일성(딜당 활성 핀 1개)·결말 전이(BOUGHT/MISSED/
+  DROPPED)부터. web 표면은 지시 대기.
+
 ## 2026-07-25 (5) — M6 착수: PRI 백엔드 완료 (무중단, 사용자 지시 "이어서 추천해주는걸어")
 
 DIGEST(M5) 완료 보고 후 사용자가 M6 진행을 지시. WATCH·PRI 중 저비용·신규개념 0인 PRI를 먼저:
