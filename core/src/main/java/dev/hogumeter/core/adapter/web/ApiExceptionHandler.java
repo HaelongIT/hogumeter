@@ -1,7 +1,9 @@
 package dev.hogumeter.core.adapter.web;
 
 import dev.hogumeter.core.application.DemandAxisValueRequiredException;
+import dev.hogumeter.core.application.DuplicatePriorityRankException;
 import dev.hogumeter.core.application.InvalidRegistrationException;
+import dev.hogumeter.core.application.ProductNotFoundException;
 import dev.hogumeter.core.application.ComparisonAxisNotFoundException;
 import dev.hogumeter.core.application.InvalidCoupangObservationException;
 import dev.hogumeter.core.application.ListingNotFoundException;
@@ -96,6 +98,18 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
 	public ApiError rateLimitExceeded(RateLimitExceededException e) {
 		return new ApiError(RateLimitExceededException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(ProductNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ApiError productNotFound(ProductNotFoundException e) {
+		return new ApiError(ProductNotFoundException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(DuplicatePriorityRankException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ApiError duplicatePriorityRank(DuplicatePriorityRankException e) {
+		return new ApiError(DuplicatePriorityRankException.CODE, e.getMessage());
 	}
 
 	public record ApiError(String code, String message) {

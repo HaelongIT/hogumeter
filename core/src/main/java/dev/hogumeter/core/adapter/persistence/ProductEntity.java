@@ -33,6 +33,14 @@ public class ProductEntity {
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
+	/** PRI ②축소(docs/19) — 유일 순번. null = 미지정(부분 유니크 인덱스라 서로 충돌하지 않는다). */
+	@Column(name = "priority_rank")
+	private Integer priorityRank;
+
+	/** PRI ②축소 — 중고·장외 구매 이탈용 수동 완료(취소 가능, 알림은 유지). */
+	@Column(name = "manually_completed", nullable = false)
+	private boolean manuallyCompleted;
+
 	protected ProductEntity() {
 	}
 
@@ -67,5 +75,21 @@ public class ProductEntity {
 
 	public Instant getCreatedAt() {
 		return createdAt;
+	}
+
+	public Integer getPriorityRank() {
+		return priorityRank;
+	}
+
+	public void setPriorityRank(Integer priorityRank) {
+		this.priorityRank = priorityRank;
+	}
+
+	public boolean isManuallyCompleted() {
+		return manuallyCompleted;
+	}
+
+	public void setManuallyCompleted(boolean manuallyCompleted) {
+		this.manuallyCompleted = manuallyCompleted;
 	}
 }

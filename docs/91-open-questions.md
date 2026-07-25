@@ -541,6 +541,11 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **재개 트리거**(무엇이 참이 되어야 하는가): ① 네이버 키 발급(Q-3) — 그 순간 겹침 여부를 판단해 반영. ② 사용자가 실 쿠팡 상품 페이지 HTML(또는 스크린샷 기반 DOM 구조)을 fixture로 제공 — 그러면 파싱 로직을 TDD로(fixture golden) 만들고, manifest/content script는 그 위에 얹는다.
 - **관련**: Q-3(네이버 키), Q-78(레이트리밋 잠정치).
 
+## [열림] Q-82. PRI(docs/19) 대기 술어 — "ARCHIVED 아님"·"구매됨/완료" 표시 구분을 배지 표현으로 미룸
+- **맥락**: M6 착수(2026-07-25, 사용자 지시). docs/19 대기 술어 원문 = "[등록 ∧ 활성 구매 없음 ∧ ARCHIVED 아님 ∧ 수동 완료 아님]", "비대기 상태 병기 '1·구매됨/완료', ARCHIVED는 설정 화면만"(3-5 손잡이). `ARCHIVED`는 코드상 `PurchaseState.ARCHIVED`(Product 자체엔 그런 상태가 없다, `docs/02` OBSERVING→REPORT_PENDING→CLOSED→ARCHIVED→OBSERVING 재활성). 원문은 "활성 구매 없음"(=OBSERVING 없음)과 "ARCHIVED 아님"을 별개 조건으로 쓰고, 표시도 갈랐다(CLOSED류는 목록 배지, ARCHIVED는 설정 화면 숨김) — CLOSED만 있고 OBSERVING·ARCHIVED가 없는 경우가 "대기"인지 "구매됨/완료"인지 문면만으로는 확정하기 어렵다.
+- **잠정값**: `PriorityQueue.isWaiting(hasAnyPurchase, manuallyCompleted)` — Purchase가 **어느 상태로든 하나라도 있으면** 무조건 비대기로 본다(CLOSED·ARCHIVED·OBSERVING 구분 없음). "대기인가"라는 데이터 진실은 이 한 가지로 충분하고, 배지 문구("구매됨/완료" vs 숨김)는 표시 손잡이(절대 원칙 4)라 화면이 Purchase 상태별로 가르면 된다 — 되돌리기 쉬운 seam(`isWaiting`의 파라미터를 상태 목록으로 넓히면 됨).
+- **재개 트리거**: web PRI 표면 착수 시(무중단이라도 web은 지시 시에만, 메모 `web-ui-wait-for-instruction`) — 그때 배지·숨김 구분이 실제로 필요해지면 이 함수를 상태 인지형으로 넓힌다.
+
 ## [부분해소] Q-81. DIGEST(docs/18) — ④(WATCH 대기) 제외 전 경로 배선 완료
 - **맥락**: M5 마지막 조각. `DigestWindow`/`DigestRules`(DIG-03 창·규칙, 순수)는 이미 있었지만 **호출자가 0**이었다(테스트만 불렀다 — CLAUDE.md "호출자 0인 순수 함수" 감사로 발견). `docs/18`은 6개 섹션·저장물 원자성·quiet 존중까지 요구하는 밀도 높은 스펙이라 한 증분에 다 하면 위험이 크다.
 - **✅ 해소(2026-07-24, 부분)**: `ComputeDigestWindowUseCase`가 첫 소비자다. **활성 시각** = variant가 속한 product의 `created_at`(variant 자신은 생성 시각이 없다, V1 스키마) — "이 variant를 언제부터 추적했는가"의 실측 대리값. **직전 성공 발송** = 신규 `digest_state`(V16) 테이블의 `last_sent_at` — 행이 없으면(한 번도 발송 안 함) 활성 시각을 그 자리에 대신 넣어 `DigestWindow.of`가 "첫 창 = 활성 시각부터"를 자연히 내도록 했다.
