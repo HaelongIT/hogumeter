@@ -193,6 +193,18 @@ class PipelineSchedulerTest {
 		assertThat(reported.get().followUpReopenedSent()).isEqualTo(1);
 	}
 
+	/** WATCH(docs/17) — markMissedPins의 반환값이 실제로 틱 리포트에 실리는지(배선을 지우면 0으로 조용해진다). */
+	@Test
+	@DisplayName("ENDED 감지로 MISSED 전이한 핀 수가 틱 리포트에 흐른다 (WATCH)")
+	void markMissedPinsCountFlowsIntoReport() {
+		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
+				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, () -> 4, healthy -> { }, () -> EMPTY,
+				reported::set).tick();
+
+		assertThat(reported.get().watchPinsMissed()).isEqualTo(4);
+		assertThat(reported.get().toString()).contains("watchPinsMissed=4");
+	}
+
 	@Test
 	@DisplayName("아무 일도 없어도 보고한다 — 조용한 스케줄러는 죽은 스케줄러와 구별되지 않는다")
 	void idleTickStillReports() {
@@ -208,8 +220,8 @@ class PipelineSchedulerTest {
 	void heldAlertFlushCountsFlowIntoReport() {
 		// 플러시가 (발송 2, 드롭 1)을 내면 리포트에 그대로 실려야 한다 — 배선이 끊기면 0이라 이 테스트가 잡는다.
 		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
-				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), FoldReport::empty, healthy -> { }, () -> EMPTY,
-				reported::set).tick();
+				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), FoldReport::empty, () -> 0, healthy -> { },
+				() -> EMPTY, reported::set).tick();
 
 		assertThat(reported.get().heldAlertsFlushed()).isEqualTo(2);
 		assertThat(reported.get().heldAlertsDropped()).isEqualTo(1);
@@ -223,7 +235,7 @@ class PipelineSchedulerTest {
 		// 알림 수까지 함께 흐르는지 본다: 접기만 흐르고 알림이 0에 머물면 아무도 눈치채지 못한다.
 		FoldReport fold = new FoldReport(3, 5, 1, 2, 1, 4, 2, 1);
 		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
-				FlushHeldAlertsUseCase.FlushReport::empty, () -> fold, healthy -> { }, () -> EMPTY,
+				FlushHeldAlertsUseCase.FlushReport::empty, () -> fold, () -> 0, healthy -> { }, () -> EMPTY,
 				reported::set).tick();
 
 		assertThat(reported.get().usedFold()).isEqualTo(fold);
@@ -253,7 +265,8 @@ class PipelineSchedulerTest {
 		};
 
 		new PipelineScheduler(expire, issue, ingest, conditions, prices, status, followUp,
-				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, healthy -> { }, probe, reported::set).tick();
+				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, () -> 0, healthy -> { }, probe,
+				reported::set).tick();
 
 		assertThat(calls).as("발급은 만료 뒤·ingest 앞").containsSubsequence("expire", "issue", "ingest");
 		assertThat(reported.get().reportCardsIssued()).isEqualTo(2);
@@ -277,7 +290,8 @@ class PipelineSchedulerTest {
 	private PipelineScheduler schedulerWithHealth(Supplier<IngestReport> ingest, Supplier<PipelineSnapshot> probe,
 			List<Boolean> health) {
 		return new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
-				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, health::add, probe, reported::set);
+				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, () -> 0, health::add, probe,
+				reported::set);
 	}
 
 	@Test

@@ -41,6 +41,9 @@ import dev.hogumeter.core.application.IngestReport;
  * {@code purchasesExpired}를 {@code Δ(REPORT_PENDING) + reportCardsIssued}로 <b>재구성</b>한다 — 두 카운터가
  * 서로 독립으로 정직해진다(발급 0이면 예전과 같다). 발급은 quiet(관통 알림 없음)라 텔레그램 토큰과 무관하다.
  *
+ * <p>{@code watchPinsMissed}는 WATCH(docs/17) 결말 자동화 — 이번 틱에 ENDED 감지로 MISSED 전이한 핀
+ * 수다. 사람이 누르는 BOUGHT/DROPPED와 진입 경로가 달라 따로 센다("사실=자동, 판단=수동").
+ *
  * <p>{@code stepsFailed}는 이번 틱에 예외를 던진 단계 수다(OBS-02, Q-56). {@code runStep}이 한 단계의 실패를
  * 격리하지만(다른 단계·다음 주기를 살린다), 격리는 <b>침묵</b>이기도 하다 — DB 스키마 불일치·락 충돌 같은
  * 지속 실패가 나면 파이프라인은 <b>도는 척하며 아무것도 처리하지 않는다.</b> 이 값이 매 틱 0이 아니면 그
@@ -65,6 +68,7 @@ public record PipelineTickReport(
 		int followUpEndedSent,
 		int followUpVerifiedSent,
 		int followUpReopenedSent,
+		int watchPinsMissed,
 		int stepsFailed,
 		int heldAlertsFlushed,
 		int heldAlertsDropped,
@@ -72,8 +76,8 @@ public record PipelineTickReport(
 
 	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest,
 			int reportCardsIssued, int followUpPriceChangedSent, int followUpEndedSent, int followUpVerifiedSent,
-			int followUpReopenedSent, int stepsFailed, int heldAlertsFlushed, int heldAlertsDropped,
-			FoldReport usedFold) {
+			int followUpReopenedSent, int watchPinsMissed, int stepsFailed, int heldAlertsFlushed,
+			int heldAlertsDropped, FoldReport usedFold) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
 		// 발급이 REPORT_PENDING을 드레인하므로 Δ만으로는 만료 수가 아니다 — 발급 수를 더해 재구성한다.
@@ -96,6 +100,7 @@ public record PipelineTickReport(
 				followUpEndedSent,
 				followUpVerifiedSent,
 				followUpReopenedSent,
+				watchPinsMissed,
 				stepsFailed,
 				heldAlertsFlushed,
 				heldAlertsDropped,
@@ -129,6 +134,7 @@ public record PipelineTickReport(
 				+ " ended=" + followUpEndedSent
 				+ " verified=" + followUpVerifiedSent
 				+ " reopened=" + followUpReopenedSent + "]"
+				+ " watchPinsMissed=" + watchPinsMissed
 				+ " heldFlushed[sent=" + heldAlertsFlushed + " dropped=" + heldAlertsDropped + "]"
 				+ " usedBatchesFolded=" + usedFold.batches()
 				// 관측한 사건과 **알린** 수를 따로 낸다 — 둘의 차이가 곧 "3계층 필터·목표가가 얼마나

@@ -1,9 +1,13 @@
 package dev.hogumeter.core.adapter.web;
 
+import dev.hogumeter.core.application.DealAlreadyPinnedException;
+import dev.hogumeter.core.application.DealEventNotFoundException;
+import dev.hogumeter.core.application.DealNotPinnableException;
 import dev.hogumeter.core.application.DemandAxisValueRequiredException;
 import dev.hogumeter.core.application.DuplicatePriorityRankException;
 import dev.hogumeter.core.application.InvalidRegistrationException;
 import dev.hogumeter.core.application.ProductNotFoundException;
+import dev.hogumeter.core.application.WatchItemNotFoundException;
 import dev.hogumeter.core.application.ComparisonAxisNotFoundException;
 import dev.hogumeter.core.application.InvalidCoupangObservationException;
 import dev.hogumeter.core.application.ListingNotFoundException;
@@ -13,6 +17,7 @@ import dev.hogumeter.core.application.UsedSearchNotFoundException;
 import dev.hogumeter.core.domain.alert.InvalidAlertPolicyException;
 import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
 import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
+import dev.hogumeter.core.domain.watch.IllegalPinTransitionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -110,6 +115,36 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.CONFLICT)
 	public ApiError duplicatePriorityRank(DuplicatePriorityRankException e) {
 		return new ApiError(DuplicatePriorityRankException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(DealEventNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ApiError dealEventNotFound(DealEventNotFoundException e) {
+		return new ApiError(DealEventNotFoundException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(DealNotPinnableException.class)
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	public ApiError dealNotPinnable(DealNotPinnableException e) {
+		return new ApiError(DealNotPinnableException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(DealAlreadyPinnedException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ApiError dealAlreadyPinned(DealAlreadyPinnedException e) {
+		return new ApiError(DealAlreadyPinnedException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(WatchItemNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ApiError watchItemNotFound(WatchItemNotFoundException e) {
+		return new ApiError(WatchItemNotFoundException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(IllegalPinTransitionException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ApiError illegalPinTransition(IllegalPinTransitionException e) {
+		return new ApiError(IllegalPinTransitionException.CODE, e.getMessage());
 	}
 
 	public record ApiError(String code, String message) {

@@ -14,6 +14,7 @@ import dev.hogumeter.core.application.FoldUsedListingsUseCase.FoldReport;
 import dev.hogumeter.core.application.IngestDealsUseCase;
 import dev.hogumeter.core.application.IngestReport;
 import dev.hogumeter.core.application.IssuePendingReportCardsUseCase;
+import dev.hogumeter.core.application.MarkMissedPinsUseCase;
 import dev.hogumeter.core.application.PipelineHealthMonitor;
 import dev.hogumeter.core.application.PreserveAppliedConditionsUseCase;
 import dev.hogumeter.core.application.ReprocessDealPricesUseCase;
@@ -55,6 +56,8 @@ import org.springframework.stereotype.Component;
  * <li>가격: 이미 링크된 원문의 새 가격을 딜에 반영한다(BM-01 AC-2, Q-27 ①).</li>
  * <li>종료: 링크된 원문이 전부 종료됐으면 딜을 ENDED로. <b>가격보다 뒤에 온다</b> — 종료된 딜의
  * 가격은 더 이상 갱신되지 않으므로, 종료 직전의 마지막 가격까지 반영하고 닫는다.</li>
+ * <li>핀 자동화: WATCH(docs/17) — 이번 틱에 ENDED된 딜의 활성 핀을 MISSED로. <b>종료 바로 뒤</b>에 와서
+ * 같은 틱에 반영한다.</li>
  * <li>후속알림: 이번 틱에 가격변화·종료·<b>병합(교차검증)</b>·<b>부활(DN-C1)</b>한 딜 중 <b>첫 알림이
  * 나갔던 것</b>에만 후속을 보낸다(AL-03, Q-67·Q-13). 가격·종료 재처리·ingest의 병합/재개 결과가 낸 전이
  * id를 그대로 종류별로 흘려보낸다 — 종료가 마지막이라 닫히기 직전 값까지 반영된다. VERIFIED·REOPENED는
@@ -80,6 +83,7 @@ public class PipelineScheduler {
 	private final Supplier<List<Long>> reprocessPrices;
 	private final Supplier<List<Long>> reprocessStatus;
 	private final BiFunction<List<Long>, FollowUpKind, Integer> followUp;
+	private final Supplier<Integer> markMissedPins; // WATCH(docs/17) ENDED 감지→MISSED 자동(DN-C1 후속)
 	private final Supplier<FoldReport> foldUsedListings; // USED-02 목록 스냅샷 접기 + 생애주기 알림(USED-03)
 	private final Supplier<FlushReport> flushHeld; // 방해금지 종료분 재평가·발송(Q-20 ②)
 	private final Consumer<Boolean> healthTick; // 틱 건강 여부 → 연속 실패 시 관리 알림(OBS-03, Q-56)
@@ -95,14 +99,14 @@ public class PipelineScheduler {
 			IssuePendingReportCardsUseCase issueReportCards, IngestDealsUseCase ingest,
 			PreserveAppliedConditionsUseCase conditions, ReprocessDealPricesUseCase prices,
 			ReprocessDealStatusUseCase status, FollowUpAlertUseCase followUp, FlushHeldAlertsUseCase flushHeld,
-			FoldUsedListingsUseCase foldUsedListings,
+			FoldUsedListingsUseCase foldUsedListings, MarkMissedPinsUseCase markMissedPins,
 			PipelineHealthMonitor healthMonitor, RawDealPostRepository rawPosts, DealEventRepository dealEvents,
 			DealEventSourceRepository sources, ReviewQueueItemRepository reviewQueue, PurchaseRepository purchases,
 			JdbcTemplate jdbc) {
 		this(expireObservations::expireDueObservations, issueReportCards::issuePendingReportCards,
 				ingest::ingestPending, conditions::preserveTags,
 				prices::reprocessPriceChanges, status::reprocessEndedDeals, followUp::sendFollowUps, flushHeld::flush,
-				foldUsedListings::foldPending, healthMonitor::onTick,
+				foldUsedListings::foldPending, markMissedPins::markEndedDealsAsMissed, healthMonitor::onTick,
 				() -> new PipelineSnapshot(
 						rawPosts.count(),
 						sources.count(),
@@ -128,8 +132,8 @@ public class PipelineScheduler {
 	PipelineScheduler(Runnable expireObservations, Supplier<Integer> issueReportCards, Supplier<IngestReport> ingest,
 			Runnable preserveConditions, Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
 			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<FlushReport> flushHeld,
-			Supplier<FoldReport> foldUsedListings, Consumer<Boolean> healthTick, Supplier<PipelineSnapshot> probe,
-			Consumer<PipelineTickReport> report) {
+			Supplier<FoldReport> foldUsedListings, Supplier<Integer> markMissedPins, Consumer<Boolean> healthTick,
+			Supplier<PipelineSnapshot> probe, Consumer<PipelineTickReport> report) {
 		this.expireObservations = expireObservations;
 		this.issueReportCards = issueReportCards;
 		this.ingest = ingest;
@@ -139,18 +143,19 @@ public class PipelineScheduler {
 		this.followUp = followUp;
 		this.flushHeld = flushHeld;
 		this.foldUsedListings = foldUsedListings;
+		this.markMissedPins = markMissedPins;
 		this.healthTick = healthTick;
 		this.probe = probe;
 		this.report = report;
 	}
 
-	/** 플러시·건강 없는 테스트 seam(기존 호출부 호환) — 발급·플러시·건강을 no-op/0으로 둔다. */
+	/** 플러시·건강 없는 테스트 seam(기존 호출부 호환) — 발급·플러시·건강·핀 자동화를 no-op/0으로 둔다. */
 	PipelineScheduler(Runnable expireObservations, Supplier<IngestReport> ingest, Runnable preserveConditions,
 			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
 			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<PipelineSnapshot> probe,
 			Consumer<PipelineTickReport> report) {
 		this(expireObservations, () -> 0, ingest, preserveConditions, reprocessPrices, reprocessStatus, followUp,
-				FlushReport::empty, FoldReport::empty, healthy -> { }, probe, report);
+				FlushReport::empty, FoldReport::empty, () -> 0, healthy -> { }, probe, report);
 	}
 
 	@Scheduled(fixedDelayString = "${core.pipeline.interval-ms:60000}",
@@ -167,6 +172,9 @@ public class PipelineScheduler {
 		runStep("preserve-conditions", preserveConditions);
 		List<Long> priceChanged = runStepReturning("reprocess-prices", reprocessPrices, List.of());
 		List<Long> ended = runStepReturning("reprocess-status", reprocessStatus, List.of());
+		// WATCH(docs/17) 결말 자동화 — "ENDED 감지→MISSED". 종료 재처리 바로 뒤에 와서 이번 틱에 새로
+		// ENDED된 딜의 핀도 같은 틱에 반영한다. 사람이 누르는 결말(BOUGHT/DROPPED)과 진입 경로가 다르다.
+		int pinsMissed = runStepReturning("mark-missed-pins", markMissedPins, 0);
 		// 후속 알림(AL-03) — 가격변화·종료한 딜 중 첫 알림이 나갔던 것에만. 종료가 마지막이라 닫히기 직전 값까지 반영.
 		// 발송 수를 붙잡아 틱 리포트에 싣는다 — 안 그러면 sendFollowUps가 낸 값이 조용히 버려진다(Q-57 절반 카운터).
 		int followUpPrice = runStepReturning("follow-up-price",
@@ -193,8 +201,8 @@ public class PipelineScheduler {
 		if (before != null && after != null) {
 			// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다. stepsFailed로 그 사실도 싣는다.
 			report.accept(PipelineTickReport.between(before, after, ingestReport, reportCardsIssued, followUpPrice,
-					followUpEnded, followUpVerified, followUpReopened, stepFailures, flush.flushed(), flush.dropped(),
-					usedFold));
+					followUpEnded, followUpVerified, followUpReopened, pinsMissed, stepFailures, flush.flushed(),
+					flush.dropped(), usedFold));
 		}
 		healthTick.accept(healthy); // 연속 실패면 관리 알림(PipelineHealthMonitor)
 	}
