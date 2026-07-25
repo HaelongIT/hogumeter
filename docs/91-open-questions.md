@@ -541,6 +541,18 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **재개 트리거**(무엇이 참이 되어야 하는가): ① 네이버 키 발급(Q-3) — 그 순간 겹침 여부를 판단해 반영. ② 사용자가 실 쿠팡 상품 페이지 HTML(또는 스크린샷 기반 DOM 구조)을 fixture로 제공 — 그러면 파싱 로직을 TDD로(fixture golden) 만들고, manifest/content script는 그 위에 얹는다.
 - **관련**: Q-3(네이버 키), Q-78(레이트리밋 잠정치).
 
+## [열림] Q-83. WATCH(docs/17) 핀 생명주기 배선 후 남은 것 — anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례
+- **맥락**: 2026-07-25 WatchItem 핵심(자격·유일성·결말 3종·REST) 배선 완료. docs/17 골자 중 아직 코드에 없는 조각들을 여기 한데 모은다 — 전부 "골자엔 있지만 이번 판엔 없음"이지, 판단이 갈리는 항목은 아니다.
+  1. **anchorPostId 자동 승계**: "이벤트 재구성 시 자동 승계 + 이력"(docs/17) — 딜이 merge window 밖에서 재구성되어 새 DealEvent로 태어나는 경우, 옛 WatchItem의 anchorPostId를 새 딜로 옮기는 배선이 없다. 지금은 핀 시점의 소스 원문 하나를 그대로 싣기만 한다(`PinDealUseCase`).
+  2. **PUR 프리필**: "[샀어요]→BOUGHT(PUR 프리필)" — `ResolvePinUseCase.markBought`는 상태만 바꾸고 Purchase 등록을 미리 채우지 않는다. REG(등록) 화면과의 교차 배선이 필요.
+  3. **핀 이력 딜의 키워드 사후학습 근거 제외**: docs/17 "핀 이력 딜은 키워드 사후학습 근거 제외" — BM-07 사후학습(Q-22)이 WatchItem 존재를 아직 안 본다.
+  4. **핀 후속 특례(인상 1회)**: "핀 후속(딜 층, variant 상태 무관·ARCHIVED에도): 인하·품절·종료·검증 무조건, 인상 1회만" — 지금 AL-03 후속은 핀 여부를 안 보고 일괄 적용된다. 핀된 딜만 별도로 "가격 인상"도 1회 알리는 특례가 없다.
+  5. **자격 상실 확인 필요 알림·부활 미응답 플래그**: docs/17 결말표의 "자격 상실→전이 없음+확인 필요 알림", "부활→...+미응답 플래그"는 WatchItem 쪽에서 아직 안 낸다(DealEvent 층 REOPENED 알림은 이미 있음 — Q-81 아님, DN-C1 배선).
+  6. **web 5번째 표면**: 활성 탭·회고 탭 — web은 지시 시에만 착수(메모 `web-ui-wait-for-instruction`).
+- **잠정값**: 위 전부 미착수. WatchItem CRUD(REST)는 완전히 동작하므로 사람이 API로 직접 핀·결말을 조작하는 것은 이미 가능 — 그 위의 자동화·교차 배선만 없다.
+- **재개 트리거**: web 착수 시(사용자 지시) — 그때 화면이 실제로 필요로 하는 항목부터 순서대로.
+- **관련**: `docs/17-feature-watchlist.md`, `working-area/progress-log.md`(2026-07-25 WATCH 배선 기록).
+
 ## [열림] Q-82. PRI(docs/19) 대기 술어 — "ARCHIVED 아님"·"구매됨/완료" 표시 구분을 배지 표현으로 미룸
 - **맥락**: M6 착수(2026-07-25, 사용자 지시). docs/19 대기 술어 원문 = "[등록 ∧ 활성 구매 없음 ∧ ARCHIVED 아님 ∧ 수동 완료 아님]", "비대기 상태 병기 '1·구매됨/완료', ARCHIVED는 설정 화면만"(3-5 손잡이). `ARCHIVED`는 코드상 `PurchaseState.ARCHIVED`(Product 자체엔 그런 상태가 없다, `docs/02` OBSERVING→REPORT_PENDING→CLOSED→ARCHIVED→OBSERVING 재활성). 원문은 "활성 구매 없음"(=OBSERVING 없음)과 "ARCHIVED 아님"을 별개 조건으로 쓰고, 표시도 갈랐다(CLOSED류는 목록 배지, ARCHIVED는 설정 화면 숨김) — CLOSED만 있고 OBSERVING·ARCHIVED가 없는 경우가 "대기"인지 "구매됨/완료"인지 문면만으로는 확정하기 어렵다.
 - **잠정값**: `PriorityQueue.isWaiting(hasAnyPurchase, manuallyCompleted)` — Purchase가 **어느 상태로든 하나라도 있으면** 무조건 비대기로 본다(CLOSED·ARCHIVED·OBSERVING 구분 없음). "대기인가"라는 데이터 진실은 이 한 가지로 충분하고, 배지 문구("구매됨/완료" vs 숨김)는 표시 손잡이(절대 원칙 4)라 화면이 Purchase 상태별로 가르면 된다 — 되돌리기 쉬운 seam(`isWaiting`의 파라미터를 상태 목록으로 넓히면 됨).

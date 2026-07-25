@@ -79,7 +79,7 @@
 
 ## M6 — 보관함·우선순위 (2차, 조건부) — **2026-07-25 착수**(사용자 지시, PRI/SIG/PUR/DIGEST 안착 후)
 - **PRI**(`docs/19`): ✅ **백엔드 완료**(2026-07-25) — `PriorityQueue`(순수 대기 판정)·V18(`priority_rank`·`manually_completed`)·3 유스케이스·REST(`PriorityController`). web 표면(목록 정렬 1곳)은 **미착수**(web은 지시 시에만 착수, 메모 참조) — 지시 대기.
-- **WATCH**(`docs/17`): 딜 보관함 — 유보 해제(DN-W, 착수 자체가 트리거). ✅ **선행 의존 DealEvent 재개 전이(DN-C1) 완료**(2026-07-25 — `DealStatus` ENDED→ACTIVE·`DealMergePolicy` 재개 로직·`FollowUpKind.REOPENED`). 남은 것: WatchItem 개체·핀 자격·결말 전이·5번째 표면(web, 지시 대기).
+- **WATCH**(`docs/17`): 딜 보관함 — 유보 해제(DN-W, 착수 자체가 트리거). ✅ **핵심 배선 완료**(2026-07-25) — DealEvent 재개 전이(DN-C1: `DealStatus` ENDED→ACTIVE·`DealMergePolicy`·`FollowUpKind.REOPENED`) + WatchItem 개체·핀 자격(`PinEligibility`)·유일성·결말 3종(BOUGHT/MISSED 자동/DROPPED)·REST(V19). 남은 것은 `docs/91` Q-83(anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례·5번째 표면). web은 지시 대기.
 
 ## 상시
 - 각 마일스톤 종료 시: lessons 정리 → CLAUDE.md 규칙 승격 검토, NFR 체크리스트 통과 확인.

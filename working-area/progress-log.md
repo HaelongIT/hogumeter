@@ -1,3 +1,26 @@
+## 2026-07-25 (7) — WATCH 핀 생명주기 핵심 배선 완료 (무중단)
+
+DN-C1 완료 후 곧바로 WatchItem 본체로 이어감. docs/17 골자를 거의 전부 구현:
+
+- **V19** `watch_item`(dealEventId+anchorPostId+메모+state) — 유일성은 부분 유니크 인덱스
+  (`state='ACTIVE'`만 충돌), 결말 후 재핀은 같은 dealEventId로 새 행(UPDATE 없이 이력 자연 연결).
+- **PinState**(순수): ACTIVE→{BOUGHT,MISSED,DROPPED} 뿐, 결말은 전부 종착. 전체 매트릭스 뮤테이션 확인.
+- **PinEligibility**(순수): 자격 = ENDED 아님 ∧ outlierFlag=NONE ∧ 기각 아님 — 새 조건을 안 짓고
+  화면에 이미 뜨는 딜의 정본 조건(outlierFlag·permanentlyExcluded)을 그대로 재사용(사본 방지).
+- **PinDealUseCase**: 자격+유일성 검증 후 생성, anchorPostId는 핀 시점 소스 원문 중 하나.
+- **ResolvePinUseCase**: 사람이 누르는 결말 — markBought/drop(기각·해제는 결과가 같아 DROPPED 하나로 합침).
+- **MarkMissedPinsUseCase**: ENDED 감지→MISSED 자동("사실=자동, 판단=수동" — 사람 결말과 진입 경로가
+  다름). `PipelineScheduler`에 mark-missed-pins 스텝으로 배선(종료 재처리 바로 뒤, 같은 틱 반영) +
+  `PipelineTickReport.watchPinsMissed` 카운터.
+- **GetWatchItemsUseCase** + **WatchController**(REST: GET 목록, POST 생성/bought/drop) +
+  `ApiExceptionHandler` 5건.
+- 전부 뮤테이션 검증(상태기계·자격 조건·유일성·결말 라우팅·자동전이·조회 필터·스케줄러 배선).
+  check-dead-columns·table-wiring·board-references 통과.
+- docs/17·30 갱신, Q-83 신설(남은 것: anchorPostId 자동 승계·PUR 프리필·사후학습 제외·핀 후속 인상
+  특례·web 5번째 표면 — 전부 미착수, 판단 갈리는 항목 아님).
+- **WatchItem CRUD는 REST로 이미 완전히 동작한다** — 사람이 API로 직접 핀·결말 조작 가능. 그 위의
+  자동화·교차 배선(PUR 프리필 등)만 없다.
+
 ## 2026-07-25 (6) — WATCH 선행 의존 DN-C1(DealEvent 재개 전이) 배선 (무중단)
 
 PRI 백엔드 완료 후 WATCH로 이어감. WATCH 본체(WatchItem)는 DN-C1(재개 전이)에 의존한다고
