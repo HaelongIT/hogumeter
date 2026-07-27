@@ -83,6 +83,17 @@ class BenchmarkCalculatorTest {
 				.containsExactlyInAnyOrder(800_000L, 850_000L, 900_000L);
 	}
 
+	/** WATCH(docs/17) 핀 손잡이의 재료 — 사례가 원래 딜의 dealEventId를 그대로 실어야 web이 핀할 수 있다(Q-83). */
+	@Test
+	void casesCarryTheirDealEventIdForWatchPinning() {
+		DealEvent deal = aDealEvent().withPriceFirst(800_000L).singleSite().firstSeen("2026-07-01T00:00:00Z")
+				.withDealEventId(42L).build();
+
+		BenchmarkView view = compute(List.of(deal), 990_000L);
+
+		assertThat(view.cases()).extracting(BenchmarkView.DealRef::dealEventId).containsExactly(42L);
+	}
+
 	// ---- AC-1 SUFFICIENT: median(전체 n) + 카운트 ----
 	@Test
 	void sufficientComputesMedianTierAndCounts() {

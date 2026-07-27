@@ -39,8 +39,11 @@ public record BenchmarkView(
 	/**
 	 * 사례·최근딜 한 건. {@code conditions}는 BM-02 조건 태그(`카할` 등) — 사람이 "정상 가격"으로
 	 * 오인하지 않게 사례에 병기한다(Q-46 ①). 배송비미상은 표본에서 이미 빠지므로(②) 여기 나오지 않는다.
+	 *
+	 * @param dealEventId WATCH(docs/17) 핀 참조 키 — web이 "이 사례를 핀하기" 손잡이를 낼 수 있게(Q-83).
 	 */
-	public record DealRef(long price, LocalDate date, String site, String sourceUrl, List<String> conditions) {
+	public record DealRef(long price, LocalDate date, String site, String sourceUrl, List<String> conditions,
+			long dealEventId) {
 		public DealRef {
 			conditions = List.copyOf(conditions);
 		}

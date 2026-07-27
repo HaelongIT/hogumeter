@@ -201,9 +201,11 @@ public class IngestDealsUseCase {
 		Instant firstSeen = post.getPostedAt() != null ? post.getPostedAt() : post.getCapturedAt();
 		// 새 딜은 조건 태그가 없다 — PreserveAppliedConditionsUseCase가 ingest 뒤에 원문에서 끌어올린다.
 		// 수요축 값은 매칭이 제목에서 판별한 것을 그대로 싣는다(Q-66 ①). null = 값 미상 — 지어내지 않는다.
+		// dealEventId는 저장 전이라 아직 없다(자리표시자 0) — confirmDeal이 실제 저장 후 mapper.toDomain(created)로
+		// 진짜 id를 다시 채운 값을 쓴다. 이 값 자체는 읽히지 않는다.
 		return new DealEvent(variantId, false, Set.of(), price, price, price, price, Origin.LIVE,
 				Set.of(post.getSite()), OutlierFlag.NONE, false, DealStatus.fromRawPostStatus(post.getStatus()),
-				firstSeen, firstSeen, post.getSite(), post.getUrl(), Set.of(), demandAxisValue);
+				firstSeen, firstSeen, post.getSite(), post.getUrl(), Set.of(), demandAxisValue, 0L);
 	}
 
 	private void enqueueForReview(RawDealPost post, MatchResult match) {

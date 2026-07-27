@@ -30,8 +30,15 @@ public final class DealEventBuilder {
 	private Set<String> appliedConditions = Set.of();
 	/** 기본은 값 미상(null) — 수요축을 등록한 제품이 대부분이 아니다(Q-66 ①). */
 	private String demandAxisValue;
+	private long dealEventId = 1L;
 
 	private DealEventBuilder() {
+	}
+
+	/** WATCH(docs/17) 핀 참조 키. 기본 1L — 이 값 자체를 시험하는 테스트만 바꿔 쓰면 된다. */
+	public DealEventBuilder withDealEventId(long id) {
+		this.dealEventId = id;
+		return this;
 	}
 
 	public DealEventBuilder appliedConditions(String... conditions) {
@@ -143,6 +150,6 @@ public final class DealEventBuilder {
 		Instant ls = (lastSeen != null) ? lastSeen : firstSeen;
 		return new DealEvent(variantId, unclassified, productCandidates, priceFirst, pMin, pMax, pLast,
 				origin, resolvedSites, outlierFlag, permanentlyExcluded, status, firstSeen, ls, site, sourceUrl,
-				appliedConditions, demandAxisValue);
+				appliedConditions, demandAxisValue, dealEventId);
 	}
 }

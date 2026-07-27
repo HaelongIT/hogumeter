@@ -66,7 +66,8 @@ public class DealMergePolicy {
 				first.site(),
 				first.sourceUrl(),
 				union(existing.appliedConditions(), incoming.appliedConditions()),
-				mergeDemandAxisValue(existing.demandAxisValue(), incoming.demandAxisValue()));
+				mergeDemandAxisValue(existing.demandAxisValue(), incoming.demandAxisValue()),
+				existing.dealEventId()); // 병합은 기존 행을 갱신할 뿐 새 딜이 아니다 — 정체성은 existing이 쥔다
 	}
 
 	/**
