@@ -1,3 +1,22 @@
+## 2026-07-27 (6) — [cleanup] domain/used/Listing 죽은 코드 삭제 + check-domain-consumers.sh 사각지대 보강 (무중단)
+
+Q-81 완료 뒤 도메인 전역 "호출자 0" 감사를 배경 에이전트로 마저 돌려 발견.
+
+- **`domain/used/Listing.java`(+`ListingTest.java`) 삭제** — USED-02 매물 생애주기를 표현하는 순수
+  레코드였지만 프로덕션 호출자 0. 실제 생애주기는 JPA `ListingEntity`가 다르게(더 느슨하게) 재구현
+  — `Listing.transition()`은 비합법 전이에 예외를 던지는데 `ListingEntity.disappeared()`는 조용히
+  무음 처리(Q-10과 같은 결의 사본 드리프트, 다만 이쪽은 실피해 없이 이미 죽어 있었다).
+- **`check-domain-consumers.sh` 사각지대 보강** — 이 게이트가 `public record`를 전부 "데이터"로
+  보고 검사를 건너뛰어서, `Listing`처럼 행동(상태전이·가드)이 있는 레코드도 사각지대에 있었다.
+  이제 record 헤더 밖 메서드 시그니처 수를 세어(다중행 시그니처 대응, 파일을 한 줄로 접어 정규식
+  매칭) 0개(순수 데이터)만 스킵하고 1개 이상이면 보통 클래스처럼 검사한다. 실 저장소 재실행 결과
+  새로 걸린 13개 record(`Purchase`·`DealEvent`·`DigestWindow` 등) 전부 실제 소비처가 있어 새 FAIL
+  0건 — 안전하게 조여졌다(`DOMAIN CONSUMERS OK: 클래스 52개`, 이전 39개).
+- 계약 테스트(`check-domain-consumers.test.sh`)에 "행동 있는 record + 소비처 0" 케이스 추가, 게이트
+  코드를 되돌려(`git stash`) 그 케이스가 RED로 도는 것으로 확인 후 복구.
+- `docs/99`에 "구조적 면제(enum/record/interface)는 행동 유무 확인 없이 걸면 사각지대가 생긴다"
+  교훈 기록(기존 CLAUDE.md 규칙 "게이트의 명시된 한계는 다음 게이트의 명세다"의 실사례).
+
 ## 2026-07-27 (5) — [cleanup] OutlierDetector 죽은 코드 삭제 + Q-81 해소: DIGEST ④ 핀 결말·부활 배선 + V20 REOPENED CHECK 제약 결함 수정 (무중단)
 
 사용자 지시("커밋하고 푸쉬하고 이어서 무중단 개발 쭉 진행해줘")로 케이던스를 다시 연속 진행으로

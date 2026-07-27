@@ -1005,3 +1005,11 @@
 - **왜 안 잡혔나**: `FollowUpAlertUseCaseTest`는 PRICE_CHANGED·VERIFIED·ENDED 세 종류만 커버했고 REOPENED는 golden에 표본이 0이었다("열거형 필드의 값 분포를 세라"는 CLAUDE.md 규칙 그대로의 사례). `PipelineScheduler.runStep`이 예외를 삼켜 stepFailures 카운터만 늘리므로, 도입 이래 매 틱 REOPENED 후속을 보낼 때마다 조용히 실패하고 있었는데 어떤 로그·테스트도 이를 드러내지 않았다.
 - **교훈(기존 규칙의 재확인, CLAUDE.md 이미 있음)**: "모듈 경계를 넘는 값 계약(문자열 표식 등)은 정본을 지목하고, 사본과 정본이 같은지 별도 게이트로 강제한다"는 규칙의 정확한 사례다 — 이번엔 정본이 `FollowUpKind`(Java enum), 사본이 `deal_alert.kind` CHECK 제약(SQL 문자열 목록)이었다. **enum에 값을 추가하는 커밋은 "이 enum의 name()을 문자열로 저장하는 모든 DB 제약·프론트 화이트리스트"를 함께 grep해야 한다** — 지금은 이걸 강제하는 게이트가 없다(향후 후보: enum과 CHECK 제약을 같이 보는 정적 검사). 없으면 다음에도 같은 모양으로 반복된다.
 - **관련**: `V20__deal_alert_reopened_kind.sql`, `FollowUpAlertUseCaseTest#sendsReopenedFollowUp`(V20 없이 RED 확인), `docs/91` Q-81.
+
+## 2026-07-27 — "record는 데이터"라는 게이트의 전제가 행동 있는 레코드의 죽음을 숨겼다 (`domain/used/Listing`)
+
+- **맥락**: 도메인 전역 "호출자 0" 감사(배경 에이전트)를 이어 돌리다 `domain/used/Listing`(USED-02 매물 생애주기, 상태전이 가드·예외 포함)이 프로덕션 호출자 0임을 발견. 실제 매물 생애주기는 JPA `ListingEntity`가 **다르게 재구현**하고 있었다 — `Listing.transition()`은 비합법 전이에 `IllegalStateException`을 던지는데, `ListingEntity.disappeared()`는 같은 상황에서 **조용히 아무 것도 안 한다**(가드 실패가 무음). Q-10과 같은 결의 사본 드리프트.
+- **왜 `check-domain-consumers.sh`가 못 잡았나**: 이 게이트는 `public record`를 전부 "데이터"로 보고 검사 대상에서 뺀다(Jackson·JPA 역직렬화가 리터럴 호출자 없이도 record를 쓸 수 있어서). 그런데 `Purchase`·`DealEvent`처럼 상태전이·가드를 품은 record도 전부 이 규칙에 걸려 스킵됐다 — **레코드에 정준 접근자 밖의 행동(메서드)이 있으면 "데이터"가 아니라 "순수 도메인 클래스"인데, 게이트는 문법(record 키워드)만 보고 의미(행동 유무)를 안 봤다.**
+- **고침**: `check-domain-consumers.sh`가 이제 record 헤더를 제외한 메서드 시그니처 수를 센다(다중행 시그니처 대응을 위해 파일을 한 줄로 접은 뒤 정규식 매칭). 0개(순수 데이터)면 여전히 스킵, 1개 이상이면 보통 클래스처럼 소비처를 검사한다. 실 저장소에서 새로 걸린 13개 record(`Purchase`·`DealEvent`·`DigestWindow` 등) 전부 실제 소비처가 있어 새 FAIL은 0건 — 안전하게 조여졌다. 계약 테스트(`check-domain-consumers.test.sh`)에 "행동 있는 record + 소비처 0"이 차단되는 케이스를 추가하고, 게이트 코드를 되돌려 그 케이스가 RED로 돌아가는 것으로 확인했다.
+- **교훈(규칙화)**: **정적 게이트가 "이 문법 구조는 항상 데이터/무해하다"고 가정하면, 그 구조 안에 행동을 넣는 순간 사각지대가 생긴다.** enum·record·interface를 자동 면제하는 검사는 "그 안에 로직이 있는가"를 실제로 확인해야 한다 — 이름·키워드만으로 건너뛰면 Q-10류 결함(사본 드리프트)이 스며들 자리를 남긴다. **한 결함을 고칠 때 "이 결함을 잡아야 할 게이트가 왜 못 잡았는가"까지 묻는다** — 결함만 고치고 게이트의 사각지대를 그대로 두면 같은 모양이 반드시 재발한다.
+- **관련**: `domain/used/Listing.java`(삭제) + `ListingTest.java`(삭제), `check-domain-consumers.sh`(record 처리 변경), `check-domain-consumers.test.sh`(신규 케이스 + RED 확인).

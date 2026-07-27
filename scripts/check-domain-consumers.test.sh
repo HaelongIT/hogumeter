@@ -50,14 +50,27 @@ echo "── 통과해야 함 (exit 0) — 오차단은 게이트를 꺼지게 �
 check 0 "프로덕션 소비자가 타입을 쓴다" "$(fake "$THING" 'class Consumer { Thing thing; }')"
 check 0 "소비처 0이지만 열린 Q로 선언됨" "$(fake "$THING" 'class Consumer {}' 'Thing  Q-9  아직 배선 전')"
 
-# enum·interface·record는 **데이터**다. Jackson·JPA가 역직렬화로 쓰므로 리터럴 소비처가 없을 수 있다.
+# enum·interface는 **데이터/계약**이다. Jackson·JPA가 역직렬화로 쓰므로 리터럴 소비처가 없을 수 있다.
 check 0 "enum은 대상이 아니다" "$(fake 'public enum Thing { A, B }' 'class Consumer {}')"
 check 0 "interface는 대상이 아니다" "$(fake 'public interface Thing { void go(); }' 'class Consumer {}')"
-check 0 "record는 대상이 아니다" "$(fake 'public record Thing(long id) { }' 'class Consumer {}')"
+# record는 **필드만 있을 때만** 데이터다 — 정준 접근자 밖 메서드(행동)가 있으면 보통 클래스처럼 본다.
+check 0 "필드만 있는 record는 대상이 아니다" "$(fake 'public record Thing(long id) { }' 'class Consumer {}')"
 
 echo "── 차단되어야 함 (exit 1) ──"
 # 이게 이 게이트의 존재 이유: 순수 도메인은 단위 테스트만으로 GREEN이 되어 죽어도 신호가 없다.
 check 1 "소비처 0인데 선언도 없다" "$(fake "$THING" 'class Consumer {}')"
+
+# 이게 이번에 메운 구멍: 행동(상태전이·가드)이 있는 record는 소비처 0이면 잡혀야 한다 — `Listing`
+# (USED-02)이 이 모양으로 죽어 있었다. 정준 접근자를 넘는 메서드가 신호다.
+check 1 "행동이 있는 record인데 소비처가 없으면 차단된다(Listing류 결함)" "$(fake \
+	'public record Thing(long id, String status) {
+	public Thing transition(String target) {
+		if (!status.equals("A")) {
+			throw new IllegalStateException("nope");
+		}
+		return new Thing(id, target);
+	}
+}' 'class Consumer {}')"
 
 # **테스트는 호출자가 아니다.**
 r=$(fake "$THING" 'class Consumer {}')
