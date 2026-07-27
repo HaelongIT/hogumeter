@@ -4,6 +4,8 @@ import dev.hogumeter.core.application.ComputeDigestBestOpportunityUseCase.BestOp
 import dev.hogumeter.core.application.ComputeDigestOpportunityCountUseCase.OpportunityCount;
 import dev.hogumeter.core.application.ComputeDigestTransitionUseCase.DigestTransition;
 import dev.hogumeter.core.domain.digest.DigestWindow;
+import dev.hogumeter.core.domain.digest.PinDigestEvent;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 
@@ -24,14 +26,17 @@ public class AssembleVariantDigestUseCase {
 	private final ComputeDigestBestOpportunityUseCase bestOpportunities;
 	private final ComputeDigestOpportunityCountUseCase opportunityCounts;
 	private final ComputeDigestTransitionUseCase transitions;
+	private final ComputeDigestPinEndingsUseCase pinEndings;
 
 	public AssembleVariantDigestUseCase(ComputeDigestWindowUseCase windows,
 			ComputeDigestBestOpportunityUseCase bestOpportunities,
-			ComputeDigestOpportunityCountUseCase opportunityCounts, ComputeDigestTransitionUseCase transitions) {
+			ComputeDigestOpportunityCountUseCase opportunityCounts, ComputeDigestTransitionUseCase transitions,
+			ComputeDigestPinEndingsUseCase pinEndings) {
 		this.windows = windows;
 		this.bestOpportunities = bestOpportunities;
 		this.opportunityCounts = opportunityCounts;
 		this.transitions = transitions;
+		this.pinEndings = pinEndings;
 	}
 
 	public VariantDigestRow assemble(long variantId) {
@@ -41,17 +46,19 @@ public class AssembleVariantDigestUseCase {
 				window,
 				bestOpportunities.bestOpportunity(variantId, window),
 				opportunityCounts.count(variantId, window),
-				transitions.transition(variantId));
+				transitions.transition(variantId),
+				pinEndings.pinEvents(variantId, window));
 	}
 
 	/**
-	 * 한 variant의 다이제스트 행. 렌더링이 이 값들을 섹션 문구로 옮긴다(아직 없다).
+	 * 한 variant의 다이제스트 행. 렌더링이 이 값들을 섹션 문구로 옮긴다.
 	 *
 	 * @param bestOpportunity ① 이번 창 최고 기회(없으면 empty — 그리지 않는다)
 	 * @param observation ③ 관찰 경과(이번 창 +k / 누적 N)
 	 * @param transition ② 전환(from/to 색 + 보고 대상 여부)
+	 * @param pinEvents ④ 핀 결말 전이 + 부활 이벤트(기각 제외, 없으면 빈 리스트)
 	 */
 	public record VariantDigestRow(long variantId, DigestWindow window, Optional<BestOpportunity> bestOpportunity,
-			OpportunityCount observation, DigestTransition transition) {
+			OpportunityCount observation, DigestTransition transition, List<PinDigestEvent> pinEvents) {
 	}
 }

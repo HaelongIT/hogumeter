@@ -6,6 +6,7 @@ import dev.hogumeter.core.application.ComputeDigestBestOpportunityUseCase.BestOp
 import dev.hogumeter.core.application.ComputeDigestTransitionUseCase.DigestTransition;
 import dev.hogumeter.core.application.GetReviewQueueUseCase.PendingItem;
 import dev.hogumeter.core.application.VariantNaming.Naming;
+import dev.hogumeter.core.domain.digest.PinDigestEvent;
 import dev.hogumeter.core.domain.signal.SignalColor;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,7 +60,8 @@ public class DigestFormatter {
 	}
 
 	private static boolean hasSignal(VariantDigestRow row) {
-		return row.bestOpportunity().isPresent() || row.observation().inWindow() > 0 || row.transition().reportable();
+		return row.bestOpportunity().isPresent() || row.observation().inWindow() > 0 || row.transition().reportable()
+				|| !row.pinEvents().isEmpty();
 	}
 
 	private static String variantLine(VariantDigestRow row, Naming naming) {
@@ -70,7 +72,17 @@ public class DigestFormatter {
 			parts.add(transitionPart(row.transition()));
 		}
 		parts.add("관찰 이번 창 +" + row.observation().inWindow() + " / 누적 " + row.observation().cumulative());
+		row.pinEvents().forEach(event -> parts.add(pinEventPart(event)));
 		return String.join(" · ", parts);
+	}
+
+	/** ④ 핀 결말 전이 + 부활 이벤트(기각 DROPPED는 원문이 제외 — {@link PinDigestEvent}엔 애초에 없다). */
+	private static String pinEventPart(PinDigestEvent event) {
+		return switch (event.type()) {
+			case BOUGHT -> "📌 샀어요";
+			case MISSED -> "📌 놓쳤어요";
+			case REVIVED -> "📌 ↩️ 다시 살아남";
+		};
 	}
 
 	private static String subject(Naming naming) {

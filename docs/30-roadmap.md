@@ -75,7 +75,7 @@
 - 기반: 딜 집합 명명·시간 좌표계·가격 3분법(`docs/03`) 순수 규칙 이식.
 - **SIG + CAD**(`docs/16`): 신호등·딜 주기 read-model(가장 저비용, 나머지가 소비할 표면 선확보).
 - **PUR**(`docs/15`): 구매 기록·관찰 모드·성적표(구매 이후 루프).
-- **DIGEST**(`docs/18`): ✅ **2026-07-25 사실상 완료**(④ 핀 결말만 WATCH 배치 전까지 비활성). 창 계산·저장물 쓰기·6섹션 중 5개(①②③⑤⑥) 조립·렌더링·분할 발송·스케줄(`DigestScheduler`, 일요일 20시 KST)까지 전 경로 배선. 문서화된 한계(quiet hours 게이트 부재 등)는 `docs/91` Q-81.
+- **DIGEST**(`docs/18`): ✅ **2026-07-27 완료(6섹션 전부)**. WATCH(M6) 백엔드 안착으로 ④ 핀 결말+부활도 배선(`ComputeDigestPinEndingsUseCase`). 창 계산·저장물 쓰기·조립·렌더링·분할 발송·스케줄(`DigestScheduler`, 일요일 20시 KST)까지 전 경로. 부수로 DN-C1 REOPENED 후속이 도입 이래 `deal_alert.kind` CHECK 제약에 걸려 매번 조용히 실패하던 진짜 결함을 찾아 V20으로 수정. 문서화된 한계(quiet hours 게이트 부재 등)는 `docs/91` Q-81.
 
 ## M6 — 보관함·우선순위 (2차, 조건부) — **2026-07-25 착수**(사용자 지시, PRI/SIG/PUR/DIGEST 안착 후)
 - **PRI**(`docs/19`): ✅ **백엔드 완료**(2026-07-25) — `PriorityQueue`(순수 대기 판정)·V18(`priority_rank`·`manually_completed`)·3 유스케이스·REST(`PriorityController`). web 표면(목록 정렬 1곳)은 **미착수**(web은 지시 시에만 착수, 메모 참조) — 지시 대기.

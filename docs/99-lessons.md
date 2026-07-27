@@ -998,3 +998,10 @@
 - **작동한 우회**: `--no-daemon`을 붙이면(대신 데몬 만료 검사 경로 자체를 안 탐) 매 실행이 단발 프로세스로 돌아 위 스캔을 건너뛰고 정상 동작한다. `$env:JAVA_HOME`을 같은 명령 안에서 명시적으로 지정하는 것도 병행했다(세션 간 상태 비영속이라 매번 재지정 필요). 최종 동작 커맨드: `$env:JAVA_HOME="C:\...\temurin21-jdk\current"; ./gradlew.bat test --no-daemon`.
 - **교훈(규칙화)**: **"버전 출력(`-v`)은 되는데 실제 태스크만 매번 같은 JVM 에러로 죽는다"는 툴체인/데몬 스캔 단계의 문제이지 `JAVA_HOME` 설정 문제가 아니다** — `org.gradle.java.installations.*` 프로퍼티로 못 고치면 `--no-daemon`부터 시도해 데몬 스캔 자체를 우회한다. 이 결함은 **이 컴퓨터의 로컬 상태**(미완료 JDK 설치)가 원인이라 재현성이 낮고 CI에는 영향 없음 — 다음 세션에 재발하면 먼저 `C:\Program Files\Eclipse Adoptium\`의 설치가 그 사이 완료(또는 삭제)됐는지부터 확인한다.
 - **관련**: (로컬 전용, 테스트 파일 없음) — CI(GitHub Actions)는 clean 컨테이너라 이 문제와 무관.
+
+## 2026-07-27 — enum에 값을 추가하면서 DB CHECK 제약(같은 값 집합의 사본)을 안 고쳤다 — REOPENED가 도입일부터 매번 실패
+
+- **맥락**: DIGEST ④(핀 결말+부활, Q-81) 통합 테스트를 짜다가 `alerts.save(new DealAlertEntity(dealId, "REOPENED"))`가 `DataIntegrityViolationException`을 냈다. `V4__alert_history.sql`의 `deal_alert.kind`는 `check (kind in ('FIRST','VERIFIED','PRICE_CHANGED','ENDED'))`인데, DN-C1(2026-07-25)이 `FollowUpKind` enum에 `REOPENED`를 추가하면서 이 CHECK 제약(같은 값 집합의 **DB측 사본**)은 안 건드렸다.
+- **왜 안 잡혔나**: `FollowUpAlertUseCaseTest`는 PRICE_CHANGED·VERIFIED·ENDED 세 종류만 커버했고 REOPENED는 golden에 표본이 0이었다("열거형 필드의 값 분포를 세라"는 CLAUDE.md 규칙 그대로의 사례). `PipelineScheduler.runStep`이 예외를 삼켜 stepFailures 카운터만 늘리므로, 도입 이래 매 틱 REOPENED 후속을 보낼 때마다 조용히 실패하고 있었는데 어떤 로그·테스트도 이를 드러내지 않았다.
+- **교훈(기존 규칙의 재확인, CLAUDE.md 이미 있음)**: "모듈 경계를 넘는 값 계약(문자열 표식 등)은 정본을 지목하고, 사본과 정본이 같은지 별도 게이트로 강제한다"는 규칙의 정확한 사례다 — 이번엔 정본이 `FollowUpKind`(Java enum), 사본이 `deal_alert.kind` CHECK 제약(SQL 문자열 목록)이었다. **enum에 값을 추가하는 커밋은 "이 enum의 name()을 문자열로 저장하는 모든 DB 제약·프론트 화이트리스트"를 함께 grep해야 한다** — 지금은 이걸 강제하는 게이트가 없다(향후 후보: enum과 CHECK 제약을 같이 보는 정적 검사). 없으면 다음에도 같은 모양으로 반복된다.
+- **관련**: `V20__deal_alert_reopened_kind.sql`, `FollowUpAlertUseCaseTest#sendsReopenedFollowUp`(V20 없이 RED 확인), `docs/91` Q-81.

@@ -1,3 +1,35 @@
+## 2026-07-27 (5) — [cleanup] OutlierDetector 죽은 코드 삭제 + Q-81 해소: DIGEST ④ 핀 결말·부활 배선 + V20 REOPENED CHECK 제약 결함 수정 (무중단)
+
+사용자 지시("커밋하고 푸쉬하고 이어서 무중단 개발 쭉 진행해줘")로 케이던스를 다시 연속 진행으로
+전환. 이번 배치는 세 조각:
+
+**1) OutlierDetector.reviewItemFor 삭제** — Q-86 직후 감사에서 확인한 호출자 0 죽은 코드(이미 이전
+증분에 커밋·기록). 여기 이어서 정리.
+
+**2) Q-81 완전 해소 — DIGEST ④(핀 결말 전이 + 부활 이벤트)**: `docs/30-roadmap` 재확인 결과 M5
+DIGEST의 마지막 재개 트리거("WATCH 채택 시")가 2026-07-25 WATCH 백엔드 안착으로 이미 참이 돼 있었다.
+- `domain/digest/PinDigestEvent`(순수, BOUGHT/MISSED/REVIVED) 신설.
+- `ComputeDigestPinEndingsUseCase.pinEvents(variantId, window)` — "핀 이력 딜"(WatchItem 존재, 상태
+  무관) 범위로 결말(기각 DROPPED 제외)·부활(DN-C1 REOPENED 후속)을 창 안으로 필터.
+- `AssembleVariantDigestUseCase.VariantDigestRow`에 `pinEvents` 필드 추가(같은 창으로 조립),
+  `DigestFormatter`가 "📌 샀어요/놓쳤어요/↩️ 다시 살아남"으로 렌더 — 이 섹션만 있어도 무변동 합산
+  대상에서 빠지게 `hasSignal` 확장.
+- DIG-04 6섹션 전부 배선 완료(①②③④⑤⑥).
+
+**3) 🐛 부수 발견 — V20: deal_alert.kind CHECK 제약이 REOPENED를 몰랐다**: ②의 통합 테스트가
+`DataIntegrityViolationException`을 내며 발견. DN-C1(2026-07-25)이 `FollowUpKind.REOPENED`를
+추가했는데 `V4__alert_history.sql`의 CHECK 제약(`FIRST·VERIFIED·PRICE_CHANGED·ENDED`만 허용)은
+그때 안 고쳤다 — **부활 후속 알림은 도입일부터 매 틱 이 제약에 걸려 조용히 실패**하고 있었다
+(`PipelineScheduler.runStep`이 삼켜 stepFailures만 늘었다). `V20__deal_alert_reopened_kind.sql`로
+제약 갱신, `FollowUpAlertUseCaseTest#sendsReopenedFollowUp` 신규(V20 제거 상태에서 RED 확인 후 복구).
+`deal_alert.sent_at`도 이 김에 읽기전용 매핑(DIGEST④ 부활 판정에 필요) — `dead-columns-allowlist`의
+낡은 면제 제거.
+
+- 전부 뮤테이션 검증(hasSignal pinEvents 분기, DROPPED 제외, 핀 이력 스코프 제한, REOPENED CHECK
+  제약 자체를 V20 제거로 RED 재현). 전 게이트(domain-consumers·board-references·dead-columns·
+  table-wiring) 통과. `docs/91` Q-81 완전 해소로 갱신, `docs/30-roadmap` M5 갱신, `docs/99` enum↔
+  CHECK 제약 사본 드리프트 교훈 추가(CLAUDE.md 기존 규칙의 재확인 사례).
+
 ## 2026-07-27 (3) — Q-86 해소: PUR 수동 아카이브 REST 배선 (무중단)
 
 Q-85 배선을 끝내자마자 domain/purchase에 "호출자 0" 감사를 이어 돌려 발견. `Purchase.archive()`·

@@ -11,12 +11,17 @@ import dev.hogumeter.core.adapter.persistence.ProductEntity;
 import dev.hogumeter.core.adapter.persistence.ProductRepository;
 import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
+import dev.hogumeter.core.adapter.persistence.WatchItemEntity;
+import dev.hogumeter.core.adapter.persistence.WatchItemRepository;
 import dev.hogumeter.core.application.AssembleVariantDigestUseCase.VariantDigestRow;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.deal.Origin;
+import dev.hogumeter.core.domain.digest.PinDigestEvent;
+import dev.hogumeter.core.domain.digest.PinDigestEvent.PinDigestEventType;
 import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.signal.SignalColor;
+import dev.hogumeter.core.domain.watch.PinState;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -54,11 +59,15 @@ class AssembleVariantDigestUseCaseTest {
 	ComputeDigestOpportunityCountUseCase opportunityCounts;
 	@Autowired
 	ComputeDigestTransitionUseCase transitions;
+	@Autowired
+	ComputeDigestPinEndingsUseCase pinEndings;
+	@Autowired
+	WatchItemRepository watchItems;
 
 	private AssembleVariantDigestUseCase withFixedSendTime(Instant thisSend) {
 		ComputeDigestWindowUseCase windows = new ComputeDigestWindowUseCase(variants, products, digestStates,
 				Clock.fixed(thisSend, ZoneOffset.UTC));
-		return new AssembleVariantDigestUseCase(windows, bestOpportunities, opportunityCounts, transitions);
+		return new AssembleVariantDigestUseCase(windows, bestOpportunities, opportunityCounts, transitions, pinEndings);
 	}
 
 	@Test
@@ -85,6 +94,7 @@ class AssembleVariantDigestUseCaseTest {
 		// 저장 색 GREEN vs 현재 색(딜 1건이라 GRAY/SPARSE 계열) → 전환 보고 대상
 		assertThat(row.transition().from()).isEqualTo(SignalColor.GREEN);
 		assertThat(row.transition().reportable()).isTrue();
+		assertThat(row.pinEvents()).isEmpty(); // 핀 이력 없음
 	}
 
 	@Test
@@ -100,5 +110,27 @@ class AssembleVariantDigestUseCaseTest {
 		assertThat(row.observation().cumulative()).isZero();
 		assertThat(row.transition().from()).isNull(); // 발송 이력 없음 → 기준선
 		assertThat(row.transition().reportable()).isFalse();
+		assertThat(row.pinEvents()).isEmpty();
+	}
+
+	/** ④가 다른 세 섹션과 같은 창으로 조립되는지 — 창 밖 결말은 담기지 않는다. */
+	@Test
+	void pinEndingWithinWindowFlowsIntoTheAssembledRow() {
+		ProductEntity product = products.save(new ProductEntity("핀 조립 테스트", "test", DemandAxisMode.GROUPED));
+		VariantEntity variant = variants.save(new VariantEntity(product.getId(), "256GB", Map.of()));
+		long v = variant.getId();
+		Instant lastSent = product.getCreatedAt().plusSeconds(3600);
+		digestStates.save(new DigestStateEntity(v, lastSent, "GREEN", "NO_ACTIVE_DEAL", "GROUPED"));
+		Instant thisSend = lastSent.plusSeconds(2 * 24 * 3600);
+		Instant inWindow = lastSent.plusSeconds(24 * 3600);
+		DealEventEntity deal = dealEvents.save(new DealEventEntity(v, false, null, 880_000, 880_000, 880_000, 880_000,
+				Origin.LIVE, false, OutlierFlag.NONE, false, DealStatus.ACTIVE, inWindow, inWindow));
+		WatchItemEntity pin = watchItems.save(new WatchItemEntity(deal.getId(), null, null));
+		pin.resolve(PinState.BOUGHT, inWindow);
+		watchItems.save(pin);
+
+		VariantDigestRow row = withFixedSendTime(thisSend).assemble(v);
+
+		assertThat(row.pinEvents()).extracting(PinDigestEvent::type).containsExactly(PinDigestEventType.BOUGHT);
 	}
 }

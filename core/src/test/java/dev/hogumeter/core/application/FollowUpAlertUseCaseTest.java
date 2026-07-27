@@ -115,6 +115,21 @@ class FollowUpAlertUseCaseTest {
 		assertThat(dealAlerts.existsByDealEventIdAndKind(dealId, FollowUpKind.VERIFIED.name())).isTrue();
 	}
 
+	/**
+	 * V20 회귀 방지 — DN-C1(REOPENED)이 도입됐을 때 {@code deal_alert.kind} CHECK 제약이 갱신되지 않아
+	 * 부활 후속이 매번 DataIntegrityViolationException으로 조용히 실패하고 있었다(docs/91 Q-81).
+	 */
+	@Test
+	void sendsReopenedFollowUp() {
+		long dealId = dealThatAlreadyAlerted();
+
+		int sent = followUp.sendFollowUps(List.of(dealId), FollowUpKind.REOPENED);
+
+		assertThat(sent).isEqualTo(1);
+		assertThat(recordingAlertSender.sent.get(0).followUpKind()).isEqualTo(FollowUpKind.REOPENED);
+		assertThat(dealAlerts.existsByDealEventIdAndKind(dealId, FollowUpKind.REOPENED.name())).isTrue();
+	}
+
 	@Test
 	void doesNotResendSameKind() {
 		long dealId = dealThatAlreadyAlerted();

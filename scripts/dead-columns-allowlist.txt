@@ -6,7 +6,6 @@
 
 # --- 설계상 영원히 안 닿음 (INTENTIONAL) ---
 deal_event.base_price     INTENTIONAL  BM-02 AC-2 역산 금지 — 항상 null. 스모크 5-1g가 base_price=NULL을 계약으로 못박는다.
-deal_alert.sent_at        INTENTIONAL  포렌식 타임스탬프(DB default now()). 발송 판정은 이력 존재로 하고 시각은 안 읽는다(수동 조사용).
 held_alert.held_at        INTENTIONAL  포렌식 타임스탬프(DB default now()). 플러시는 현재 방해금지로 재평가하지 held_at을 안 본다(Q-20 ②).
 deal_ignore.ignored_at    INTENTIONAL  포렌식 타임스탬프(DB default now()). 무시 판정은 행 존재로 하고 시각은 안 읽는다.
 

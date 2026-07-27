@@ -12,6 +12,8 @@ import dev.hogumeter.core.application.GetReviewQueueUseCase.PendingItem;
 import dev.hogumeter.core.application.VariantNaming.Naming;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.digest.DigestWindow;
+import dev.hogumeter.core.domain.digest.PinDigestEvent;
+import dev.hogumeter.core.domain.digest.PinDigestEvent.PinDigestEventType;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
 import dev.hogumeter.core.domain.signal.SignalColor;
 import java.time.Instant;
@@ -30,7 +32,7 @@ class DigestFormatterTest {
 
 	private static VariantDigestRow silentRow(long variantId) {
 		return new VariantDigestRow(variantId, WINDOW, java.util.Optional.empty(), new OpportunityCount(0, 0),
-				new DigestTransition(null, SignalColor.GRAY, false));
+				new DigestTransition(null, SignalColor.GRAY, false), List.of());
 	}
 
 	@Test
@@ -49,7 +51,7 @@ class DigestFormatterTest {
 				.demandAxisValue("블랙").build();
 		VariantDigestRow signaled = new VariantDigestRow(1, WINDOW,
 				java.util.Optional.of(new BestOpportunity(deal, 700_000, true)), new OpportunityCount(2, 5),
-				new DigestTransition(SignalColor.YELLOW, SignalColor.GREEN, true));
+				new DigestTransition(SignalColor.YELLOW, SignalColor.GREEN, true), List.of());
 		VariantDigestRow quietA = silentRow(2);
 		VariantDigestRow quietB = silentRow(3);
 		Naming naming = new Naming("아이폰 17", "256GB");
@@ -64,12 +66,36 @@ class DigestFormatterTest {
 		assertThat(out).contains("나머지 2개 항목은 변동 없음");
 	}
 
+	/** ④ 핀 결말 전이 + 부활 이벤트 — 다른 신호가 없어도 이것만으로 자기 줄을 받는다(무변동 합산 대상 아님). */
+	@Test
+	void pinEventsGiveTheirOwnLineEvenWithoutOtherSignals() {
+		VariantDigestRow row = new VariantDigestRow(1, WINDOW, java.util.Optional.empty(), new OpportunityCount(0, 0),
+				new DigestTransition(null, SignalColor.GRAY, false),
+				List.of(new PinDigestEvent(42L, PinDigestEventType.BOUGHT, Instant.parse("2026-07-03T00:00:00Z"))));
+
+		String out = formatter.format(new Digest(List.of(row), List.of(), false), Map.of());
+
+		assertThat(out).contains("샀어요");
+		assertThat(out).doesNotContain("나머지 1개 항목은 변동 없음");
+	}
+
+	@Test
+	void revivedPinEventRendersDistinctlyFromEndings() {
+		VariantDigestRow row = new VariantDigestRow(1, WINDOW, java.util.Optional.empty(), new OpportunityCount(0, 0),
+				new DigestTransition(null, SignalColor.GRAY, false),
+				List.of(new PinDigestEvent(42L, PinDigestEventType.REVIVED, Instant.parse("2026-07-03T00:00:00Z"))));
+
+		String out = formatter.format(new Digest(List.of(row), List.of(), false), Map.of());
+
+		assertThat(out).contains("다시 살아남");
+	}
+
 	@Test
 	void unnamedVariantFallsBackToUnknownSubject() {
 		DealEvent deal = aDealEvent().build();
 		VariantDigestRow row = new VariantDigestRow(9, WINDOW,
 				java.util.Optional.of(new BestOpportunity(deal, deal.priceFirst(), true)), new OpportunityCount(1, 1),
-				new DigestTransition(null, SignalColor.GRAY, false));
+				new DigestTransition(null, SignalColor.GRAY, false), List.of());
 
 		String out = formatter.format(new Digest(List.of(row), List.of(), false), Map.of());
 
