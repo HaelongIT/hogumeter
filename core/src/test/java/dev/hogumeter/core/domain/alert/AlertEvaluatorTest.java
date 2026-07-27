@@ -76,6 +76,30 @@ class AlertEvaluatorTest {
 				.containsExactly(AlertIntensity.SPECIAL, AlertIntensity.TARGET, AlertIntensity.GOOD);
 	}
 
+	/**
+	 * PUR-03: 이 variant의 관찰이 전부 ARCHIVED면(호출자가 미리 계산해 넘김) 🔥·목표가 트리거는 꺼진다.
+	 * SPECIAL·GOOD(기준가·P25 계열)은 PUR-03 매트릭스 밖이라 그대로 유지된다.
+	 */
+	@Test
+	void purchaseGateSuppressesJackpotAndTargetWhenAllObservationsAreArchived() {
+		DealEvent d = aDealEvent().withPriceFirst(840_000L).outlier(OutlierFlag.LOWER).singleSite().build();
+
+		AlertDecision r = evaluator.evaluate(d, sufficient(), policy(900_000L), params, false, true);
+
+		assertThat(r.shouldAlert()).isTrue(); // SPECIAL·GOOD은 살아 있다
+		assertThat(r.intensity()).isEqualTo(AlertIntensity.SPECIAL);
+		assertThat(r.alsoSatisfied()).containsExactly(AlertIntensity.GOOD); // JACKPOT·TARGET 빠짐
+	}
+
+	@Test
+	void purchaseGateDoesNotSuppressWhenFalse() {
+		DealEvent d = aDealEvent().withPriceFirst(840_000L).outlier(OutlierFlag.LOWER).singleSite().build();
+
+		AlertDecision r = evaluator.evaluate(d, sufficient(), policy(900_000L), params, false, false);
+
+		assertThat(r.intensity()).isEqualTo(AlertIntensity.JACKPOT);
+	}
+
 	@Test
 	void specialWhenAtOrBelowP25() {
 		AlertDecision r = evaluator.evaluate(deal(840_000L), sufficient(), policy(null), params);

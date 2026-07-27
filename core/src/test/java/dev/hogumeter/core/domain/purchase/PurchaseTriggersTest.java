@@ -52,4 +52,37 @@ class PurchaseTriggersTest {
 		Purchase closed = observingAt(900_000L).expire().close();
 		assertThat(PurchaseTriggers.paidPriceTriggerFires(880_000L, List.of(closed))).isFalse();
 	}
+
+	// ---- isEnabled: 복수 관찰 OR + 무관찰 기본 허용 ----
+
+	/** 관찰이 아예 없으면 이 매트릭스가 관할하지 않는다 — AL-02 단독 판정을 막지 않는다(항상 enabled). */
+	@Test
+	void noPurchasesMeansNotSuppressed() {
+		assertThat(PurchaseTriggers.isEnabled(PurchaseTrigger.JACKPOT, List.of())).isTrue();
+		assertThat(PurchaseTriggers.isEnabled(PurchaseTrigger.TARGET, List.of())).isTrue();
+	}
+
+	@Test
+	void singleArchivedPurchaseSuppressesJackpotAndTarget() {
+		Purchase archived = observingAt(900_000L).expire().close().archive();
+
+		assertThat(PurchaseTriggers.isEnabled(PurchaseTrigger.JACKPOT, List.of(archived))).isFalse();
+		assertThat(PurchaseTriggers.isEnabled(PurchaseTrigger.TARGET, List.of(archived))).isFalse();
+	}
+
+	/** 복수 관찰 = 트리거 열별 OR — 하나라도 살아있으면(OBSERVING) 전체가 아직 enabled다. */
+	@Test
+	void oneLiveObservationAmongArchivedOnesKeepsItEnabled() {
+		Purchase archived = observingAt(900_000L).expire().close().archive();
+		Purchase live = observingAt(850_000L);
+
+		assertThat(PurchaseTriggers.isEnabled(PurchaseTrigger.JACKPOT, List.of(archived, live))).isTrue();
+	}
+
+	@Test
+	void closedPurchaseKeepsJackpotAndTargetEnabled() {
+		Purchase closed = observingAt(900_000L).expire().close();
+
+		assertThat(PurchaseTriggers.isEnabled(PurchaseTrigger.JACKPOT, List.of(closed))).isTrue();
+	}
 }

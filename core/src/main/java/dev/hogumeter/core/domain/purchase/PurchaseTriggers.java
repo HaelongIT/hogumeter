@@ -29,4 +29,18 @@ public final class PurchaseTriggers {
 				.filter(p -> p.state() == PurchaseState.OBSERVING)
 				.anyMatch(p -> dealPrice < p.paidPrice());
 	}
+
+	/**
+	 * 이 variant에 걸린 관찰들을 놓고 트리거가 켜져 있는가("복수 관찰 = 트리거 열별 OR"). 관찰이
+	 * 하나라도 이 트리거를 허용하면 켜진다 — 전부 ARCHIVED일 때만 꺼진다.
+	 *
+	 * <p><b>관찰이 아예 없으면 항상 켜진다</b> — 이 매트릭스는 "구매 후 알림을 어떻게 계속할까"를 다룰
+	 * 뿐이라, 관찰 자체가 없는 딜의 판정(AL-02)을 이 표가 막을 이유가 없다.
+	 */
+	public static boolean isEnabled(PurchaseTrigger trigger, List<Purchase> purchases) {
+		if (purchases.isEmpty()) {
+			return true;
+		}
+		return purchases.stream().anyMatch(p -> enabledFor(p.state()).contains(trigger));
+	}
 }

@@ -1,3 +1,17 @@
+## 2026-07-27 (2) — Q-85 해소: PUR-03 🔥·목표가 ARCHIVED 억제 실배선 (무중단)
+
+Q-84 정리 뒤 domain 계층 "호출자 0" 감사를 계속하다 발견한 실결함. `PurchaseTriggers.enabledFor`
+(PUR-03 매트릭스: 🔥·목표가는 ARCHIVED만 off)는 단위 테스트만 부르고 있었고, 실제 알림 판정 경로
+(`EvaluateAlertOnDealUseCase`→`AlertDispatcher`→`AlertEvaluator`)는 이 매트릭스를 전혀 안 봤다 —
+**Purchase가 ARCHIVED로 전이돼도 JACKPOT·TARGET 알림이 무기한 계속 발화**하고 있었다.
+
+- `PurchaseTriggers.isEnabled(trigger, purchases)` 신설(무관찰=true, 복수 관찰 OR).
+- `AlertEvaluator`·`AlertDispatcher`에 억제 플래그 오버로드 추가(기존 오버로드는 기본값 false로 안전
+  하위호환), `EvaluateAlertOnDealUseCase`가 계산해 넘김.
+- 전부 뮤테이션 검증 + 신규 통합 테스트(ARCHIVED 관찰만 있으면 LOWER 이상치도 NO_ALERT, 배선 제거
+  뮤테이션으로 RED 확인). 전 게이트(domain-consumers·board-references·dead-columns·table-wiring) 통과.
+- Q-31(RELATIVE 트리거)은 이 수정과 별개로 여전히 미구현.
+
 ## 2026-07-27 — Q-84 해소: DealEvent 상태 전이 안전망 (무중단)
 
 Q-10 정리 뒤 domain 계층 전체로 "호출자 0" 감사를 넓히다 발견. `DealEvent.activate()`·`.verify()`·

@@ -20,7 +20,7 @@ public class AlertEvaluator {
 	private final BenchmarkCalculator benchmark = new BenchmarkCalculator();
 
 	public AlertDecision evaluate(DealEvent deal, BenchmarkView view, AlertPolicy policy, BenchmarkParams params) {
-		return evaluate(deal, view, policy, params, false);
+		return evaluate(deal, view, policy, params, false, false);
 	}
 
 	/**
@@ -29,17 +29,31 @@ public class AlertEvaluator {
 	 */
 	public AlertDecision evaluate(DealEvent deal, BenchmarkView view, AlertPolicy policy, BenchmarkParams params,
 			boolean paidPriceTriggerFires) {
+		return evaluate(deal, view, policy, params, paidPriceTriggerFires, false);
+	}
+
+	/**
+	 * @param paidPriceTriggerFires PUR-03 관찰 트리거 — 활성(OBSERVING) 관찰의 paidPrice를 딜이 하회하면 true.
+	 *     충족 시 서열 최하위 강도 PAID_PRICE를 더한다(다른 트리거와 OR·병기).
+	 * @param purchaseGateSuppressesJackpotAndTarget PUR-03 매트릭스 — 이 variant의 관찰이 하나 이상 있고
+	 *     전부 ARCHIVED면 true(호출자가 {@code PurchaseTriggers.isEnabled}로 미리 계산해 넘긴다). 켜지면
+	 *     🔥·목표가는 만들지 않는다 — 기준가·P25 계열(SPECIAL·GOOD)은 이 매트릭스 밖이라 그대로다.
+	 */
+	public AlertDecision evaluate(DealEvent deal, BenchmarkView view, AlertPolicy policy, BenchmarkParams params,
+			boolean paidPriceTriggerFires, boolean purchaseGateSuppressesJackpotAndTarget) {
 		if (deal.status() == DealStatus.ENDED) {
 			return new AlertDecision(false, AlertIntensity.NONE, List.of(), labels(deal, view)); // Q-27③ 종료 딜 억제
 		}
 		long price = deal.priceFirst();
 		EnumSet<AlertIntensity> satisfied = EnumSet.noneOf(AlertIntensity.class);
 
-		if (deal.outlierFlag() == OutlierFlag.LOWER) {
-			satisfied.add(AlertIntensity.JACKPOT); // 🔥 최우선
-		}
-		if (policy.targetPrice() != null && price <= policy.targetPrice()) {
-			satisfied.add(AlertIntensity.TARGET);
+		if (!purchaseGateSuppressesJackpotAndTarget) {
+			if (deal.outlierFlag() == OutlierFlag.LOWER) {
+				satisfied.add(AlertIntensity.JACKPOT); // 🔥 최우선
+			}
+			if (policy.targetPrice() != null && price <= policy.targetPrice()) {
+				satisfied.add(AlertIntensity.TARGET);
+			}
 		}
 		switch (view.tier()) {
 			case SUFFICIENT -> {

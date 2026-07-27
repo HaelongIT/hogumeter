@@ -41,7 +41,18 @@ public class AlertDispatcher {
 	/** PUR-03 paidPrice 하회 트리거(활성 관찰)를 함께 반영해 판정한다. dealEventId는 [무시] 버튼(Q-22)에 실린다. */
 	public DispatchOutcome dispatch(DealEvent deal, BenchmarkView view, AlertPolicy policy,
 			BenchmarkParams params, Clock clock, boolean paidPriceTriggerFires, long dealEventId) {
-		AlertDecision decision = evaluator.evaluate(deal, view, policy, params, paidPriceTriggerFires);
+		return dispatch(deal, view, policy, params, clock, paidPriceTriggerFires, false, dealEventId);
+	}
+
+	/**
+	 * @param purchaseGateSuppressesJackpotAndTarget PUR-03 — 이 variant의 관찰이 전부 ARCHIVED면 true
+	 *     (호출자가 {@code PurchaseTriggers.isEnabled}로 미리 계산). 🔥·목표가를 억제한다.
+	 */
+	public DispatchOutcome dispatch(DealEvent deal, BenchmarkView view, AlertPolicy policy,
+			BenchmarkParams params, Clock clock, boolean paidPriceTriggerFires,
+			boolean purchaseGateSuppressesJackpotAndTarget, long dealEventId) {
+		AlertDecision decision = evaluator.evaluate(deal, view, policy, params, paidPriceTriggerFires,
+				purchaseGateSuppressesJackpotAndTarget);
 		if (!decision.shouldAlert()) {
 			return DispatchOutcome.NO_ALERT;
 		}

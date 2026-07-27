@@ -119,6 +119,25 @@ class EvaluateAlertOnDealUseCaseTest {
 		assertThat(outcome).isEqualTo(DispatchOutcome.SENT);
 	}
 
+	/**
+	 * PUR-03: 이 variant의 관찰이 전부 ARCHIVED면 🔥는 꺼진다 — "구매 후 알림을 언제까지 계속할까"의
+	 * 마지막 매듭. 배선이 끊기면(주입 무시) 이 테스트가 SENT로 잘못 통과한다.
+	 */
+	@Test
+	void jackpotIsSuppressedWhenAllObservationsAreArchived() {
+		purchases.save(new PurchaseEntity(
+				Purchase.observing(variantId, "256GB", 900_000L, Instant.parse("2026-06-01T00:00:00Z"), 90)
+						.expire().close().archive(),
+				Snapshot.unobserved("P=6mo,K=5")));
+
+		long dealId = dealEvents.findByVariantId(variantId).get(0).getId();
+		// 950k > 기준가 890k·P25 850k라 LOWER 이상치(🔥)가 아니면 아무 것도 안 걸린다.
+		DispatchOutcome outcome = useCase.evaluate(variantId, dealId,
+				aDealEvent().withPriceFirst(950_000L).outlier(OutlierFlag.LOWER).build());
+
+		assertThat(outcome).isEqualTo(DispatchOutcome.NO_ALERT);
+	}
+
 	@Test
 	void jackpotIsSentEvenInQuietHours() {
 		// 조용시간 전 구간(0~23이 아니라 wrap로 상시) — 🔥 관통 확인

@@ -552,6 +552,13 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **검증**: `DealEventEntityTest`(신규) — 합법 전이 허용, 같은 상태 재대입 허용(가격 갱신 통로), 비합법 전이 거부 3케이스. 각각 뮤테이션으로 RED 확인.
 - **관련**: `DealEventEntity.applyMerge`·`.applyStatusChange`, `DealStatus`, `IngestDealsUseCase`, `ReprocessDealPricesUseCase`, `ReprocessDealStatusUseCase`, `DealMergePolicy`(DN-C1).
 
+## [해소 2026-07-27] Q-85. PUR-03 🔥·목표가 트리거가 ARCHIVED 관찰에서도 계속 발화하고 있었다
+- **맥락**: Q-84 정리에 이어 domain 계층 "호출자 0" 감사를 계속하다 발견. `PurchaseTriggers.enabledFor`(PUR-03 상태×트리거 매트릭스: 🔥·목표가는 ARCHIVED만 off)는 `PurchaseTriggersTest`(단위 테스트)만 부르고 있었고, 실제 알림 판정 경로(`EvaluateAlertOnDealUseCase`→`AlertDispatcher`→`AlertEvaluator`)는 이 매트릭스를 전혀 참조하지 않았다. `activePurchases`(변수명과 달리 상태 무관 전체 조회)는 `paidPriceTriggerFires`에만 쓰이고 있었다.
+- **실제 결함**: `docs/15` PUR-03 표는 "🔥·목표가는 ARCHIVED에서 off"라고 명시하는데, 강제하는 코드가 없어 **Purchase가 ARCHIVED로 전이돼도 같은 variant의 JACKPOT·TARGET 알림이 무기한 계속 발화**하고 있었다(구매 관찰을 완전히 접었는데도 같은 딜 알림을 계속 받는 셈).
+- **해소 내용**: `PurchaseTriggers.isEnabled(PurchaseTrigger, List<Purchase>)` 신설(순수 — "복수 관찰 = 트리거 열별 OR", 관찰이 아예 없으면 항상 true). `AlertEvaluator.evaluate`에 `purchaseGateSuppressesJackpotAndTarget` 오버로드 추가(켜지면 JACKPOT·TARGET을 아예 안 만든다 — SPECIAL·GOOD은 이 매트릭스 밖이라 그대로). `AlertDispatcher.dispatch`도 같은 방식으로 한 겹 오버로드 추가. `EvaluateAlertOnDealUseCase`가 `PurchaseTriggers.isEnabled(JACKPOT, activePurchases)`로 계산해 넘긴다(JACKPOT·TARGET은 매트릭스상 완전히 같은 행이라 하나로 판정).
+- **검증**: `PurchaseTriggersTest`(무관찰=항상 true·단일 ARCHIVED=false·복수 관찰 OR·CLOSED는 여전히 true, 4케이스 + anyMatch/allMatch 뮤테이션), `AlertEvaluatorTest`(억제 시 JACKPOT·TARGET만 빠지고 SPECIAL·GOOD은 유지 + 뮤테이션), `EvaluateAlertOnDealUseCaseTest`(신규 통합 테스트 — ARCHIVED 관찰만 있는 variant는 950k·LOWER 이상치 딜에도 NO_ALERT, 배선 제거 뮤테이션으로 RED 확인).
+- **관련**: `docs/15` PUR-03, Q-31(RELATIVE 트리거는 별도, 여전히 미구현), `PurchaseTriggers.java`, `AlertEvaluator.java`, `AlertDispatcher.java`, `EvaluateAlertOnDealUseCase.java`.
+
 ## [열림] Q-83. WATCH(docs/17) 핀 생명주기 배선 후 남은 것 — anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례
 - **맥락**: 2026-07-25 WatchItem 핵심(자격·유일성·결말 3종·REST) 배선 완료. docs/17 골자 중 아직 코드에 없는 조각들을 여기 한데 모은다 — 전부 "골자엔 있지만 이번 판엔 없음"이지, 판단이 갈리는 항목은 아니다.
   1. **anchorPostId 자동 승계**: "이벤트 재구성 시 자동 승계 + 이력"(docs/17) — 딜이 merge window 밖에서 재구성되어 새 DealEvent로 태어나는 경우, 옛 WatchItem의 anchorPostId를 새 딜로 옮기는 배선이 없다. 지금은 핀 시점의 소스 원문 하나를 그대로 싣기만 한다(`PinDealUseCase`).
