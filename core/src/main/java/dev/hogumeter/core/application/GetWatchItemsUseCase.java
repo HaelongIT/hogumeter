@@ -31,14 +31,20 @@ public class GetWatchItemsUseCase {
 		return watchItems.findByState(PinState.ACTIVE).stream().map(this::toView).toList();
 	}
 
+	/** 회고 탭 — 결말(BOUGHT·MISSED·DROPPED)에 닿은 핀을 최근 결말 순으로. */
+	@Transactional(readOnly = true)
+	public List<WatchItemView> resolved() {
+		return watchItems.findByStateNotOrderByResolvedAtDesc(PinState.ACTIVE).stream().map(this::toView).toList();
+	}
+
 	private WatchItemView toView(WatchItemEntity item) {
 		DealEventEntity deal = dealEvents.findById(item.getDealEventId()).orElse(null);
 		return new WatchItemView(item.getId(), item.getDealEventId(), item.getNote(), item.getState(),
-				item.getCreatedAt(), deal == null ? null : deal.getPriceLast(),
+				item.getCreatedAt(), item.getResolvedAt(), deal == null ? null : deal.getPriceLast(),
 				deal == null ? null : deal.getStatus());
 	}
 
 	public record WatchItemView(long watchItemId, long dealEventId, String note, PinState state, Instant pinnedAt,
-			Long currentPriceLast, DealStatus dealStatus) {
+			Instant resolvedAt, Long currentPriceLast, DealStatus dealStatus) {
 	}
 }

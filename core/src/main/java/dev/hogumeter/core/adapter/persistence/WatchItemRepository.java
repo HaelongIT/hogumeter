@@ -15,4 +15,7 @@ public interface WatchItemRepository extends JpaRepository<WatchItemEntity, Long
 	Optional<WatchItemEntity> findByDealEventIdAndState(Long dealEventId, PinState state);
 
 	List<WatchItemEntity> findByState(PinState state);
+
+	/** WATCH 회고 탭 — 결말(BOUGHT·MISSED·DROPPED)에 닿은 핀을 최근 결말 순으로. */
+	List<WatchItemEntity> findByStateNotOrderByResolvedAtDesc(PinState state);
 }

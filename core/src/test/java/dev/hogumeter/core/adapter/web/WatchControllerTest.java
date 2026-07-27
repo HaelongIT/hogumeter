@@ -101,4 +101,23 @@ class WatchControllerTest {
 		mockMvc.perform(get("/api/v1/watch-items"))
 				.andExpect(jsonPath("$[?(@.watchItemId == " + watchItemId + ")]").isEmpty());
 	}
+
+	@Test
+	void resolvedEndpointListsBoughtPinsButNotActiveOnes() throws Exception {
+		long activeDeal = deal();
+		mockMvc.perform(post("/api/v1/watch-items").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"dealEventId\": " + activeDeal + ", \"note\": null}"));
+
+		long boughtDeal = deal();
+		String body = mockMvc.perform(post("/api/v1/watch-items").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"dealEventId\": " + boughtDeal + ", \"note\": null}"))
+				.andReturn().getResponse().getContentAsString();
+		long watchItemId = Long.parseLong(body.replaceAll("\\D+", ""));
+		mockMvc.perform(post("/api/v1/watch-items/" + watchItemId + "/bought"));
+
+		mockMvc.perform(get("/api/v1/watch-items/resolved"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[?(@.dealEventId == " + boughtDeal + ")].state").value("BOUGHT"))
+				.andExpect(jsonPath("$[?(@.dealEventId == " + activeDeal + ")]").isEmpty());
+	}
 }

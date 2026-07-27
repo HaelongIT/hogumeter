@@ -17,6 +17,7 @@ import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.deal.Origin;
 import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.watch.PinState;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +27,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 
-/** WATCH(docs/17) 활성 탭 조회 — 결말(BOUGHT 등)에 닿은 핀은 안 보이고, 딜의 현재가가 실제로 실린다. */
+/**
+ * WATCH(docs/17) 활성 탭·회고 탭 조회 — 결말(BOUGHT 등)에 닿은 핀은 활성에서 안 보이고 회고에서
+ * 보이며, 딜의 현재가가 실제로 실린다.
+ */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional
@@ -62,6 +66,7 @@ class GetWatchItemsUseCaseTest {
 		assertThat(view.currentPriceLast()).isEqualTo(850_000L);
 		assertThat(view.note()).isEqualTo("메모");
 		assertThat(view.state()).isEqualTo(PinState.ACTIVE);
+		assertThat(view.resolvedAt()).isNull(); // 아직 결말 안 남
 	}
 
 	@Test
@@ -74,5 +79,31 @@ class GetWatchItemsUseCaseTest {
 		List<Long> activeDealIds = getWatchItems.active().stream().map(WatchItemView::dealEventId).toList();
 
 		assertThat(activeDealIds).doesNotContain(dealId);
+	}
+
+	@Test
+	void resolvedListShowsOnlyResolvedPinsNewestFirst() {
+		long boughtDeal = dealAt(800_000);
+		WatchItemEntity bought = watchItems.save(new WatchItemEntity(boughtDeal, null, null));
+		Instant older = Instant.now().minus(Duration.ofDays(2));
+		bought.resolve(PinState.BOUGHT, older);
+		watchItems.save(bought);
+
+		long missedDeal = dealAt(810_000);
+		WatchItemEntity missed = watchItems.save(new WatchItemEntity(missedDeal, null, null));
+		Instant newer = Instant.now();
+		missed.resolve(PinState.MISSED, newer);
+		watchItems.save(missed);
+
+		long activeDeal = dealAt(820_000);
+		watchItems.save(new WatchItemEntity(activeDeal, null, null)); // ACTIVE — 회고에 안 나옴
+
+		List<WatchItemView> resolved = getWatchItems.resolved();
+
+		assertThat(resolved).extracting(WatchItemView::dealEventId)
+				.containsExactly(missedDeal, boughtDeal); // 최근 결말 먼저
+		assertThat(resolved).extracting(WatchItemView::state)
+				.containsExactly(PinState.MISSED, PinState.BOUGHT);
+		assertThat(resolved).noneMatch(v -> v.dealEventId() == activeDeal);
 	}
 }

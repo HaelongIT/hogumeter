@@ -33,6 +33,12 @@ public class WatchController {
 		return getWatchItems.active();
 	}
 
+	/** 회고 탭 — 결말(BOUGHT·MISSED·DROPPED)에 닿은 핀을 최근 결말 순으로. */
+	@GetMapping("/resolved")
+	public List<GetWatchItemsUseCase.WatchItemView> resolved() {
+		return getWatchItems.resolved();
+	}
+
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public PinCreated pin(@RequestBody PinRequest request) {
