@@ -2,17 +2,13 @@ package dev.hogumeter.core.domain.deal;
 
 import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.Quantiles;
-import dev.hogumeter.core.domain.review.ReviewQueueItem;
-import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 /**
  * BM-05 양방향 이상치 판정(순수 도메인). Tukey IQR: Q1−k·IQR 미만=LOWER, Q3+k·IQR 초과=UPPER, 그 외 NONE.
  * 컷 경계는 이상치 아님(포함). SPARSE 구간은 IQR 불안정 → 현재가 대비 폴백 컷(AC-5).
- * 🔥 최우선 알림·큐 영속화는 AL/어댑터 관심사 — 여기선 플래그·리뷰 항목 값만 만든다.
+ * 🔥 최우선 알림·리뷰 항목 영속화는 AL/어댑터 관심사(`IngestDealsUseCase.classifyOutlier`) — 여기선 플래그만 만든다.
  */
 public class OutlierDetector {
 
@@ -31,17 +27,6 @@ public class OutlierDetector {
 			return OutlierFlag.UPPER;
 		}
 		return OutlierFlag.NONE;
-	}
-
-	/** LOWER 이상치 → OUTLIER_LOWER 리뷰 항목(AC-2). UPPER·NONE은 항목 없음. */
-	public Optional<ReviewQueueItem> reviewItemFor(DealEvent deal) {
-		if (deal.outlierFlag() != OutlierFlag.LOWER) {
-			return Optional.empty();
-		}
-		return Optional.of(new ReviewQueueItem(ReviewQueueType.OUTLIER_LOWER, Map.of(
-				"priceFirst", deal.priceFirst(),
-				"site", deal.site(),
-				"sourceUrl", deal.sourceUrl())));
 	}
 
 	/**

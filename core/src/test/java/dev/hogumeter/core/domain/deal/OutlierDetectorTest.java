@@ -1,15 +1,10 @@
 package dev.hogumeter.core.domain.deal;
 
-import static dev.hogumeter.core.domain.deal.DealEventBuilder.aDealEvent;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.hogumeter.core.domain.BenchmarkParams;
-import dev.hogumeter.core.domain.review.ReviewQueueItem;
-import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -33,25 +28,6 @@ class OutlierDetectorTest {
 	})
 	void classifiesByTukeyIqrCut(long price, OutlierFlag expected) {
 		assertThat(detector.classify(price, DISTRIBUTION, params)).isEqualTo(expected);
-	}
-
-	// ---- AC-2 LOWER → OUTLIER_LOWER 리뷰 항목 (🔥 최우선 판정은 AL이 큐 타입으로) ----
-	@Test
-	void lowerOutlierYieldsOutlierLowerReviewItem() {
-		DealEvent lower = aDealEvent().outlier(OutlierFlag.LOWER).withPriceFirst(300_000)
-				.withSite("ppomppu").withSourceUrl("https://ppomppu.test/x").build();
-
-		Optional<ReviewQueueItem> item = detector.reviewItemFor(lower);
-
-		assertThat(item).isPresent();
-		assertThat(item.get().type()).isEqualTo(ReviewQueueType.OUTLIER_LOWER);
-		assertThat(item.get().payload()).containsEntry("priceFirst", 300_000L);
-	}
-
-	@Test
-	void upperAndNormalOutliersYieldNoReviewItem() {
-		assertThat(detector.reviewItemFor(aDealEvent().outlier(OutlierFlag.UPPER).build())).isEmpty();
-		assertThat(detector.reviewItemFor(aDealEvent().outlier(OutlierFlag.NONE).build())).isEmpty();
 	}
 
 	// ---- AC-5 SPARSE 폴백: 현재가 대비 비상식(±50% 잠정) → 잠정 제외 대상 ----
