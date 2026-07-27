@@ -245,6 +245,15 @@ export interface ApiError {
     | 'USED_SEARCH_NOT_FOUND'
     | 'LISTING_NOT_FOUND'
     | 'COMPARISON_AXIS_NOT_FOUND'
+    // PRI(docs/19)
+    | 'PRI_PRODUCT_NOT_FOUND'
+    | 'PRI_DUPLICATE_RANK'
+    // WATCH(docs/17)
+    | 'WATCH_ITEM_NOT_FOUND'
+    | 'WATCH_DEAL_NOT_FOUND'
+    | 'WATCH_DEAL_NOT_PINNABLE'
+    | 'WATCH_ALREADY_PINNED'
+    | 'WATCH_ILLEGAL_PIN_TRANSITION'
     | (string & {})
   message: string
 }
@@ -425,5 +434,61 @@ export interface NoteCreated {
 export interface AxisValueRequest {
   axisId: number
   value: string
+}
+
+// ── PRI(docs/19) 우선순위 ────────────────────────────────────────
+
+/**
+ * GET /api/v1/products/prioritized — 목록 정렬 1곳(PRI ②축소). `waiting`이 데이터 진실(대기 중인가)
+ * 이고, "구매됨/완료" 같은 배지 문구는 표시 손잡이라 화면이 짓는다(docs/91 Q-82).
+ */
+export interface PrioritizedProduct {
+  productId: number
+  name: string
+  /** 사용자가 지정한 순번. 미지정이면 null — 정렬은 맨 뒤로 민다. */
+  priorityRank: number | null
+  waiting: boolean
+  manuallyCompleted: boolean
+}
+
+/** PUT /api/v1/products/{id}/priority — rank가 null이면 순번 해제. */
+export interface SetPriorityCommand {
+  rank: number | null
+}
+
+/** PUT /api/v1/products/{id}/manually-completed */
+export interface SetManuallyCompletedCommand {
+  manuallyCompleted: boolean
+}
+
+// ── WATCH(docs/17) 딜 보관함 ─────────────────────────────────────
+
+export type PinState = 'ACTIVE' | 'BOUGHT' | 'MISSED' | 'DROPPED'
+export type DealStatus = 'NEW' | 'ACTIVE' | 'VERIFIED' | 'ENDED'
+
+/**
+ * GET /api/v1/watch-items(활성)·/resolved(회고). 딜이 사라졌으면(있을 수 없지만 방어적으로)
+ * `currentPriceLast`·`dealStatus`가 null이다 — 지어내지 않는다.
+ */
+export interface WatchItemView {
+  watchItemId: number
+  dealEventId: number
+  note: string | null
+  state: PinState
+  pinnedAt: string
+  /** 결말(BOUGHT·MISSED·DROPPED) 시각. 활성 핀은 null. */
+  resolvedAt: string | null
+  currentPriceLast: number | null
+  dealStatus: DealStatus | null
+}
+
+/** POST /api/v1/watch-items */
+export interface PinRequest {
+  dealEventId: number
+  note: string | null
+}
+
+export interface PinCreated {
+  watchItemId: number
 }
 

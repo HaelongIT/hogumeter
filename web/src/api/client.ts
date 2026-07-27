@@ -12,6 +12,9 @@ import type {
   EvaluationResponse,
   GlobalExcludeKeywordsView,
   NoteCreated,
+  PinCreated,
+  PinRequest,
+  PrioritizedProduct,
   ProductCreated,
   ProductSummary,
   PurchaseObservation,
@@ -20,11 +23,14 @@ import type {
   RegisterProductCommand,
   RegisterUsedSearchCommand,
   ReviewQueueItem,
+  SetManuallyCompletedCommand,
+  SetPriorityCommand,
   SignalView,
   UpdateAlertPolicyCommand,
   UsedSearchCreated,
   UsedSearchView,
   VariantView,
+  WatchItemView,
 } from './types'
 
 /** core가 `{ code, message }`로 돌려준 실패. 그 외 실패는 `Error`. */
@@ -186,4 +192,29 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(req),
     }),
+
+  // ── PRI(docs/19) 우선순위 ──────────────────────────────────────
+
+  listPrioritizedProducts: () => request<PrioritizedProduct[]>('/api/v1/products/prioritized'),
+
+  setPriority: (productId: number, req: SetPriorityCommand) =>
+    command(`/api/v1/products/${productId}/priority`, { method: 'PUT', body: JSON.stringify(req) }),
+
+  setManuallyCompleted: (productId: number, req: SetManuallyCompletedCommand) =>
+    command(`/api/v1/products/${productId}/manually-completed`, { method: 'PUT', body: JSON.stringify(req) }),
+
+  // ── WATCH(docs/17) 딜 보관함 ───────────────────────────────────
+
+  listActiveWatchItems: () => request<WatchItemView[]>('/api/v1/watch-items'),
+
+  listResolvedWatchItems: () => request<WatchItemView[]>('/api/v1/watch-items/resolved'),
+
+  pinDeal: (req: PinRequest) =>
+    request<PinCreated>('/api/v1/watch-items', { method: 'POST', body: JSON.stringify(req) }),
+
+  markWatchItemBought: (watchItemId: number) =>
+    command(`/api/v1/watch-items/${watchItemId}/bought`, { method: 'POST' }),
+
+  dropWatchItem: (watchItemId: number) =>
+    command(`/api/v1/watch-items/${watchItemId}/drop`, { method: 'POST' }),
 }

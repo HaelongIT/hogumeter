@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { ThemeToggle } from './components/ThemeToggle'
 import { DecisionPage } from './decision/DecisionPage'
+import { PriorityPage } from './priority/PriorityPage'
 import { RegistrationPage } from './registration/RegistrationPage'
 import { ReviewQueuePage } from './review/ReviewQueuePage'
 import { SettingsPage } from './settings/SettingsPage'
 import { UsedPage } from './used/UsedPage'
 
-// 화면이 다섯뿐이라 라우터를 들이지 않는다. URL이 필요해지면 그때 넣는다.
+// 라우터를 들이지 않는다 — 1인용 규모라 탭으로 족하다. URL이 필요해지면 그때 넣는다.
 const TABS = {
   decision: '지금 사도 되나',
   registration: '제품 등록',
   used: '중고',
+  priority: '우선순위',
   review: '미상 큐',
   settings: '설정',
 } as const
@@ -47,6 +49,7 @@ export function App() {
       {tab === 'decision' && <DecisionPage initialVariantId={openVariantId} />}
       {tab === 'registration' && <RegistrationPage onOpenDecision={openDecision} />}
       {tab === 'used' && <UsedPage />}
+      {tab === 'priority' && <PriorityPage />}
       {tab === 'review' && <ReviewQueuePage />}
       {tab === 'settings' && <SettingsPage />}
     </div>

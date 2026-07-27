@@ -1068,6 +1068,62 @@ echo "$comparison" | grep -q '"name":"배터리%"' || fail "비교표에 방금 
 echo "$comparison" | grep -q '"92%"' || fail "비교표에 승격한 축값이 없다: $comparison"
 echo "$comparison" | grep -q '"스모크 메모"' || fail "비교표에 방금 단 메모가 없다: $comparison"
 
+echo "--- 5-4d) PRI·WATCH REST 계약 (docs/19·17 필드 드리프트) ---"
+# PRI: 목록 정렬 조회 + 순번·수동완료 쓰기 왕복. 계약 드리프트: web PrioritizedProduct(정본 =
+# web/src/api/types.ts)가 기대하는 필드가 전부 있는가.
+prioritized=$(curl -fsS "${WEB}/api/v1/products/prioritized")
+for field in productId name priorityRank waiting manuallyCompleted; do
+	echo "$prioritized" | grep -q "\"${field}\"" ||
+		fail "web PrioritizedProduct가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $prioritized"
+done
+echo "$prioritized" | grep -q "\"productId\":${product_id}," || fail "우선순위 목록에 방금 만든 제품이 없다: $prioritized"
+
+curl -fsS -o /dev/null -w '%{http_code}' -X PUT "${WEB}/api/v1/products/${product_id}/priority" \
+	-H 'Content-Type: application/json' -d '{"rank":1}' | grep -q '^204$' || fail "우선순위 저장이 204가 아니다"
+prioritized=$(curl -fsS "${WEB}/api/v1/products/prioritized")
+echo "$prioritized" | grep -q "\"productId\":${product_id},\"name\":[^,]*,\"priorityRank\":1" ||
+	fail "저장한 순번이 조회에 반영되지 않았다: $prioritized"
+
+curl -fsS -o /dev/null -w '%{http_code}' -X PUT "${WEB}/api/v1/products/${product_id}/manually-completed" \
+	-H 'Content-Type: application/json' -d '{"manuallyCompleted":true}' | grep -q '^204$' ||
+	fail "수동 완료 저장이 204가 아니다"
+prioritized=$(curl -fsS "${WEB}/api/v1/products/prioritized")
+echo "$prioritized" | grep -q "\"productId\":${product_id},\"name\":[^,]*,\"priorityRank\":1,\"waiting\":false" ||
+	fail "수동 완료 처리한 제품이 대기 목록에서 안 빠졌다: $prioritized"
+
+# WATCH: 활성 핀 생성 → 조회 → 결말(BOUGHT) → 활성에서 빠지고 회고에 나타남.
+# ${variant_id}(512GB)의 기존 딜은 5-3에서 born-ENDED로 만든 것뿐이라(품절 원문) 재사용하지 않는다 —
+# 핀 가능 여부(ACTIVE)를 직접 보장하는 새 deal_event를 하나 심는다(파이프라인 왕복은 5-1b가 이미 검증).
+watch_deal_id=$(compose exec -T postgres psql -qtA -U "${DB_USER:-hogumeter}" -d "${DB_NAME:-hogumeter}" \
+	-c "insert into deal_event (variant_id, price_first, price_min, price_max, price_last, origin, status, first_seen, last_seen)
+	    values (${variant_id}, 850000, 850000, 850000, 850000, 'LIVE', 'ACTIVE', now(), now()) returning id" | tr -d '\r')
+[ -n "$watch_deal_id" ] || fail "WATCH 스모크용 딜 삽입 실패"
+
+pin_payload=$(mktemp)
+printf '{"dealEventId":%s,"note":"스모크 핀"}' "$watch_deal_id" >"$pin_payload"
+pin_resp=$(curl -fsS -X POST "${WEB}/api/v1/watch-items" -H 'Content-Type: application/json' -d @"$pin_payload")
+rm -f "$pin_payload"
+watch_item_id=$(echo "$pin_resp" | sed 's/.*"watchItemId":\([0-9]*\).*/\1/')
+[ -n "$watch_item_id" ] || fail "핀 생성 응답에서 watchItemId를 못 찾았다: $pin_resp"
+
+active_watch=$(curl -fsS "${WEB}/api/v1/watch-items")
+for field in watchItemId dealEventId note state pinnedAt resolvedAt currentPriceLast dealStatus; do
+	echo "$active_watch" | grep -q "\"${field}\"" ||
+		fail "web WatchItemView가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $active_watch"
+done
+echo "$active_watch" | grep -q "\"watchItemId\":${watch_item_id}," || fail "방금 핀 생성한 항목이 활성 목록에 없다: $active_watch"
+
+curl -fsS -o /dev/null -w '%{http_code}' -X POST "${WEB}/api/v1/watch-items/${watch_item_id}/bought" |
+	grep -q '^204$' || fail "핀 결말(BOUGHT) 처리가 204가 아니다"
+
+active_watch=$(curl -fsS "${WEB}/api/v1/watch-items")
+echo "$active_watch" | grep -q "\"watchItemId\":${watch_item_id}," &&
+	fail "결말난 핀이 활성 목록에서 안 빠졌다: $active_watch"
+
+resolved_watch=$(curl -fsS "${WEB}/api/v1/watch-items/resolved")
+echo "$resolved_watch" | grep -q "\"watchItemId\":${watch_item_id},\"dealEventId\":${watch_deal_id},\"note\":\"스모크 핀\",\"state\":\"BOUGHT\"" ||
+	fail "결말난 핀이 회고 목록에 없다(또는 상태가 BOUGHT가 아니다): $resolved_watch"
+
 echo "--- 6) collector는 opt-in 없이 네트워크를 만지지 않는다 (OBS-01 구조화 로그) ---"
 # 로그는 JSON Lines다. 문장을 grep하지 말고 이벤트를 본다 — 문구는 바뀌어도 계약은 안 바뀐다.
 collector_log=$(compose logs --no-log-prefix collector 2>&1 | grep '^{' | tail -1)
