@@ -575,15 +575,16 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   3. **핀 이력 딜의 키워드 사후학습 근거 제외**: docs/17 "핀 이력 딜은 키워드 사후학습 근거 제외" — BM-07 사후학습(Q-22)이 WatchItem 존재를 아직 안 본다.
   4. **핀 후속 특례(인상 1회)**: "핀 후속(딜 층, variant 상태 무관·ARCHIVED에도): 인하·품절·종료·검증 무조건, 인상 1회만" — 지금 AL-03 후속은 핀 여부를 안 보고 일괄 적용된다. 핀된 딜만 별도로 "가격 인상"도 1회 알리는 특례가 없다.
   5. **자격 상실 확인 필요 알림·부활 미응답 플래그**: docs/17 결말표의 "자격 상실→전이 없음+확인 필요 알림", "부활→...+미응답 플래그"는 WatchItem 쪽에서 아직 안 낸다(DealEvent 층 REOPENED 알림은 이미 있음 — Q-81 아님, DN-C1 배선).
-  6. **web 5번째 표면**: 활성 탭·회고 탭 — web은 지시 시에만 착수(메모 `web-ui-wait-for-instruction`).
-- **잠정값**: 위 전부 미착수. WatchItem CRUD(REST)는 완전히 동작하므로 사람이 API로 직접 핀·결말을 조작하는 것은 이미 가능 — 그 위의 자동화·교차 배선만 없다.
-- **재개 트리거**: web 착수 시(사용자 지시) — 그때 화면이 실제로 필요로 하는 항목부터 순서대로.
-- **관련**: `docs/17-feature-watchlist.md`, `working-area/progress-log.md`(2026-07-25 WATCH 배선 기록).
+  6. **✅ web 5번째 표면 해소(2026-07-27, 사용자 지시)**: `web/src/watch/WatchPage.tsx` — 활성 탭(핀 목록 + 샀어요/기각·해제)·회고 탭(결말난 핀, 버튼 없음). 회고 조회 REST(`GET /api/v1/watch-items/resolved`, `resolvedAt` 필드)를 이 화면 착수 전에 먼저 배선했다(백엔드가 ACTIVE만 냈었다). **판단 화면에서 딜을 골라 핀 거는 손잡이는 아직 없다** — `BenchmarkView`의 `DealRef`가 `dealEventId`를 안 실어(원문 링크·가격만 있음) 교차 배선이 더 필요하다. 지금은 딜 ID를 직접 입력해 핀한다(화면 안내문으로 임시 경로임을 밝힘).
+- **잠정값**: 1~5(anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례·확인필요 알림)는 여전히 미착수 — web 표면과 무관한 배선 항목들이라 별개로 남는다. WatchItem CRUD(REST)는 완전히 동작하므로 사람이 API·web 둘 다로 핀·결말을 조작할 수 있다.
+- **재개 트리거**: 1~5는 각자의 기능(BM-07 사후학습·AL-03 후속·REG 등록화면)이 WatchItem을 실제로 참조하게 될 때. **판단 화면 핀 손잡이**는 `DealRef.dealEventId` 노출 결정 시(되돌리기 쉬운 추가 — API 필드 하나 + web 타입 하나).
+- **관련**: `docs/17-feature-watchlist.md`, `working-area/progress-log.md`(2026-07-25 WATCH 배선, 2026-07-27 web 표면 기록).
 
 ## [열림] Q-82. PRI(docs/19) 대기 술어 — "ARCHIVED 아님"·"구매됨/완료" 표시 구분을 배지 표현으로 미룸
 - **맥락**: M6 착수(2026-07-25, 사용자 지시). docs/19 대기 술어 원문 = "[등록 ∧ 활성 구매 없음 ∧ ARCHIVED 아님 ∧ 수동 완료 아님]", "비대기 상태 병기 '1·구매됨/완료', ARCHIVED는 설정 화면만"(3-5 손잡이). `ARCHIVED`는 코드상 `PurchaseState.ARCHIVED`(Product 자체엔 그런 상태가 없다, `docs/02` OBSERVING→REPORT_PENDING→CLOSED→ARCHIVED→OBSERVING 재활성). 원문은 "활성 구매 없음"(=OBSERVING 없음)과 "ARCHIVED 아님"을 별개 조건으로 쓰고, 표시도 갈랐다(CLOSED류는 목록 배지, ARCHIVED는 설정 화면 숨김) — CLOSED만 있고 OBSERVING·ARCHIVED가 없는 경우가 "대기"인지 "구매됨/완료"인지 문면만으로는 확정하기 어렵다.
 - **잠정값**: `PriorityQueue.isWaiting(hasAnyPurchase, manuallyCompleted)` — Purchase가 **어느 상태로든 하나라도 있으면** 무조건 비대기로 본다(CLOSED·ARCHIVED·OBSERVING 구분 없음). "대기인가"라는 데이터 진실은 이 한 가지로 충분하고, 배지 문구("구매됨/완료" vs 숨김)는 표시 손잡이(절대 원칙 4)라 화면이 Purchase 상태별로 가르면 된다 — 되돌리기 쉬운 seam(`isWaiting`의 파라미터를 상태 목록으로 넓히면 됨).
-- **재개 트리거**: web PRI 표면 착수 시(무중단이라도 web은 지시 시에만, 메모 `web-ui-wait-for-instruction`) — 그때 배지·숨김 구분이 실제로 필요해지면 이 함수를 상태 인지형으로 넓힌다.
+- **web PRI 표면 착수(2026-07-27, 사용자 지시)**: `PriorityPage.tsx`가 이 잠정값 그대로 구현됐다 — `statusBadge`(web/src/priority/present.ts)가 비대기를 전부 "구매됨/완료" 배지 하나로 낸다(CLOSED·ARCHIVED·수동완료 구분 없음). 착수했다고 이 잠정값이 저절로 정확해지진 않는다 — **여전히 열려 있다.**
+- **재개 트리거**: 사용자가 실사용 중 CLOSED(구매만 함)와 ARCHIVED(완전히 접음)를 화면에서 갈라 보고 싶다고 판단할 때 — 그때 `isWaiting`을 상태 인지형으로 넓히고 배지를 세분화한다(seam은 이미 격리돼 있음).
 
 ## [해소 2026-07-27] Q-81. DIGEST(docs/18) — 6섹션 전 경로 배선 완료(④ 포함)
 - **맥락**: M5 마지막 조각. `DigestWindow`/`DigestRules`(DIG-03 창·규칙, 순수)는 이미 있었지만 **호출자가 0**이었다(테스트만 불렀다 — CLAUDE.md "호출자 0인 순수 함수" 감사로 발견). `docs/18`은 6개 섹션·저장물 원자성·quiet 존중까지 요구하는 밀도 높은 스펙이라 한 증분에 다 하면 위험이 크다.

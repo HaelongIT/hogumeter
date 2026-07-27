@@ -1,3 +1,25 @@
+## 2026-07-27 (7) — [web] PRI·WATCH 화면 착수 (사용자 지시)
+
+사용자가 "이제 더 진행할거 뭐 있는데?" → web 화면(PRI·WATCH)은 사람 액션 없이 바로 시작 가능하다고
+답하자 "무중단 개발 ㄱㄱ"로 명시 지시. `web-ui-wait-for-instruction` 메모의 지시 대기 조건 충족 —
+착수.
+
+- **WATCH 백엔드 선행**: `GetWatchItemsUseCase`가 ACTIVE만 조회할 수 있어 회고 탭이 낼 데이터가
+  없었다 — `resolved()`(`GET /api/v1/watch-items/resolved`, 최근 결말 순) + `WatchItemView.resolvedAt`
+  추가. 뮤테이션 검증(쿼리를 active용으로 바꿔 RED 확인) 후 커밋·푸시.
+- **PRI 화면**(`web/src/priority/`): `PriorityPage` — 목록 정렬은 core가 이미 했으므로 재정렬하지
+  않는다. 행마다 순번 입력(PUT priority)·수동완료 토글(PUT manually-completed). 비대기는 "구매됨/
+  완료" 배지 하나(Q-82 잠정값 그대로 — 세분화는 여전히 열림).
+- **WATCH 화면**(`web/src/watch/`): `WatchPage` — 활성 탭(핀 목록 + 샀어요/기각·해제)·회고 탭(결말,
+  버튼 없음). 판단 화면에서 딜 골라 핀 거는 손잡이는 아직 없어(`DealRef`에 dealEventId 미노출)
+  딜 ID 직접 입력으로 임시 배선 — 화면에 그 사실을 안내.
+- **부수**: `kstDate`를 `shared/kst.ts`로 승격(review/present.ts가 예고했던 "세 번째 소비자" 시점).
+- `scripts/smoke.sh`에 PRI·WATCH 계약 드리프트 절(5-4d) 추가 — 필드 존재 + 순번/수동완료 쓰기 반영
+  + 핀 결말이 활성→회고로 이동하는 것까지 실 스택으로 종단 검증(전체 스모크 통과).
+- web 컴포넌트 테스트 247건 전체 GREEN, 타입체크·프로덕션 빌드 통과.
+- `docs/91` Q-83(WATCH web 표면 항목 해소, 나머지 5개 잔존)·Q-82(구현됐으나 세분화는 미해결로 명시)
+  갱신, `docs/30-roadmap` M6 PRI·WATCH 완료로 갱신.
+
 ## 2026-07-27 (6) — [cleanup] domain/used/Listing 죽은 코드 삭제 + check-domain-consumers.sh 사각지대 보강 (무중단)
 
 TURN-END: ② 일감 소진 — ⓐ docs/30: M5·M6 백엔드 완료, 나머지 마일스톤(M1·M3·M4)은 전부 외부

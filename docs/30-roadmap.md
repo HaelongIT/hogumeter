@@ -78,8 +78,8 @@
 - **DIGEST**(`docs/18`): ✅ **2026-07-27 완료(6섹션 전부)**. WATCH(M6) 백엔드 안착으로 ④ 핀 결말+부활도 배선(`ComputeDigestPinEndingsUseCase`). 창 계산·저장물 쓰기·조립·렌더링·분할 발송·스케줄(`DigestScheduler`, 일요일 20시 KST)까지 전 경로. 부수로 DN-C1 REOPENED 후속이 도입 이래 `deal_alert.kind` CHECK 제약에 걸려 매번 조용히 실패하던 진짜 결함을 찾아 V20으로 수정. 문서화된 한계(quiet hours 게이트 부재 등)는 `docs/91` Q-81.
 
 ## M6 — 보관함·우선순위 (2차, 조건부) — **2026-07-25 착수**(사용자 지시, PRI/SIG/PUR/DIGEST 안착 후)
-- **PRI**(`docs/19`): ✅ **백엔드 완료**(2026-07-25) — `PriorityQueue`(순수 대기 판정)·V18(`priority_rank`·`manually_completed`)·3 유스케이스·REST(`PriorityController`). web 표면(목록 정렬 1곳)은 **미착수**(web은 지시 시에만 착수, 메모 참조) — 지시 대기.
-- **WATCH**(`docs/17`): 딜 보관함 — 유보 해제(DN-W, 착수 자체가 트리거). ✅ **핵심 배선 완료**(2026-07-25) — DealEvent 재개 전이(DN-C1: `DealStatus` ENDED→ACTIVE·`DealMergePolicy`·`FollowUpKind.REOPENED`) + WatchItem 개체·핀 자격(`PinEligibility`)·유일성·결말 3종(BOUGHT/MISSED 자동/DROPPED)·REST(V19). 남은 것은 `docs/91` Q-83(anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례·5번째 표면). web은 지시 대기.
+- **PRI**(`docs/19`): ✅ **완료**(백엔드 2026-07-25, web 2026-07-27 사용자 지시) — `PriorityQueue`(순수 대기 판정)·V18(`priority_rank`·`manually_completed`)·3 유스케이스·REST(`PriorityController`) + `web/src/priority/PriorityPage.tsx`(목록 정렬 1곳 + 순번·수동완료 손잡이). 배지 세분화(Q-82)는 여전히 열림.
+- **WATCH**(`docs/17`): 딜 보관함 — 유보 해제(DN-W). ✅ **완료**(핵심 배선 2026-07-25, 회고 조회·web 2026-07-27 사용자 지시) — DealEvent 재개 전이(DN-C1) + WatchItem 개체·핀 자격·유일성·결말 3종·REST(V19) + `GetWatchItemsUseCase.resolved()` + `web/src/watch/WatchPage.tsx`(활성/회고 탭). 남은 것은 `docs/91` Q-83(anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례·판단 화면 핀 손잡이).
 
 ## 상시
 - 각 마일스톤 종료 시: lessons 정리 → CLAUDE.md 규칙 승격 검토, NFR 체크리스트 통과 확인.
