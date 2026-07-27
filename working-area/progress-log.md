@@ -1,5 +1,15 @@
 ## 2026-07-27 (6) — [cleanup] domain/used/Listing 죽은 코드 삭제 + check-domain-consumers.sh 사각지대 보강 (무중단)
 
+TURN-END: ② 일감 소진 — ⓐ docs/30: M5·M6 백엔드 완료, 나머지 마일스톤(M1·M3·M4)은 전부 외부
+키·fixture·인프라 결정 대기, M2(USED) 도메인 클래스는 이번 감사에서 전부 실호출자 확인됨. ⓑ docs/91:
+재개 트리거 재확인 라운드에서 Q-81(이미 이번 배치에 해소) 외 새로 충족된 트리거 없음, 나머지는 전부
+키 발급·실측 데이터·정책 결정 대기(Q-54·Q-52 등도 "1차 검증에서 관측되면"류 트리거가 아직 거짓).
+ⓒ 소비처 0 감사: domain 전역(purchase·deal·watch·digest·alert·used·benchmark·signal·priority·
+product·review)을 배경 에이전트로 재점검, `Listing` 정리 이후 재확인 결과 나머지 전부 실소비처
+있음. ⓓ V20 마이그레이션은 기존 FlywayMigrationTest/Testcontainers가 자동 검증, check-domain-
+consumers.sh 변경은 기존 계약 테스트가 커버하고 이미 ci.yml에 걸려 있음. 넷 다 확인 후 이번 라운드
+종료.
+
 Q-81 완료 뒤 도메인 전역 "호출자 0" 감사를 배경 에이전트로 마저 돌려 발견.
 
 - **`domain/used/Listing.java`(+`ListingTest.java`) 삭제** — USED-02 매물 생애주기를 표현하는 순수
