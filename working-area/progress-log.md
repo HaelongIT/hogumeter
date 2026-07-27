@@ -1,3 +1,25 @@
+## 2026-07-27 (3) — Q-86 해소: PUR 수동 아카이브 REST 배선 (무중단)
+
+Q-85 배선을 끝내자마자 domain/purchase에 "호출자 0" 감사를 이어 돌려 발견. `Purchase.archive()`·
+`.reactivate()`는 순수 도메인에 있었지만 프로덕션 호출자가 0이었다 — **Q-85가 방금 배선한
+"ARCHIVED면 🔥·목표가 억제"가 애초에 발화할 조건(ARCHIVED)에 도달할 방법이 없는 죽은 안전망**이었다.
+Q-84·Q-85·Q-86이 한 세션 안에서 같은 패턴(상태기계 전이는 선언됐지만 부르는 사람이 없다)으로
+세 번 겹쳐 나온 셈 — `docs/99` 교훈으로 승격.
+
+- `ArchivePurchaseUseCase`(신규) — archive/reactivate 두 메서드, 도메인이 전이 승인, 벌크 UPDATE로
+  `state`만(PUR-02 동결 스냅샷 보존, `ExpirePurchaseObservationsUseCase`와 같은 수법).
+- REST: `POST /api/v1/purchases/{id}/archive`·`/reactivate`(사람이 누르는 두 버튼, 204).
+- 신규 `PurchaseNotFoundException`(404)·`IllegalPurchaseTransitionException`에 `CODE` 상수 추가
+  (409), `ApiExceptionHandler` 매핑.
+- **범위 밖(의도적)**: 자동 아카이브("다른 활성 관찰 없을 때")는 조건 판정처 미정이라 안 열었다
+  (Q-62 재개 트리거 그대로, `decisions-needed` 후보) — 수동 결말만.
+- `ArchivePurchaseUseCaseTest`(5케이스)·`PurchaseControllerTest`(204/409/404), 상태기계 검증 우회
+  뮤테이션으로 거부 케이스 RED 확인 후 원복. 전 게이트(domain-consumers·board-references·
+  dead-columns·table-wiring) 통과.
+- ⚠️ **로컬 환경 잡음(코드 무관)**: 이 컴퓨터의 `C:\Program Files\Eclipse Adoptium\`에 미완료 JDK가
+  있어 `./gradlew test`(데몬 모드)가 매번 즉시 실패했다 — `--no-daemon` + 인라인 `$env:JAVA_HOME`
+  으로 우회(`docs/99` 기록). CI는 clean 컨테이너라 무관.
+
 ## 2026-07-27 (2) — Q-85 해소: PUR-03 🔥·목표가 ARCHIVED 억제 실배선 (무중단)
 
 Q-84 정리 뒤 domain 계층 "호출자 0" 감사를 계속하다 발견한 실결함. `PurchaseTriggers.enabledFor`

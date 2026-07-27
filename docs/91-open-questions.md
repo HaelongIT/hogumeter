@@ -289,7 +289,7 @@ _(Q-40. REL-06 파싱 드리프트 감지 — **해소됨 2026-07-09**: `schedul
 
 _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildCommand`가 데카르트 곱을 만든다(용량 2 × 색상 2 → variant 4). 축 이름 중복은 거부(맵에서 덮어쓰기), 빈 축 행은 무시, 화면이 "생성될 variant N개"를 미리 보여준다. 여기서 제거.)_
 
-## [부분해소] Q-62. PUR 상태기계 — 만료·**성적표 발급(CLOSED)**까지 배선. ARCHIVED만 남음
+## [부분해소] Q-62. PUR 상태기계 — 만료·성적표 발급(CLOSED)·**수동 아카이브**까지 배선. 자동 아카이브만 남음
 - **맥락**: `PurchaseState`는 `OBSERVING → REPORT_PENDING → CLOSED → ARCHIVED → OBSERVING`을 정의하고 `Purchase.expire()/close()/archive()/reactivate()`가 다 있다. 그런데 **프로덕션에서 상태를 쓰는 곳은 `RecordPurchaseUseCase`(항상 OBSERVING) 하나뿐이었다.** 상태기계에 전이가 있어도 부르는 사람이 없으면 그 전이는 존재하지 않는다.
 - **해소된 부분(2026-07-10)**: `ExpirePurchaseObservationsUseCase`(신규 파일) — 관찰 기간이 끝난 구매를 `REPORT_PENDING`으로. `PipelineScheduler`가 **ingest보다 먼저** 부른다(ingest가 알림을 태우는데 PUR-03 "산 뒤 알림"은 OBSERVING에만 발화하므로). 스모크 5-2b가 종단 증명. 그전까지 ① "관찰 N일차"가 무한히 커지고 ② **3년 전 구매에도 계속 알림이 나갔을 것**이며 ③ 성적 집계 대기로 넘어가지 않았다.
 - **✅ 성적표 발급 해소(2026-07-21) — `REPORT_PENDING → CLOSED`가 산다.** 그전까지 `ReportCardCalculator`(순수 도메인)는 성적을 계산할 줄 알고 테스트도 GREEN이었지만 **프로덕션 호출자가 0**이었다(Q-68의 거울상 — "호출자 0인 순수 함수"). 이제:
@@ -298,9 +298,10 @@ _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildComm
   - **배선**: `PipelineScheduler`가 **만료 바로 뒤·ingest 앞**에 부른다 — 방금 만료된 것까지 같은 틱에 닫아 뒤의 ingest가 CLOSED로 보아 "산 뒤 알림"에서 뺀다. 발급 수를 `PipelineTickReport.reportCardsIssued`로 싣고, 발급이 REPORT_PENDING을 드레인하므로 `purchasesExpired`를 `Δ(REPORT_PENDING)+발급`으로 재구성한다(카운터 오염 방지, docs/99).
   - **읽기 소비처**: `PurchaseObservation.reportCard`(CLOSED만 채움, 그 외 null) — `GetPurchaseObservationsUseCase`가 `findByPurchaseId`로 읽어 `GET /api/v1/variants/{id}/purchases`로 낸다. 없으면 report_card가 **write-only 테이블**(쌓이는데 볼 수 없던 review_queue_item의 거울상)이 될 뻔했다.
   - 관통 테스트 `IssuePendingReportCardsUseCaseTest`(발급→CLOSED·멱등·OBSERVING 제외), 배선 `PipelineSchedulerTest.issuesReportCardsAfterExpireAndFlowsCountIntoReport`(순서 + 카운트 흐름 + 재구성). domain-consumers allowlist에서 `ReportCardCalculator`·`ReportIssueGate` 삭제(이제 소비됨, 게이트가 낡은 면제를 잡았다).
-- **남은 것**: ① **web 성적표 표시** — API는 `reportCard`를 내지만 web은 아직 안 그린다(별도 프론트 증분). REPORT_PENDING은 이제 매 틱 드레인돼 순간이지만, 그 순간의 문구는 여전히 "관찰 종료 · 성적표는 아직 발급되지 않습니다"가 옳다. ② `CLOSED → ARCHIVED`(PUR-06)·`ARCHIVED → OBSERVING`(재활성)은 호출자 0 — 아카이브 조건("다른 활성 관찰 없을 때") 판정처가 정해져야 한다. ③ 발급 게이트의 두 외부 조건(백필 배치 C-4·미분류 48h 유예)은 지금 보수적으로 true(대기할 상태가 없다) — 그 상태가 생기면 `canIssue`에 주입(seam은 유스케이스 한 줄).
+- **✅ 수동 아카이브 해소(2026-07-27, Q-86)** — `CLOSED → ARCHIVED`·`ARCHIVED → OBSERVING`(재활성)에 REST(`POST /api/v1/purchases/{id}/archive`·`/reactivate`)가 생겼다. 상세는 Q-86.
+- **남은 것**: ① **web 성적표 표시** — API는 `reportCard`를 내지만 web은 아직 안 그린다(별도 프론트 증분). REPORT_PENDING은 이제 매 틱 드레인돼 순간이지만, 그 순간의 문구는 여전히 "관찰 종료 · 성적표는 아직 발급되지 않습니다"가 옳다. ② **자동 아카이브**("다른 활성 관찰 없을 때" 조건 판정처)는 아직 없다 — 사람이 수동으로만 접는다(Q-86). ③ 발급 게이트의 두 외부 조건(백필 배치 C-4·미분류 48h 유예)은 지금 보수적으로 true(대기할 상태가 없다) — 그 상태가 생기면 `canIssue`에 주입(seam은 유스케이스 한 줄).
 - **잠정값(발급 규약)**: observedFrom = 최초 딜 firstSeen(Q-34와 동일), capturedAt ≤ 발급 검증은 `DealEvent.capturedAt` 부재로 미적용(Q-32) — 둘 다 record와 같은 잠정이라 성적이 구매 시점 판단과 일관된다. 삭제 3행 매트릭스(Q-30)는 발급과 직교(삭제 REST 착수 시).
-- **재개 트리거**(남은 ARCHIVED): 아카이브 조건 판정처(다른 활성 관찰 집합)가 정해지고, 삭제 3행 매트릭스(Q-30)와 정합될 때.
+- **재개 트리거**(남은 자동 아카이브): 아카이브 조건 판정처(다른 활성 관찰 집합)가 정해지고, 삭제 3행 매트릭스(Q-30)와 정합될 때 — 정책 판단이 필요해 `decisions-needed`행 후보.
 
 ## [열림] Q-61. SEC-03·SEC-04·SEC-07이 어느 보드에도 없었다 (Q-58과 같은 실패 모드)
 - **맥락**: `docs/20`의 NFR ID 26개를 코드·테스트·스크립트·compose·CI에서 전수 grep했더니 **SEC-03·SEC-04·SEC-07이 참조 0**이었고, `docs/91`·`working-area` 어디에도 없었다. 보드에 없는 요구는 없는 일이 된다 — PERF·OPS에서 이미 한 번 겪었다(Q-58).
@@ -558,6 +559,14 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **해소 내용**: `PurchaseTriggers.isEnabled(PurchaseTrigger, List<Purchase>)` 신설(순수 — "복수 관찰 = 트리거 열별 OR", 관찰이 아예 없으면 항상 true). `AlertEvaluator.evaluate`에 `purchaseGateSuppressesJackpotAndTarget` 오버로드 추가(켜지면 JACKPOT·TARGET을 아예 안 만든다 — SPECIAL·GOOD은 이 매트릭스 밖이라 그대로). `AlertDispatcher.dispatch`도 같은 방식으로 한 겹 오버로드 추가. `EvaluateAlertOnDealUseCase`가 `PurchaseTriggers.isEnabled(JACKPOT, activePurchases)`로 계산해 넘긴다(JACKPOT·TARGET은 매트릭스상 완전히 같은 행이라 하나로 판정).
 - **검증**: `PurchaseTriggersTest`(무관찰=항상 true·단일 ARCHIVED=false·복수 관찰 OR·CLOSED는 여전히 true, 4케이스 + anyMatch/allMatch 뮤테이션), `AlertEvaluatorTest`(억제 시 JACKPOT·TARGET만 빠지고 SPECIAL·GOOD은 유지 + 뮤테이션), `EvaluateAlertOnDealUseCaseTest`(신규 통합 테스트 — ARCHIVED 관찰만 있는 variant는 950k·LOWER 이상치 딜에도 NO_ALERT, 배선 제거 뮤테이션으로 RED 확인).
 - **관련**: `docs/15` PUR-03, Q-31(RELATIVE 트리거는 별도, 여전히 미구현), `PurchaseTriggers.java`, `AlertEvaluator.java`, `AlertDispatcher.java`, `EvaluateAlertOnDealUseCase.java`.
+
+## [해소 2026-07-27] Q-86. PUR 아카이브(ARCHIVED)가 영원히 닿을 수 없는 상태였다 — Q-85 억제가 죽은 안전망이었다
+- **맥락**: Q-85 정리 직후 이어서 "호출자 0" 감사를 `domain/purchase`에 돌리다 발견. `Purchase.archive()`/`.reactivate()`(순수 도메인, `PurchaseStateTest`로 GREEN)는 `PurchaseState` 상태기계에 `CLOSED→ARCHIVED`·`ARCHIVED→OBSERVING` 전이를 정의하지만, **프로덕션에서 이 메서드를 부르는 곳이 하나도 없었다**(`ExpirePurchaseObservationsUseCase`는 expire만, `IssuePendingReportCardsUseCase`는 close만 호출). Q-62가 이미 "남은 것"으로 적어 뒀던 항목.
+- **실제 결함**: 방금 배선한 Q-85("Purchase가 ARCHIVED면 🔥·목표가 억제")는 Purchase가 애초에 ARCHIVED에 도달할 방법이 전무했으므로 **평생 발화할 일이 없는 안전망**이었다 — Q-84·Q-85와 같은 결의 "선언은 됐으나 안 불리는 상태전이" 패턴의 세 번째 사례.
+- **해소 내용**: `ArchivePurchaseUseCase`(신규) — `archive(purchaseId)`/`reactivate(purchaseId)`, 상태기계 전이 승인은 도메인(`Purchase.archive()/.reactivate()`)이 하고 쓰기는 벌크 UPDATE(`state`만, `ExpirePurchaseObservationsUseCase`와 같은 수법 — 엔티티 전체 재작성은 PUR-02 동결 스냅샷을 조용히 바꾼다). REST: `POST /api/v1/purchases/{id}/archive`·`/reactivate`(사람이 누르는 두 버튼, 204). 신규 예외 `PurchaseNotFoundException`(404)·`IllegalPurchaseTransitionException`에 `CODE` 상수 추가(409) + `ApiExceptionHandler` 매핑.
+- **범위 밖(의도적)**: **자동** 아카이브("다른 활성 관찰 없을 때")는 조건 판정처가 미정이라 이번 판에 안 열었다(Q-62 재개 트리거 그대로 남음, `decisions-needed` 후보) — 여기는 사람이 직접 누르는 수동 결말만.
+- **검증**: `ArchivePurchaseUseCaseTest`(CLOSED→ARCHIVED 성공·OBSERVING에서 아카이브 거부·ARCHIVED→OBSERVING 재활성 성공·CLOSED에서 재활성 거부·미상 id 거부, 5케이스), `PurchaseControllerTest`(204/409/404 HTTP 매핑). 상태기계 검증 우회 뮤테이션으로 거부 2케이스 RED 확인 후 원복.
+- **관련**: `docs/91` Q-62(부분해소, 잔여 자동 아카이브)·Q-85(이 배선이 없으면 죽은 안전망이었던 배경), `ArchivePurchaseUseCase.java`, `PurchaseController.java`, `PurchaseState.java`.
 
 ## [열림] Q-83. WATCH(docs/17) 핀 생명주기 배선 후 남은 것 — anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례
 - **맥락**: 2026-07-25 WatchItem 핵심(자격·유일성·결말 3종·REST) 배선 완료. docs/17 골자 중 아직 코드에 없는 조각들을 여기 한데 모은다 — 전부 "골자엔 있지만 이번 판엔 없음"이지, 판단이 갈리는 항목은 아니다.

@@ -7,6 +7,7 @@ import dev.hogumeter.core.application.DemandAxisValueRequiredException;
 import dev.hogumeter.core.application.DuplicatePriorityRankException;
 import dev.hogumeter.core.application.InvalidRegistrationException;
 import dev.hogumeter.core.application.ProductNotFoundException;
+import dev.hogumeter.core.application.PurchaseNotFoundException;
 import dev.hogumeter.core.application.WatchItemNotFoundException;
 import dev.hogumeter.core.application.ComparisonAxisNotFoundException;
 import dev.hogumeter.core.application.InvalidCoupangObservationException;
@@ -17,6 +18,7 @@ import dev.hogumeter.core.application.UsedSearchNotFoundException;
 import dev.hogumeter.core.domain.alert.InvalidAlertPolicyException;
 import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
 import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
+import dev.hogumeter.core.domain.purchase.IllegalPurchaseTransitionException;
 import dev.hogumeter.core.domain.watch.IllegalPinTransitionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -145,6 +147,18 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.CONFLICT)
 	public ApiError illegalPinTransition(IllegalPinTransitionException e) {
 		return new ApiError(IllegalPinTransitionException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(PurchaseNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ApiError purchaseNotFound(PurchaseNotFoundException e) {
+		return new ApiError(PurchaseNotFoundException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(IllegalPurchaseTransitionException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ApiError illegalPurchaseTransition(IllegalPurchaseTransitionException e) {
+		return new ApiError(IllegalPurchaseTransitionException.CODE, e.getMessage());
 	}
 
 	public record ApiError(String code, String message) {
