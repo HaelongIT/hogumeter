@@ -1,3 +1,19 @@
+## 2026-07-27 — Q-84 해소: DealEvent 상태 전이 안전망 (무중단)
+
+Q-10 정리 뒤 domain 계층 전체로 "호출자 0" 감사를 넓히다 발견. `DealEvent.activate()`·`.verify()`·
+`.end()`(및 `DealStatus.transitionTo`)는 프로덕션 호출자 0 — 실제 상태 변경은 세 경로
+(`IngestDealsUseCase` 신규 조립·`DealMergePolicy.merge()`·`DealEventEntity.applyStatusChange`)가
+검증 없이 대신하고 있었다. 지금은 셋 다 결과적으로 항상 합법 전이만 만들지만("우연히 옳은 코드는
+다음 커밋에 틀려진다"), 그 우연을 계약으로 잠갔다:
+
+- `DealEventEntity.applyStatusChange`: 항상 `DealStatus.transitionTo`로 엄격 검증(유일한 호출자가
+  항상 진짜 전이만 만듦).
+- `DealEventEntity.applyMerge`: 같은 상태 재대입은 허용(가격만 갱신하는 `ReprocessDealPricesUseCase`의
+  합법적 용법)하되, 값이 바뀌는 호출은 `canTransitionTo`로 검증.
+- 신규 `DealEventEntityTest`(3케이스 + 뮤테이션), Q-84 해소 기록.
+- 파이프라인 전체를 도메인 메서드 호출로 리라이트하진 않았다(DN-C1로 막 안정화된 코드의 넓은
+  변경은 위험 대비 이득이 낮음) — 안전망만 추가.
+
 ## 2026-07-25 (8) — Q-10 해소: 콜드스타트 잭팟 판정 이중 구현 제거 (무중단)
 
 M6 완료 후 "호출자 0" 감사를 다시 돌려 발견. `BenchmarkCalculator.qualifiesAsColdStartJackpot`은

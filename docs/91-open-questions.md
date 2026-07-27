@@ -544,6 +544,14 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **재개 트리거**(무엇이 참이 되어야 하는가): ① 네이버 키 발급(Q-3) — 그 순간 겹침 여부를 판단해 반영. ② 사용자가 실 쿠팡 상품 페이지 HTML(또는 스크린샷 기반 DOM 구조)을 fixture로 제공 — 그러면 파싱 로직을 TDD로(fixture golden) 만들고, manifest/content script는 그 위에 얹는다.
 - **관련**: Q-3(네이버 키), Q-78(레이트리밋 잠정치).
 
+## [해소 2026-07-27] Q-84. DealEvent 상태 전이 안전망 — DB 갱신 메서드가 우연히만 옳았다
+- **맥락**: Q-10 정리 뒤 이어서 "호출자 0" 감사를 domain 계층 전체로 넓히다 발견. `DealEvent.activate()`·`.verify()`·`.end()`(그리고 그 안의 `DealStatus.transitionTo`)는 프로덕션 호출자가 0이었다 — 실제 상태 변경은 `IngestDealsUseCase`(신규 딜은 raw 생성자로 조립)·`DealMergePolicy.merge()`(병합 상태 계산, 검증 없이 직접 대입)·`DealEventEntity.applyStatusChange`(단순 필드 대입, 검증 없음) 세 경로가 대신하고 있었다. 즉 "허용 전이만 통과"라는 상태기계의 계약이 도메인 계층엔 있지만 DB에 실제로 쓰는 지점엔 강제되지 않았다.
+- **판단**: 세 경로 모두 지금은 **결과적으로** 항상 합법 전이만 만든다(`ReprocessDealStatusUseCase`는 ACTIVE·VERIFIED 상태만 걸러 ENDED로 옮기고, `DealMergePolicy`의 재개·검증 로직도 합법 전이만 계산한다) — 지금 당장 잘못된 전이가 실제로 일어나는 결함은 아니다. 하지만 "우연히 옳은 코드는 다음 커밋에 틀려진다"(축적 규칙) — 이 우연을 계약으로 잠갔다.
+- **해소 내용**: `DealEventEntity.applyStatusChange`는 `DealStatus.transitionTo`로 항상 엄격히 검증(이 메서드의 유일한 호출자는 항상 진짜 전이만 만들어서 같은 상태 재대입을 허용할 이유가 없다). `applyMerge`는 절반만 다르다 — `ReprocessDealPricesUseCase`가 가격만 갱신하며 **같은 상태를 그대로 되돌려 넣는** 합법적 사용이 있어(주석 "종료 판정은 별도 유스케이스의 몫"), 같은 상태 재대입은 허용하고 실제로 값이 바뀌는 호출만 `DealStatus.canTransitionTo`로 검증한다.
+- **왜 `DealEvent.activate()` 등을 직접 쓰도록 리팩터하지 않았나**: `IngestDealsUseCase`의 신규 딜 생성은 원래 상태 전이가 아니라 "관측된 그대로 태어난다"(raw post status로 초기 상태 결정, `DealStatus.fromRawPostStatus`)라 전이 개념이 안 맞는다. 세 경로를 전부 도메인 메서드 호출로 바꾸는 것은 이미 안정된 파이프라인(DN-C1로 막 손댄 곳 포함)의 넓은 리라이트라 이번 판은 안전망만 추가했다 — 위험 대비 이득이 낮다.
+- **검증**: `DealEventEntityTest`(신규) — 합법 전이 허용, 같은 상태 재대입 허용(가격 갱신 통로), 비합법 전이 거부 3케이스. 각각 뮤테이션으로 RED 확인.
+- **관련**: `DealEventEntity.applyMerge`·`.applyStatusChange`, `DealStatus`, `IngestDealsUseCase`, `ReprocessDealPricesUseCase`, `ReprocessDealStatusUseCase`, `DealMergePolicy`(DN-C1).
+
 ## [열림] Q-83. WATCH(docs/17) 핀 생명주기 배선 후 남은 것 — anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례
 - **맥락**: 2026-07-25 WatchItem 핵심(자격·유일성·결말 3종·REST) 배선 완료. docs/17 골자 중 아직 코드에 없는 조각들을 여기 한데 모은다 — 전부 "골자엔 있지만 이번 판엔 없음"이지, 판단이 갈리는 항목은 아니다.
   1. **anchorPostId 자동 승계**: "이벤트 재구성 시 자동 승계 + 이력"(docs/17) — 딜이 merge window 밖에서 재구성되어 새 DealEvent로 태어나는 경우, 옛 WatchItem의 anchorPostId를 새 딜로 옮기는 배선이 없다. 지금은 핀 시점의 소스 원문 하나를 그대로 싣기만 한다(`PinDealUseCase`).

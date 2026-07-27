@@ -1,6 +1,7 @@
 package dev.hogumeter.core.adapter.persistence;
 
 import dev.hogumeter.core.domain.deal.DealStatus;
+import dev.hogumeter.core.domain.deal.IllegalDealTransitionException;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.deal.Origin;
 import jakarta.persistence.Column;
@@ -181,9 +182,21 @@ public class DealEventEntity {
 		return demandAxisValue;
 	}
 
-	/** 병합 결과(도메인 merge 산출)를 반영. 이상치 플래그·영구제외는 유지(C-4: 유입 1회 판정). */
+	/**
+	 * 병합 결과(도메인 merge 산출)를 반영. 이상치 플래그·영구제외는 유지(C-4: 유입 1회 판정).
+	 *
+	 * <p><b>상태 전이 안전망(Q-84)</b>: 이 메서드의 실제 호출자는 둘로 갈린다 — {@code IngestDealsUseCase}는
+	 * {@link dev.hogumeter.core.domain.deal.DealMergePolicy}가 계산한 <b>진짜 전이</b>(예: 재개
+	 * ENDED→ACTIVE, 교차검증 ACTIVE→VERIFIED)를 넘기고, {@code ReprocessDealPricesUseCase}는 가격만 갱신할
+	 * 뿐이라 <b>같은 상태를 그대로</b> 되돌려 넣는다("종료 판정은 별도 유스케이스의 몫"). 그래서 같은
+	 * 상태로의 호출은 허용하되, 실제로 값이 바뀌는 호출은 {@link DealStatus#canTransitionTo}를 지켜야 한다 —
+	 * 우연히 옳았던 호출자들이 미래에 잘못된 전이를 만들면 조용히 상태가 깨지는 대신 즉시 던진다.
+	 */
 	public void applyMerge(long priceFirst, long priceMin, long priceMax, long priceLast,
 			boolean crossVerified, DealStatus status, Instant firstSeen, Instant lastSeen) {
+		if (status != this.status && !this.status.canTransitionTo(status)) {
+			throw new IllegalDealTransitionException(this.status, status);
+		}
 		this.priceFirst = priceFirst;
 		this.priceMin = priceMin;
 		this.priceMax = priceMax;
@@ -203,9 +216,15 @@ public class DealEventEntity {
 		this.permanentlyExcluded = permanentlyExcluded;
 	}
 
-	/** Q-27 상태변화 재처리 — status·lastSeen만 갱신(가격·이상치·firstSeen 불변). */
+	/**
+	 * Q-27 상태변화 재처리 — status·lastSeen만 갱신(가격·이상치·firstSeen 불변).
+	 *
+	 * <p><b>상태 전이 안전망(Q-84)</b>: 이 메서드는 항상 실제 전이만 만든다(호출자가 이미 ACTIVE·VERIFIED
+	 * 상태만 걸러 ENDED로 옮긴다) — {@code applyMerge}와 달리 같은 상태 재대입을 허용할 이유가 없어 항상
+	 * {@link DealStatus#transitionTo}로 엄격히 검증한다.
+	 */
 	public void applyStatusChange(DealStatus status, Instant lastSeen) {
-		this.status = status;
+		this.status = this.status.transitionTo(status);
 		this.lastSeen = lastSeen;
 	}
 }
