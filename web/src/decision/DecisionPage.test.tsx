@@ -29,7 +29,10 @@ const benchmark: BenchmarkView = {
   benchmarkPrice: 820_000,
   goodDealLine: 790_000,
   periodLowest: { price: 780_000, date: '2026-05-02' },
-  latestDeal: { price: 799_000, date: '2026-07-01', site: 'ppomppu', sourceUrl: 'https://ppomppu/1', conditions: [] },
+  latestDeal: {
+    price: 799_000, date: '2026-07-01', site: 'ppomppu', sourceUrl: 'https://ppomppu/1', conditions: [],
+    dealEventId: 1,
+  },
   n: 12,
   m: 3,
   expandedToMonths: null,
@@ -124,8 +127,8 @@ describe('DecisionPage', () => {
       m: 0,
       gap: { vsBenchmark: null, vsLowest: null },
       cases: [
-        { price: 810_000, date: '2026-06-01', site: 'ruliweb', sourceUrl: 'https://r/1', conditions: ['카할'] },
-        { price: 830_000, date: '2026-04-11', site: 'fmkorea', sourceUrl: 'https://f/2', conditions: [] },
+        { price: 810_000, date: '2026-06-01', site: 'ruliweb', sourceUrl: 'https://r/1', conditions: ['카할'], dealEventId: 2 },
+        { price: 830_000, date: '2026-04-11', site: 'fmkorea', sourceUrl: 'https://f/2', conditions: [], dealEventId: 3 },
       ],
       latestDeal: null,
     })
@@ -138,6 +141,57 @@ describe('DecisionPage', () => {
     expect(screen.getAllByRole('link', { name: '원문' })).toHaveLength(2)
     // 조건부 사례는 "조건부: 카할"을 병기한다 — 정상 가격으로 오인 방지(Q-46①).
     expect(screen.getByText(/조건부: 카할/)).toBeInTheDocument()
+  })
+
+  describe('WATCH(docs/17) 핀 손잡이', () => {
+    it('사례를 핀하면 그 딜만 "핀함"으로 바뀐다', async () => {
+      const pinDeal = vi.spyOn(api, 'pinDeal').mockResolvedValue({ watchItemId: 1 })
+      vi.spyOn(api, 'getBenchmark').mockResolvedValue({
+        ...benchmark,
+        tier: 'SPARSE',
+        benchmarkPrice: null,
+        goodDealLine: null,
+        n: 2,
+        m: 0,
+        gap: { vsBenchmark: null, vsLowest: null },
+        cases: [
+          { price: 810_000, date: '2026-06-01', site: 'ruliweb', sourceUrl: 'https://r/1', conditions: [], dealEventId: 2 },
+          { price: 830_000, date: '2026-04-11', site: 'fmkorea', sourceUrl: 'https://f/2', conditions: [], dealEventId: 3 },
+        ],
+        latestDeal: null,
+      })
+      render(<DecisionPage />)
+      await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+      await pick()
+      await screen.findByRole('heading', { name: '사례 2건' })
+
+      const pinButtons = screen.getAllByRole('button', { name: '📌 핀하기' })
+      await userEvent.click(pinButtons[0]!)
+
+      expect(pinDeal).toHaveBeenCalledWith({ dealEventId: 2, note: null })
+      expect(await screen.findByText('📌 핀함')).toBeInTheDocument()
+      // 다른 사례는 그대로 "핀하기" 버튼이다 — 방금 누른 것만 바뀐다.
+      expect(screen.getAllByRole('button', { name: '📌 핀하기' })).toHaveLength(1)
+    })
+
+    it('최근 딜에도 핀 손잡이가 있다', async () => {
+      vi.spyOn(api, 'pinDeal').mockResolvedValue({ watchItemId: 1 })
+      render(<DecisionPage />)
+      await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+      await pick()
+
+      expect(await screen.findByLabelText('최근 딜')).toHaveTextContent('📌 핀하기')
+    })
+
+    it('핀할 수 없는 딜은 code를 그대로 보여준다', async () => {
+      vi.spyOn(api, 'pinDeal').mockRejectedValue(new ApiFailure(400, 'WATCH_DEAL_NOT_PINNABLE'))
+      render(<DecisionPage />)
+      await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+      await pick()
+      await userEvent.click(await screen.findByRole('button', { name: '📌 핀하기' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('WATCH_DEAL_NOT_PINNABLE')
+    })
   })
 
   it('GRAY는 판단 보류이고 딱지를 함께 낸다', async () => {
@@ -296,7 +350,7 @@ describe('DecisionPage — 이상치 토글 (Q-11, 기본 숨김)', () => {
     vi.spyOn(api, 'getBenchmark').mockResolvedValue({
       ...benchmark,
       outliers: [
-        { price: 5_000_000, date: '2026-07-02', site: 'ppomppu', sourceUrl: 'https://p/9', conditions: [] },
+        { price: 5_000_000, date: '2026-07-02', site: 'ppomppu', sourceUrl: 'https://p/9', conditions: [], dealEventId: 9 },
       ],
     })
     render(<DecisionPage />)
@@ -313,7 +367,7 @@ describe('DecisionPage — 이상치 토글 (Q-11, 기본 숨김)', () => {
     vi.spyOn(api, 'getBenchmark').mockResolvedValue({
       ...benchmark,
       outliers: [
-        { price: 5_000_000, date: '2026-07-02', site: 'ppomppu', sourceUrl: 'https://p/9', conditions: [] },
+        { price: 5_000_000, date: '2026-07-02', site: 'ppomppu', sourceUrl: 'https://p/9', conditions: [], dealEventId: 9 },
       ],
     })
     render(<DecisionPage />)

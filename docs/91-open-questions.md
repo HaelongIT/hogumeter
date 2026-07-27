@@ -575,9 +575,10 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   3. **핀 이력 딜의 키워드 사후학습 근거 제외**: docs/17 "핀 이력 딜은 키워드 사후학습 근거 제외" — BM-07 사후학습(Q-22)이 WatchItem 존재를 아직 안 본다.
   4. **핀 후속 특례(인상 1회)**: "핀 후속(딜 층, variant 상태 무관·ARCHIVED에도): 인하·품절·종료·검증 무조건, 인상 1회만" — 지금 AL-03 후속은 핀 여부를 안 보고 일괄 적용된다. 핀된 딜만 별도로 "가격 인상"도 1회 알리는 특례가 없다.
   5. **자격 상실 확인 필요 알림·부활 미응답 플래그**: docs/17 결말표의 "자격 상실→전이 없음+확인 필요 알림", "부활→...+미응답 플래그"는 WatchItem 쪽에서 아직 안 낸다(DealEvent 층 REOPENED 알림은 이미 있음 — Q-81 아님, DN-C1 배선).
-  6. **✅ web 5번째 표면 해소(2026-07-27, 사용자 지시)**: `web/src/watch/WatchPage.tsx` — 활성 탭(핀 목록 + 샀어요/기각·해제)·회고 탭(결말난 핀, 버튼 없음). 회고 조회 REST(`GET /api/v1/watch-items/resolved`, `resolvedAt` 필드)를 이 화면 착수 전에 먼저 배선했다(백엔드가 ACTIVE만 냈었다). **판단 화면에서 딜을 골라 핀 거는 손잡이는 아직 없다** — `BenchmarkView`의 `DealRef`가 `dealEventId`를 안 실어(원문 링크·가격만 있음) 교차 배선이 더 필요하다. 지금은 딜 ID를 직접 입력해 핀한다(화면 안내문으로 임시 경로임을 밝힘).
+  6. **✅ web 5번째 표면 해소(2026-07-27, 사용자 지시)**: `web/src/watch/WatchPage.tsx` — 활성 탭(핀 목록 + 샀어요/기각·해제)·회고 탭(결말난 핀, 버튼 없음). 회고 조회 REST(`GET /api/v1/watch-items/resolved`, `resolvedAt` 필드)를 이 화면 착수 전에 먼저 배선했다(백엔드가 ACTIVE만 냈었다).
+  7. **✅ 판단 화면 핀 손잡이 해소(2026-07-27)**: `DealEvent`·`BenchmarkView.DealRef`에 `dealEventId` 필드 추가(병합은 existing 정체성 유지, ingest 전 값은 자리표시자 0 — 저장 후 mapper가 실제 id로 재구성). `DecisionPage.tsx`의 "사례"·"최근 딜"마다 📌 핀 버튼 — 이제 딜 ID를 직접 입력하지 않고 판단 화면에서 바로 핀한다.
 - **잠정값**: 1~5(anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례·확인필요 알림)는 여전히 미착수 — web 표면과 무관한 배선 항목들이라 별개로 남는다. WatchItem CRUD(REST)는 완전히 동작하므로 사람이 API·web 둘 다로 핀·결말을 조작할 수 있다.
-- **재개 트리거**: 1~5는 각자의 기능(BM-07 사후학습·AL-03 후속·REG 등록화면)이 WatchItem을 실제로 참조하게 될 때. **판단 화면 핀 손잡이**는 `DealRef.dealEventId` 노출 결정 시(되돌리기 쉬운 추가 — API 필드 하나 + web 타입 하나).
+- **재개 트리거**: 1~5는 각자의 기능(BM-07 사후학습·AL-03 후속·REG 등록화면)이 WatchItem을 실제로 참조하게 될 때.
 - **관련**: `docs/17-feature-watchlist.md`, `working-area/progress-log.md`(2026-07-25 WATCH 배선, 2026-07-27 web 표면 기록).
 
 ## [열림] Q-82. PRI(docs/19) 대기 술어 — "ARCHIVED 아님"·"구매됨/완료" 표시 구분을 배지 표현으로 미룸

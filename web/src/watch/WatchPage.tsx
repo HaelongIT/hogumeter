@@ -19,9 +19,8 @@ function subject(item: WatchItemView): string {
 }
 
 /**
- * WATCH(docs/17) 딜 보관함 — 활성 탭(관찰 중인 핀)·회고 탭(결말난 핀). 핀을 거는 화면(예: 판단
- * 화면의 딜 카드)은 아직 없어(교차 배선 후속) 여기서 딜 ID로 직접 건다 — 임시 경로임을 안내에
- * 밝힌다(과대약속 금지).
+ * WATCH(docs/17) 딜 보관함 — 활성 탭(관찰 중인 핀)·회고 탭(결말난 핀). 판단 화면(사례·최근 딜)에
+ * 📌 핀 버튼이 따로 있고(`DecisionPage`), 여기서도 딜 ID를 알면 직접 핀할 수 있다.
  */
 export function WatchPage() {
   const [subTab, setSubTab] = useState<SubTab>('active')
@@ -111,8 +110,8 @@ export function WatchPage() {
       {subTab === 'active' && (
         <section aria-label="활성 핀">
           <p role="note">
-            지켜보고 싶은 딜을 핀으로 꽂아둡니다. 판단 화면에서 딜을 고르는 손잡이는 아직 없어(교차 배선
-            후속), 지금은 딜 ID로 직접 겁니다.
+            지켜보고 싶은 딜을 핀으로 꽂아둡니다. 판단 화면의 사례·최근 딜에 📌 핀 버튼이 있고, 딜 ID를
+            알면 여기서 직접 걸 수도 있습니다.
           </p>
           <form
             aria-label="핀 추가"

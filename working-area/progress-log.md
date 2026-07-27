@@ -1,3 +1,17 @@
+## 2026-07-27 (8) — [WATCH] 판단 화면 핀 손잡이 교차 배선 (무중단)
+
+WATCH 화면 착수 때 남겨둔 "판단 화면에서 딜 골라 핀 걸기"가 아직 없다는 캐비앗을 바로 이어서 메웠다.
+
+- **core**: `DealEvent`·`BenchmarkView.DealRef`에 `dealEventId` 필드 추가. `DealEventMapper`(실제 값)·
+  `DealMergePolicy`(병합은 existing 정체성 유지)·`IngestDealsUseCase`(저장 전 자리표시자 0, 실값은
+  저장 후 mapper가 재구성) 스레딩. 신규 테스트로 실 값 흐름 확인 + 뮤테이션(0으로 하드코딩해 RED)
+  검증. 블라스트 반경은 우려보다 작았다(프로덕션 생성 지점 3곳 + 테스트 빌더/직접생성 3곳뿐).
+- **web**: `DecisionPage.tsx`의 "사례"·"최근 딜"마다 📌 핀 버튼(`PinButton` 컴포넌트, 눌린 것만
+  "핀함"으로 굳음). `WatchPage.tsx`의 "손잡이가 아직 없다" 안내문·주석을 갱신(더 이상 사실이 아님).
+- `scripts/smoke.sh`에 `DealRef.dealEventId` 계약 드리프트 검증 추가, 전체 스모크 재확인 통과.
+- web 테스트 250건 전체 GREEN(신규 4건), 타입체크·프로덕션 빌드 통과.
+- `docs/91` Q-83에 7번 항목(판단 화면 핀 손잡이 해소)으로 기록, 재개 트리거에서 이 조건 제거.
+
 ## 2026-07-27 (7) — [web] PRI·WATCH 화면 착수 (사용자 지시)
 
 사용자가 "이제 더 진행할거 뭐 있는데?" → web 화면(PRI·WATCH)은 사람 액션 없이 바로 시작 가능하다고

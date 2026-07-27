@@ -25,6 +25,26 @@ interface Loaded {
 const describe = (failure: unknown) =>
   failure instanceof ApiFailure ? `조회 실패 (${failure.code})` : '조회 실패 — core가 떠 있는지 확인하세요.'
 
+/** WATCH(docs/17) 핀 손잡이 — 누르면 "핀함"으로 굳는다(다시 누를 필요 없음, 취소는 보관함 화면에서). */
+function PinButton({
+  dealEventId,
+  pinned,
+  onPin,
+}: {
+  dealEventId: number
+  pinned: Record<number, true>
+  onPin: (dealEventId: number) => void
+}) {
+  if (pinned[dealEventId]) {
+    return <span>📌 핀함</span>
+  }
+  return (
+    <button type="button" onClick={() => onPin(dealEventId)}>
+      📌 핀하기
+    </button>
+  )
+}
+
 /**
  * 제품 목록을 (제품, variant) 쌍으로 편다. variant가 없는 제품은 고를 수 없다.
  *
@@ -58,6 +78,21 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
   const [includeOutliers, setIncludeOutliers] = useState(false)
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // WATCH(docs/17) 핀 — 이 딜을 지켜보고 싶다는 표시. 성공/실패를 딜별로 기억해 방금 누른 것만 바뀐다.
+  const [pinned, setPinned] = useState<Record<number, true>>({})
+  const [pinError, setPinError] = useState<string | null>(null)
+
+  async function pin(dealEventId: number) {
+    setPinError(null)
+    try {
+      await api.pinDeal({ dealEventId, note: null })
+      setPinned((prev) => ({ ...prev, [dealEventId]: true }))
+    } catch (failure) {
+      setPinError(
+        failure instanceof ApiFailure ? `핀하지 못했습니다 (${failure.code})` : '핀하지 못했습니다 — 알 수 없는 오류',
+      )
+    }
+  }
 
   // 분리 제품이면 어느 축 값을 볼지 골라야 한다 — 안 고르면 core가 400을 낸다(전체로 답하면 묶음의 거짓말).
   const demandAxis = options.find((option) => option.variantId === variantId)?.demandAxis ?? null
@@ -247,10 +282,12 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
                 {conditionsSuffix(loaded.benchmark.latestDeal.conditions)} ·{' '}
                 <a href={loaded.benchmark.latestDeal.sourceUrl} target="_blank" rel="noreferrer">
                   원문
-                </a>
+                </a>{' '}
+                · <PinButton dealEventId={loaded.benchmark.latestDeal.dealEventId} pinned={pinned} onPin={pin} />
               </p>
             )}
           </div>
+          {pinError && <p role="alert">{pinError}</p>}
 
           {/* SPARSE면 기준가 대신 사례를 그대로 보여준다 — 판단은 사람이 한다(절대 원칙 2). */}
           {loaded.benchmark.cases.length > 0 && (
@@ -263,7 +300,8 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
                     {conditionsSuffix(deal.conditions)} ·{' '}
                     <a href={deal.sourceUrl} target="_blank" rel="noreferrer">
                       원문
-                    </a>
+                    </a>{' '}
+                    · <PinButton dealEventId={deal.dealEventId} pinned={pinned} onPin={pin} />
                   </li>
                 ))}
               </ul>

@@ -20,7 +20,7 @@ const benchmark = (over: Partial<BenchmarkView> = {}): BenchmarkView => ({
   benchmarkPrice: 820_000,
   goodDealLine: 790_000,
   periodLowest: { price: 780_000, date: '2026-05-02' },
-  latestDeal: { price: 799_000, date: '2026-07-01', site: 'ppomppu', sourceUrl: 'https://x', conditions: [] },
+  latestDeal: { price: 799_000, date: '2026-07-01', site: 'ppomppu', sourceUrl: 'https://x', conditions: [], dealEventId: 1 },
   n: 12,
   m: 3,
   expandedToMonths: null,
