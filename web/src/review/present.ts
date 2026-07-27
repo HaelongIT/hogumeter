@@ -7,9 +7,8 @@
  *     그 사실을 말하고 근거(payload)를 그대로 내놓는다. `undefined`를 그리지 않는다.
  */
 import type { ReviewQueueItem } from '../api/types'
-// KST 해석은 한 곳에서만 한다. 여기서 다시 구현하면 오프셋 계산이 두 벌이 되고, 사본은 드리프트한다.
-// 세 번째 소비자가 생기면 공용 모듈로 옮긴다.
-import { kstDate } from '../purchase/present'
+// KST 해석은 한 곳에서만 한다(shared/kst.ts) — 세 번째 소비자(watch/present.ts)가 생겨 옮겼다.
+import { kstDate } from '../shared/kst'
 
 export interface ReviewLine {
   reason: string

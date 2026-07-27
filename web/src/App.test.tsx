@@ -36,6 +36,14 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: '우선순위' })).toBeInTheDocument()
   })
+
+  it('탭으로 딜 보관함 화면에 간다', async () => {
+    vi.spyOn(api, 'listActiveWatchItems').mockResolvedValue([])
+    render(<App />)
+    await userEvent.click(screen.getByRole('button', { name: '딜 보관함' }))
+
+    expect(await screen.findByRole('heading', { name: '딜 보관함' })).toBeInTheDocument()
+  })
 })
 
 describe('App — 등록에서 판단으로 이어진다', () => {

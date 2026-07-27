@@ -6,6 +6,7 @@ import { RegistrationPage } from './registration/RegistrationPage'
 import { ReviewQueuePage } from './review/ReviewQueuePage'
 import { SettingsPage } from './settings/SettingsPage'
 import { UsedPage } from './used/UsedPage'
+import { WatchPage } from './watch/WatchPage'
 
 // 라우터를 들이지 않는다 — 1인용 규모라 탭으로 족하다. URL이 필요해지면 그때 넣는다.
 const TABS = {
@@ -13,6 +14,7 @@ const TABS = {
   registration: '제품 등록',
   used: '중고',
   priority: '우선순위',
+  watch: '딜 보관함',
   review: '미상 큐',
   settings: '설정',
 } as const
@@ -50,6 +52,7 @@ export function App() {
       {tab === 'registration' && <RegistrationPage onOpenDecision={openDecision} />}
       {tab === 'used' && <UsedPage />}
       {tab === 'priority' && <PriorityPage />}
+      {tab === 'watch' && <WatchPage />}
       {tab === 'review' && <ReviewQueuePage />}
       {tab === 'settings' && <SettingsPage />}
     </div>
