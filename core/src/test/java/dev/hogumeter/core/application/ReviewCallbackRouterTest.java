@@ -42,7 +42,7 @@ class ReviewCallbackRouterTest {
 		final List<Long> ignored = new ArrayList<>();
 
 		RecordingIgnore() {
-			super(null, null, null, null, null, null, null);
+			super(null, null, null, null, null, null, null, null);
 		}
 
 		@Override

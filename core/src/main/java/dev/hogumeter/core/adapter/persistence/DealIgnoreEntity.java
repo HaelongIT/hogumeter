@@ -37,6 +37,10 @@ public class DealIgnoreEntity {
 		this.title = title;
 	}
 
+	public Long getDealEventId() {
+		return dealEventId;
+	}
+
 	public Long getVariantId() {
 		return variantId;
 	}

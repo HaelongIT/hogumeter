@@ -15,6 +15,8 @@ import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
 import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
+import dev.hogumeter.core.adapter.persistence.WatchItemEntity;
+import dev.hogumeter.core.adapter.persistence.WatchItemRepository;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.Origin;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
@@ -54,6 +56,8 @@ class IgnoreDealUseCaseTest {
 	DealIgnoreRepository ignores;
 	@Autowired
 	ReviewQueueItemRepository reviewQueue;
+	@Autowired
+	WatchItemRepository watchItems;
 
 	private long variantId;
 	private int seq;
@@ -92,6 +96,17 @@ class IgnoreDealUseCaseTest {
 		useCase.ignore(insertDeal("리퍼 상품B")); // "리퍼" 2회 → 후보
 
 		assertThat(pendingKeywordSuggestions()).as("빈출 토큰이 KEYWORD_SUGGEST로 제안된다").isEqualTo(1);
+	}
+
+	/** Q-83 ③(2026-07-30 확정) — 핀 이력(WatchItem 존재, 상태 무관) 딜의 제목은 사후학습 근거에서 뺀다. */
+	@Test
+	void pinnedDealsAreExcludedFromKeywordLearning() {
+		long pinnedDealId = insertDeal("리퍼 상품A");
+		watchItems.save(new WatchItemEntity(pinnedDealId, null, null)); // 핀 이력 있음
+		useCase.ignore(pinnedDealId);
+		useCase.ignore(insertDeal("리퍼 상품B")); // 핀 없는 무시 — "리퍼"는 실질 1회로만 카운트돼야 함
+
+		assertThat(pendingKeywordSuggestions()).as("핀 이력 딜의 제목은 빈출 카운트에서 빠진다").isZero();
 	}
 
 	private long pendingKeywordSuggestions() {

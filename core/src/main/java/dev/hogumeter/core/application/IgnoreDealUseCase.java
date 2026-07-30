@@ -11,6 +11,7 @@ import dev.hogumeter.core.adapter.persistence.RawDealPost;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemEntity;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
+import dev.hogumeter.core.adapter.persistence.WatchItemRepository;
 import dev.hogumeter.core.application.port.out.ReviewNotifier;
 import dev.hogumeter.core.domain.deal.KeywordSuggester;
 import dev.hogumeter.core.domain.review.ReviewQueueItem;
@@ -38,11 +39,12 @@ public class IgnoreDealUseCase {
 	private final AlertPolicyRepository policies;
 	private final ReviewQueueItemRepository reviewQueue;
 	private final ReviewNotifier reviewNotifier;
+	private final WatchItemRepository watchItems;
 	private final KeywordSuggester suggester = new KeywordSuggester();
 
 	public IgnoreDealUseCase(DealIgnoreRepository ignores, DealEventRepository dealEvents,
 			DealEventSourceRepository sources, RawDealPostRepository rawPosts, AlertPolicyRepository policies,
-			ReviewQueueItemRepository reviewQueue, ReviewNotifier reviewNotifier) {
+			ReviewQueueItemRepository reviewQueue, ReviewNotifier reviewNotifier, WatchItemRepository watchItems) {
 		this.ignores = ignores;
 		this.dealEvents = dealEvents;
 		this.sources = sources;
@@ -50,6 +52,7 @@ public class IgnoreDealUseCase {
 		this.policies = policies;
 		this.reviewQueue = reviewQueue;
 		this.reviewNotifier = reviewNotifier;
+		this.watchItems = watchItems;
 	}
 
 	@Transactional
@@ -71,6 +74,9 @@ public class IgnoreDealUseCase {
 
 	private void suggestKeywords(long variantId) {
 		List<String> ignoredTitles = ignores.findByVariantId(variantId).stream()
+				// Q-83 ③(2026-07-30 확정): 핀 이력(WatchItem 존재, 상태 무관) 딜은 노이즈 학습 재료에서 뺀다 —
+				// 사람이 지켜보고 싶다고 표시한 딜의 제목을 "이건 무시할 노이즈"로 배우면 안 된다.
+				.filter(ignore -> watchItems.findByDealEventId(ignore.getDealEventId()).isEmpty())
 				.map(DealIgnoreEntity::getTitle)
 				.toList();
 		suggester.suggest(ignoredTitles, knownExcludeKeywords(variantId))

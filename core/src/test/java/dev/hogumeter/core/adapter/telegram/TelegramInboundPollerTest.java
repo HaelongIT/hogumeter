@@ -64,7 +64,7 @@ class TelegramInboundPollerTest {
 
 	private static final class NoOpIgnore extends IgnoreDealUseCase {
 		NoOpIgnore() {
-			super(null, null, null, null, null, null, null);
+			super(null, null, null, null, null, null, null, null);
 		}
 
 		@Override
