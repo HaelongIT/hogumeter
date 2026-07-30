@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PurchaseObservation, ReportCard } from '../api/types'
-import { kstDate, observationLine, reportCardLine, stateLabel } from './present'
+import { kstDate, observationLine, prefillNotice, reportCardLine, stateLabel } from './present'
 
 const observation = (over: Partial<PurchaseObservation> = {}): PurchaseObservation => ({
   purchaseId: 1,
@@ -162,4 +162,27 @@ describe('stateLabel', () => {
 // 재수출이 실제로 값을 내는지만 한 줄로 확인한다.
 it('kstDate 재수출이 살아있다(정본 = shared/kst.ts)', () => {
   expect(kstDate('2026-07-01T20:00:00Z')).toBe('2026-07-02')
+})
+
+describe('prefillNotice — PUR 프리필(Q-83 ②) 실지불가 안내, 딜의 조건 태그로 3분기', () => {
+  it('배송비미상이면 하한 경고 — 딜 가격이 실제보다 낮을 수 있다', () => {
+    expect(prefillNotice(['배송비미상'])).toBe('⚠ 배송비를 못 읽어 하한입니다 — 실제 낸 금액으로 고치세요')
+  })
+
+  it('카할(축약)이면 카드할인 경고', () => {
+    expect(prefillNotice(['카할'])).toBe("⚠ '카드할인' 조건이 붙은 가격입니다 — 그 카드로 안 샀다면 고치세요")
+  })
+
+  it('발급사+카드(예: 신한카드)도 카드할인 경고 — collector _CARD 정규식이 실제로 내는 모양', () => {
+    expect(prefillNotice(['신한카드'])).toBe("⚠ '카드할인' 조건이 붙은 가격입니다 — 그 카드로 안 샀다면 고치세요")
+  })
+
+  it('조건 없음(null·빈 배열)이면 단순 관측가 안내 — 딜 가격은 이미 배송비 포함이라 늘 뜨는 경고를 달지 않는다', () => {
+    expect(prefillNotice(null)).toBe('이 딜의 관측가(배송비 포함)입니다. 쿠폰·적립을 따로 썼다면 고치세요')
+    expect(prefillNotice([])).toBe('이 딜의 관측가(배송비 포함)입니다. 쿠폰·적립을 따로 썼다면 고치세요')
+  })
+
+  it('배송비미상이 카드할인류보다 우선한다 — 하한이 더 근본적인 문제다', () => {
+    expect(prefillNotice(['배송비미상', '카할'])).toBe('⚠ 배송비를 못 읽어 하한입니다 — 실제 낸 금액으로 고치세요')
+  })
 })

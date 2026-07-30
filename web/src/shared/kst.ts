@@ -17,3 +17,8 @@ const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 export function kstDate(instant: string): string {
   return new Date(new Date(instant).getTime() + KST_OFFSET_MS).toISOString().slice(0, 10)
 }
+
+/** 지금 이 순간의 **KST 날짜** — 폼 프리필(Q-83 ②)이 구매일 초기값으로 쓴다. */
+export function todayKst(): string {
+  return kstDate(new Date().toISOString())
+}

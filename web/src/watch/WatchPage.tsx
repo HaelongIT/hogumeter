@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
-import type { WatchItemView } from '../api/types'
+import type { BoughtPrefill, WatchItemView } from '../api/types'
 import { dateLine, priceLine, stateLabel } from './present'
 
 type SubTab = 'active' | 'resolved'
@@ -21,8 +21,12 @@ function subject(item: WatchItemView): string {
 /**
  * WATCH(docs/17) 딜 보관함 — 활성 탭(관찰 중인 핀)·회고 탭(결말난 핀). 판단 화면(사례·최근 딜)에
  * 📌 핀 버튼이 따로 있고(`DecisionPage`), 여기서도 딜 ID를 알면 직접 핀할 수 있다.
+ *
+ * <p>{@code onBought}(Q-83 ②, 2026-07-28 확정): [샀어요]가 미분류 아닌 딜이면 그 프리필 재료를
+ * 실어 호출한다 — `App`이 판단 화면으로 이동시키고 구매 기록 폼을 채운다. 미분류 딜이면 이동하지
+ * 않고 그 사실을 이 화면에서 안내한다(지어내지 않는다).
  */
-export function WatchPage() {
+export function WatchPage({ onBought }: { onBought?: (prefill: BoughtPrefill) => void } = {}) {
   const [subTab, setSubTab] = useState<SubTab>('active')
   const [active, setActive] = useState<WatchItemView[] | null>(null)
   const [resolved, setResolved] = useState<WatchItemView[] | null>(null)
@@ -82,8 +86,19 @@ export function WatchPage() {
     setBusy(watchItemId)
     setActionError(null)
     try {
-      await (action === 'bought' ? api.markWatchItemBought(watchItemId) : api.dropWatchItem(watchItemId))
+      if (action === 'drop') {
+        await api.dropWatchItem(watchItemId)
+        await loadActive()
+        return
+      }
+      const prefill = await api.markWatchItemBought(watchItemId)
       await loadActive()
+      if (prefill.variantId === null) {
+        // 미분류 딜 — 판단 화면이 요구하는 variant가 없다. 이동하지 않고 사실을 알린다(지어내지 않는다).
+        setActionError('이 딜은 아직 제품에 연결되지 않아 구매 기록으로 넘어갈 수 없습니다(미상 큐 확인).')
+      } else {
+        onBought?.(prefill)
+      }
     } catch (failure) {
       setActionError(describeAction(failure))
     } finally {

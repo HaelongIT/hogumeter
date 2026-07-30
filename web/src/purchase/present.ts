@@ -5,6 +5,7 @@
  * 그래서 여기서 `null`을 만나면 "0"으로 읽지 않고 **그 모드가 아니라고** 읽는다.
  */
 import type { ObservationContext, PurchaseObservation, PurchaseState, ReportCard } from '../api/types'
+import { SHIPPING_UNKNOWN } from '../review/present'
 // 정본은 shared/kst.ts 하나 — 세 번째 소비자(watch/present.ts)가 생겨 옮겼다. 이 파일이 원래
 // 자리였으므로 재수출해 기존 소비처(review/present.ts, 이 파일의 테스트)를 그대로 둔다.
 export { kstDate } from '../shared/kst'
@@ -67,4 +68,30 @@ export function observationLine(observation: PurchaseObservation): string {
       // 0건도 적는다 — "놓친 기회가 없었다"는 그 자체로 정보다.
       return `활성 딜 없음 · 관찰 ${context.observationDay}일차 · 더 싼 기회 ${context.cheaperChanceCount}건`
   }
+}
+
+/**
+ * 카드할인 조건 태그는 이름이 하나가 아니다(collector `price.py`의 `_CARD` 정규식 — `카할` 리터럴,
+ * 발급사+`카드`, `카드할인`/`카드결제`/`카드적용` 등 여러 모양). `SHIPPING_UNKNOWN`처럼 문자열 하나로
+ * 못 박을 수 없어 `check-tag-contract.sh`의 정확 일치 게이트 대상이 아니다 — 대신 "카드"를 포함하거나
+ * `카할`과 정확히 같으면 카드할인류로 본다(과거 발급사 목록이 바뀌어도 이 포함 검사는 안 깨진다).
+ */
+function isCardDiscountTag(tag: string): boolean {
+  return tag === '카할' || tag.includes('카드')
+}
+
+/**
+ * PUR 프리필(Q-83 ②) 실지불가 안내 — 딜의 조건 태그로 3분기. **딜 가격은 이미 배송비 포함**이라
+ * (collector `price.py`의 `headline_price = main + shipping`, BM-02 저장 기준) 태그가 없으면 단순
+ * 관측가 안내만 한다 — 늘 뜨는 경고는 안 읽힌다.
+ */
+export function prefillNotice(appliedConditions: string[] | null): string {
+  const conditions = appliedConditions ?? []
+  if (conditions.includes(SHIPPING_UNKNOWN)) {
+    return '⚠ 배송비를 못 읽어 하한입니다 — 실제 낸 금액으로 고치세요'
+  }
+  if (conditions.some(isCardDiscountTag)) {
+    return "⚠ '카드할인' 조건이 붙은 가격입니다 — 그 카드로 안 샀다면 고치세요"
+  }
+  return '이 딜의 관측가(배송비 포함)입니다. 쿠폰·적립을 따로 썼다면 고치세요'
 }

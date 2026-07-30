@@ -89,8 +89,12 @@ function candidateStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
-/** 배송비를 모르면 저장된 가격은 실결제가가 아니라 **하한**이다(collector `SHIPPING_UNKNOWN`). */
-const SHIPPING_UNKNOWN = '배송비미상'
+/**
+ * 배송비를 모르면 저장된 가격은 실결제가가 아니라 **하한**이다(collector `SHIPPING_UNKNOWN`).
+ * `scripts/check-tag-contract.sh`가 이 리터럴을 정본(collector `pipeline/price.py`)과 대조한다 —
+ * web 안의 두 번째 소비처(`purchase/present.ts`)도 이 값을 재수출해 쓴다(사본을 늘리지 않는다).
+ */
+export const SHIPPING_UNKNOWN = '배송비미상'
 
 /**
  * 이상치가 **왜** 싸 보이는가. 조건이 없으면 빈 문자열 — 이유를 지어내지 않는다.

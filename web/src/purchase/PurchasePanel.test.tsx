@@ -130,6 +130,56 @@ describe('PurchasePanel', () => {
   })
 })
 
+describe('PurchasePanel — WATCH [샀어요] 프리필(Q-83 ②)', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'listPurchases').mockResolvedValue([])
+    vi.spyOn(api, 'recordPurchase').mockResolvedValue({ purchaseId: 7 })
+  })
+
+  it('딜 가격·오늘 날짜를 미리 채우고, 딜의 조건 태그로 안내를 보여준다', async () => {
+    render(
+      <PurchasePanel
+        variantId={11}
+        prefill={{ dealEventId: 42, dealPrice: 850_000, appliedConditions: ['배송비미상'] }}
+      />,
+    )
+
+    expect(await screen.findByLabelText(/실지불가/)).toHaveValue('850000')
+    expect(screen.getByRole('note')).toHaveTextContent('배송비를 못 읽어 하한입니다')
+  })
+
+  it('제출하면 연결 딜을 함께 보낸다', async () => {
+    render(
+      <PurchasePanel
+        variantId={11}
+        prefill={{ dealEventId: 42, dealPrice: 850_000, appliedConditions: null }}
+      />,
+    )
+    // 실지불가·구매일 모두 이미 프리필돼 있다 — 그 값 그대로 제출.
+    await screen.findByDisplayValue('850000')
+    await userEvent.click(screen.getByRole('button', { name: '기록' }))
+
+    await waitFor(() =>
+      expect(api.recordPurchase).toHaveBeenCalledWith(expect.objectContaining({ linkedDealEventId: 42 })),
+    )
+  })
+
+  it('조건 태그가 없으면 관측가 안내만 — 늘 뜨는 배송비 경고를 달지 않는다', async () => {
+    render(
+      <PurchasePanel variantId={11} prefill={{ dealEventId: 42, dealPrice: 850_000, appliedConditions: [] }} />,
+    )
+
+    expect(await screen.findByRole('note')).toHaveTextContent('이 딜의 관측가(배송비 포함)입니다')
+  })
+
+  it('프리필 없이 쓰면 안내가 안 뜨고 폼은 비어 있다 — 기존 흐름 그대로', async () => {
+    render(<PurchasePanel variantId={11} />)
+
+    expect(await screen.findByLabelText(/실지불가/)).toHaveValue('')
+    expect(screen.queryByRole('note')).toBeNull()
+  })
+})
+
 describe('PurchasePanel — 날짜는 KST로 그린다 (OPS-03)', () => {
   it('UTC 저녁에 기록된 구매는 KST 날짜(다음 날)로 보인다', async () => {
     vi.spyOn(api, 'listPurchases').mockResolvedValue([

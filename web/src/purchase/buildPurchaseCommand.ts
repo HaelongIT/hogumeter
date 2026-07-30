@@ -8,6 +8,8 @@ export interface PurchaseForm {
   observationDays: string
   /** 분리 제품이면 판단 화면에서 고른 값, 묶음이면 null(Q-66 ③). 자유 입력이 아니라 선택된 값을 그대로 받는다. */
   demandAxisValue: string | null
+  /** WATCH 핀에서 넘어왔으면 그 딜(Q-83 ②), 아니면 null. 자유 입력이 아니라 프리필이 실어 온 값 그대로. */
+  linkedDealEventId: number | null
 }
 
 /**
@@ -42,7 +44,6 @@ export function buildPurchaseCommand(form: PurchaseForm): RecordPurchaseCommand 
     purchasedAt: new Date(`${form.purchasedDate}${KST_END_OF_DAY}`).toISOString(),
     observationDays: observationDays === '' ? null : Number(observationDays),
     demandAxisValue: form.demandAxisValue,
-    // 화면에 딜 연결 입력이 없다. 없는 값을 지어내지 않는다(PUR-01에서 선택 필드).
-    linkedDealEventId: null,
+    linkedDealEventId: form.linkedDealEventId,
   }
 }

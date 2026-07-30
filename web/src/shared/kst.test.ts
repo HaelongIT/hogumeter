@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { kstDate } from './kst'
+import { kstDate, todayKst } from './kst'
 
 describe('kstDate — 저장은 UTC, 표시는 KST (OPS-03)', () => {
   it('UTC 저녁은 KST로 다음 날이다 — ISO 문자열을 그냥 자르면 하루가 어긋난다', () => {
@@ -26,5 +26,15 @@ describe('kstDate — 저장은 UTC, 표시는 KST (OPS-03)', () => {
     const instant = '2026-07-01T20:00:00Z'
     expect(kstDate(instant)).toBe('2026-07-02')
     expect(kstDate(instant)).not.toBe(new Date(instant).toISOString().slice(0, 10))
+  })
+})
+
+describe('todayKst — 지금 이 순간의 KST 날짜(Q-83 ② 폼 프리필용)', () => {
+  it('kstDate(지금)과 같은 날을 낸다 — 실제 벽시계를 같은 방식으로 변환할 뿐이다', () => {
+    expect(todayKst()).toBe(kstDate(new Date().toISOString()))
+  })
+
+  it('YYYY-MM-DD 형식이다', () => {
+    expect(todayKst()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 })

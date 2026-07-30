@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { BenchmarkView, CadenceView, CoupangLatestPrice, ProductSummary, SignalView } from '../api/types'
 import { AlertPolicyPanel } from '../policy/AlertPolicyPanel'
-import { PurchasePanel } from '../purchase/PurchasePanel'
+import { PurchasePanel, type PurchasePrefill } from '../purchase/PurchasePanel'
 import { Gauge } from './Gauge'
 import {
   benchmarkLine,
@@ -69,7 +69,14 @@ const PERIODS = [3, 6, 12] as const
 /** core의 `GetSignalUseCase.PERIOD_MONTHS` — 신호등은 이 값으로 고정 판정한다(Q-26 잠정). */
 const SIGNAL_PERIOD_MONTHS = 6
 
-export function DecisionPage({ initialVariantId = null }: { initialVariantId?: number | null } = {}) {
+export function DecisionPage({
+  initialVariantId = null,
+  purchasePrefill = null,
+}: {
+  initialVariantId?: number | null
+  /** WATCH [샀어요]로 넘어왔을 때의 구매 기록 프리필(Q-83 ②) — `PurchasePanel`로 그대로 흘려보낸다. */
+  purchasePrefill?: PurchasePrefill | null
+} = {}) {
   const [options, setOptions] = useState<ReturnType<typeof selectable>>([])
   const [variantId, setVariantId] = useState<number | null>(initialVariantId)
   const [periodMonths, setPeriodMonths] = useState<number>(6)
@@ -331,7 +338,13 @@ export function DecisionPage({ initialVariantId = null }: { initialVariantId?: n
 
       {/* 판단 바로 아래에 기록을 둔다 — 사후에 "호구였나"를 물으려면 같은 variant 문맥이어야 한다.
           조회가 실패해도(위의 error) 이미 산 것을 기록하는 길은 막지 않는다. */}
-      {variantId !== null && <PurchasePanel variantId={variantId} demandAxisValue={demandAxisValue} />}
+      {variantId !== null && (
+        <PurchasePanel
+          variantId={variantId}
+          demandAxisValue={demandAxisValue}
+          prefill={variantId === initialVariantId ? purchasePrefill : null}
+        />
+      )}
 
       {/* "지금은 아니다"의 다음 행동은 "그럼 얼마면 알려줘"다. 그래서 판단 화면에 둔다(REG-03). */}
       {variantId !== null && <AlertPolicyPanel variantId={variantId} />}

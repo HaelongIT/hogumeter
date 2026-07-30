@@ -8,6 +8,7 @@ const form = (over: Partial<PurchaseForm> = {}): PurchaseForm => ({
   purchasedDate: '2026-07-01',
   observationDays: '',
   demandAxisValue: null,
+  linkedDealEventId: null,
   ...over,
 })
 
@@ -38,8 +39,12 @@ describe('buildPurchaseCommand', () => {
     expect(buildPurchaseCommand(form({ demandAxisValue: '블랙' })).demandAxisValue).toBe('블랙')
   })
 
-  it('연결 딜은 지어내지 않는다 — 화면에 입력이 없으므로 항상 null', () => {
+  it('연결 딜은 지어내지 않는다 — 프리필이 없으면 null', () => {
     expect(buildPurchaseCommand(form()).linkedDealEventId).toBeNull()
+  })
+
+  it('연결 딜은 프리필이 실어 온 값을 그대로 보낸다(Q-83 ② WATCH 핀 연동)', () => {
+    expect(buildPurchaseCommand(form({ linkedDealEventId: 42 })).linkedDealEventId).toBe(42)
   })
 
   it.each([

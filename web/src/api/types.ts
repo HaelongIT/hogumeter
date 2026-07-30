@@ -494,3 +494,14 @@ export interface PinCreated {
   watchItemId: number
 }
 
+/**
+ * POST /api/v1/watch-items/{id}/bought 응답 — PUR 프리필(Q-83 ②) 재료. `variantId`·`dealPrice`는
+ * 미분류 딜(딜이 어느 variant에도 안 붙음)·딜 행 부재 시 null — 지어내지 않는다.
+ */
+export interface BoughtPrefill {
+  variantId: number | null
+  dealEventId: number
+  dealPrice: number | null
+  appliedConditions: string[] | null
+}
+

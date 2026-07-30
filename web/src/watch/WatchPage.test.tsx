@@ -70,13 +70,56 @@ describe('WatchPage — 활성 탭', () => {
   it('샀어요를 누르면 결말 처리하고 활성 목록에서 사라진다', async () => {
     const list = vi.spyOn(api, 'listActiveWatchItems')
     list.mockResolvedValueOnce([activeItem()]).mockResolvedValueOnce([])
-    const markBought = vi.spyOn(api, 'markWatchItemBought').mockResolvedValue()
+    const markBought = vi
+      .spyOn(api, 'markWatchItemBought')
+      .mockResolvedValue({ variantId: 5, dealEventId: 42, dealPrice: 850_000, appliedConditions: null })
 
     render(<WatchPage />)
     await userEvent.click(await screen.findByRole('button', { name: '샀어요' }))
 
     expect(markBought).toHaveBeenCalledWith(1)
     expect(await screen.findByText(/핀한 딜이 없습니다/)).toBeInTheDocument()
+  })
+
+  /** Q-83 ②: 미분류 딜이 아니면 프리필 재료로 onBought를 불러 판단 화면 이동을 위임한다. */
+  it('샀어요 성공 시 미분류 아닌 딜이면 onBought에 프리필 재료를 실어 부른다', async () => {
+    vi.spyOn(api, 'listActiveWatchItems').mockResolvedValueOnce([activeItem()]).mockResolvedValueOnce([])
+    vi.spyOn(api, 'markWatchItemBought').mockResolvedValue({
+      variantId: 5,
+      dealEventId: 42,
+      dealPrice: 850_000,
+      appliedConditions: ['배송비미상'],
+    })
+    const onBought = vi.fn()
+
+    render(<WatchPage onBought={onBought} />)
+    await userEvent.click(await screen.findByRole('button', { name: '샀어요' }))
+
+    await screen.findByText(/핀한 딜이 없습니다/)
+    expect(onBought).toHaveBeenCalledWith({
+      variantId: 5,
+      dealEventId: 42,
+      dealPrice: 850_000,
+      appliedConditions: ['배송비미상'],
+    })
+  })
+
+  /** 미분류 딜(variant 없음)은 판단 화면으로 갈 수 없다 — 이동하지 않고 사실을 알린다(지어내지 않는다). */
+  it('샀어요 성공 시 미분류 딜이면 onBought를 안 부르고 그 사실을 안내한다', async () => {
+    vi.spyOn(api, 'listActiveWatchItems').mockResolvedValueOnce([activeItem()]).mockResolvedValueOnce([])
+    vi.spyOn(api, 'markWatchItemBought').mockResolvedValue({
+      variantId: null,
+      dealEventId: 42,
+      dealPrice: 850_000,
+      appliedConditions: null,
+    })
+    const onBought = vi.fn()
+
+    render(<WatchPage onBought={onBought} />)
+    await userEvent.click(await screen.findByRole('button', { name: '샀어요' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('제품에 연결되지 않아')
+    expect(onBought).not.toHaveBeenCalled()
   })
 
   it('기각·해제를 누르면 활성 목록에서 사라진다', async () => {

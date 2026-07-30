@@ -1115,8 +1115,19 @@ for field in watchItemId dealEventId note state pinnedAt resolvedAt currentPrice
 done
 echo "$active_watch" | grep -q "\"watchItemId\":${watch_item_id}," || fail "방금 핀 생성한 항목이 활성 목록에 없다: $active_watch"
 
-curl -fsS -o /dev/null -w '%{http_code}' -X POST "${WEB}/api/v1/watch-items/${watch_item_id}/bought" |
-	grep -q '^204$' || fail "핀 결말(BOUGHT) 처리가 204가 아니다"
+# PUR 프리필(Q-83 ②): bought는 이제 204가 아니라 200 + BoughtPrefill(variantId·dealEventId·dealPrice·
+# appliedConditions) — web이 이 재료로 판단 화면 이동 + 구매 기록 폼을 채운다. 결말 전이는 1회성이라
+# (재호출하면 400) 한 번의 curl 호출로 상태코드·본문을 함께 받는다.
+bought_raw=$(curl -fsS -w '\n%{http_code}' -X POST "${WEB}/api/v1/watch-items/${watch_item_id}/bought")
+bought_code=$(echo "$bought_raw" | tail -n1)
+bought_body=$(echo "$bought_raw" | sed '$d')
+[ "$bought_code" = "200" ] || fail "핀 결말(BOUGHT) 처리가 200이 아니다: $bought_code / $bought_body"
+for field in variantId dealEventId dealPrice appliedConditions; do
+	echo "$bought_body" | grep -q "\"${field}\"" ||
+		fail "BoughtPrefill 응답에 기대하는 필드 '${field}'가 없다 (Q-83 ② 계약 드리프트): $bought_body"
+done
+echo "$bought_body" | grep -q "\"dealEventId\":${watch_deal_id}" ||
+	fail "bought 응답의 dealEventId가 핀한 딜과 다르다: $bought_body"
 
 active_watch=$(curl -fsS "${WEB}/api/v1/watch-items")
 echo "$active_watch" | grep -q "\"watchItemId\":${watch_item_id}," &&

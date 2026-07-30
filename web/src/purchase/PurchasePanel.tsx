@@ -2,10 +2,18 @@ import { useEffect, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { PurchaseObservation } from '../api/types'
 import { InvalidForm } from '../registration/buildCommand'
+import { todayKst } from '../shared/kst'
 import { buildPurchaseCommand, type PurchaseForm } from './buildPurchaseCommand'
-import { kstDate, observationLine, reportCardLine, stateLabel } from './present'
+import { kstDate, observationLine, prefillNotice, reportCardLine, stateLabel } from './present'
 
 const EMPTY = { paidPrice: '', purchasedDate: '', observationDays: '' }
+
+/** WATCH [샀어요] → 판단 화면 이동(Q-83 ②)이 실어 오는 프리필 재료. */
+export interface PurchasePrefill {
+  dealEventId: number
+  dealPrice: number | null
+  appliedConditions: string[] | null
+}
 
 const describe = (failure: unknown) => {
   if (failure instanceof InvalidForm) return failure.message
@@ -33,15 +41,26 @@ function verdictOf(purchase: PurchaseObservation): 'over' | 'under' | 'even' | u
  * <p>{@code demandAxisValue}: 분리(SPLIT) 제품이면 판단 화면에서 이미 고른 값을 그대로 받는다(Q-66 ③) —
  * 여기서 자유 입력을 다시 받으면 판단과 다른 색을 적을 수 있고, core는 "SPLIT인데 값 없음"으로 400을 낸다.
  * 묶음(GROUPED) 제품이면 {@code null}이고 이 손잡이 자체를 그리지 않는다.
+ *
+ * <p>{@code prefill}(Q-83 ②): WATCH [샀어요]로 넘어왔으면 실지불가·구매일·연결 딜을 미리 채운다.
+ * **최초 마운트 시 한 번만** 반영한다 — variant를 나중에 바꿔도 이미 채운 값은 유지한다(딜과 무관하게
+ * 사람이 고친 값이 됐을 수 있다). 프리필은 lazy 초기값일 뿐이라 이 컴포넌트가 리마운트될 때만 다시 먹는다.
  */
 export function PurchasePanel({
   variantId,
   demandAxisValue = null,
+  prefill = null,
 }: {
   variantId: number
   demandAxisValue?: string | null
+  prefill?: PurchasePrefill | null
 }) {
-  const [form, setForm] = useState(EMPTY)
+  const [form, setForm] = useState(() =>
+    prefill
+      ? { paidPrice: prefill.dealPrice === null ? '' : String(prefill.dealPrice), purchasedDate: todayKst(), observationDays: '' }
+      : EMPTY,
+  )
+  const [linkedDealEventId, setLinkedDealEventId] = useState<number | null>(prefill?.dealEventId ?? null)
   const [purchases, setPurchases] = useState<PurchaseObservation[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -66,9 +85,15 @@ export function PurchasePanel({
     setError(null)
     setBusy(true)
     try {
-      const command = buildPurchaseCommand({ ...form, variantId, demandAxisValue } satisfies PurchaseForm)
+      const command = buildPurchaseCommand({
+        ...form,
+        variantId,
+        demandAxisValue,
+        linkedDealEventId,
+      } satisfies PurchaseForm)
       await api.recordPurchase(command)
       setForm(EMPTY)
+      setLinkedDealEventId(null) // 프리필은 한 번만 — 다음 기록에 이 딜이 딸려가지 않는다
       await reload(variantId)
     } catch (failure) {
       setError(describe(failure))
@@ -86,6 +111,12 @@ export function PurchasePanel({
           실지불가 (배송비 포함)
           <input value={form.paidPrice} onChange={set('paidPrice')} placeholder="899,000" />
         </label>
+        {/* WATCH 핀에서 넘어온 값이면 그 딜의 조건 태그로 안내를 가른다(Q-83 ②) — 늘 뜨는 경고는 안 읽힌다. */}
+        {prefill && (
+          <p className="purchase-prefill-note" role="note">
+            {prefillNotice(prefill.appliedConditions)}
+          </p>
+        )}
         <label>
           구매일
           <input type="date" value={form.purchasedDate} onChange={set('purchasedDate')} />

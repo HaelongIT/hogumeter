@@ -1013,3 +1013,25 @@
 - **고침**: `check-domain-consumers.sh`가 이제 record 헤더를 제외한 메서드 시그니처 수를 센다(다중행 시그니처 대응을 위해 파일을 한 줄로 접은 뒤 정규식 매칭). 0개(순수 데이터)면 여전히 스킵, 1개 이상이면 보통 클래스처럼 소비처를 검사한다. 실 저장소에서 새로 걸린 13개 record(`Purchase`·`DealEvent`·`DigestWindow` 등) 전부 실제 소비처가 있어 새 FAIL은 0건 — 안전하게 조여졌다. 계약 테스트(`check-domain-consumers.test.sh`)에 "행동 있는 record + 소비처 0"이 차단되는 케이스를 추가하고, 게이트 코드를 되돌려 그 케이스가 RED로 돌아가는 것으로 확인했다.
 - **교훈(규칙화)**: **정적 게이트가 "이 문법 구조는 항상 데이터/무해하다"고 가정하면, 그 구조 안에 행동을 넣는 순간 사각지대가 생긴다.** enum·record·interface를 자동 면제하는 검사는 "그 안에 로직이 있는가"를 실제로 확인해야 한다 — 이름·키워드만으로 건너뛰면 Q-10류 결함(사본 드리프트)이 스며들 자리를 남긴다. **한 결함을 고칠 때 "이 결함을 잡아야 할 게이트가 왜 못 잡았는가"까지 묻는다** — 결함만 고치고 게이트의 사각지대를 그대로 두면 같은 모양이 반드시 재발한다.
 - **관련**: `domain/used/Listing.java`(삭제) + `ListingTest.java`(삭제), `check-domain-consumers.sh`(record 처리 변경), `check-domain-consumers.test.sh`(신규 케이스 + RED 확인).
+
+## 2026-07-30 — Windows 동적 포트 예약이 스모크의 고정 postgres 포트를 삼켰다 (로컬 환경, `POSTGRES_PORT` seam으로 우회)
+
+- **맥락**: PUR 프리필(Q-83 ②) 증분 2 검증 중 `bash scripts/smoke.sh`가 기동 단계에서 매번
+  `Error response from daemon: ports are not available: exposing port TCP 127.0.0.1:55432 -> ...:
+  bind: An attempt was made to access a socket in a way forbidden by its access permissions`로 실패했다.
+  `docker ps -a`·`netstat`엔 그 포트를 쓰는 프로세스가 전혀 없었다 — 우리 코드·compose 설정 문제가
+  아니었다.
+- **원인**: `netsh interface ipv4 show excludedportrange protocol=tcp`로 확인하니 `55334~55433`이
+  **Windows(Hyper-V/WSL의 동적 포트 예약)가 그 순간 배타적으로 쥐고 있는 범위**였다 — `scripts/smoke.sh`의
+  기본값 `POSTGRES_PORT=55432`가 정확히 그 안에 들어간다. 이 범위는 재부팅·WSL 세션마다 바뀔 수 있어
+  재현성이 낮다.
+- **우회**: `scripts/smoke.sh`가 이미 `POSTGRES_PORT` 환경변수로 포트를 오버라이드할 수 있게 열려
+  있었다(seam이 이미 있었다) — `POSTGRES_PORT=15432 bash scripts/smoke.sh`로 그 범위 밖 포트를 쓰니
+  바로 통과했다.
+- **교훈(규칙화)**: **"포트를 아무도 안 쓰는데 바인딩이 거부된다"는 Windows에서는 프로세스 점유가 아니라
+  동적 포트 예약 범위와의 충돌을 의심한다** — `netsh interface ipv4 show excludedportrange protocol=tcp`로
+  즉시 확인 가능하고, 코드를 고칠 필요 없이 그 범위 밖 포트로 재시도하면 된다. 고정 포트를 쓰는 로컬
+  스크립트는 환경변수 오버라이드 seam을 반드시 열어 둔다(`scripts/smoke.sh`는 이미 그렇게 돼 있었다 —
+  이번엔 그 seam을 실제로 써 봤을 뿐).
+- **관련**: `scripts/smoke.sh`(`POSTGRES_PORT` 기본값 55432, 변경 없음 — 사용법만 확인), 로컬 전용이라
+  CI(GitHub Actions, 리눅스 컨테이너)엔 영향 없음.

@@ -143,6 +143,31 @@ describe('DecisionPage', () => {
     expect(screen.getByText(/조건부: 카할/)).toBeInTheDocument()
   })
 
+  describe('PUR 프리필(Q-83 ②) — WATCH [샀어요]로 넘어온 경우', () => {
+    it('initialVariantId와 함께 온 프리필을 PurchasePanel에 흘려보낸다', async () => {
+      render(
+        <DecisionPage
+          initialVariantId={11}
+          purchasePrefill={{ dealEventId: 1, dealPrice: 850_000, appliedConditions: ['배송비미상'] }}
+        />,
+      )
+      await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+
+      expect(await screen.findByLabelText(/실지불가/)).toHaveValue('850000')
+      expect(screen.getByText(/배송비를 못 읽어 하한입니다/)).toBeInTheDocument()
+    })
+
+    it('프리필 없이 평소처럼 들어오면(등록 화면 경유 등) 안내가 안 뜨고 폼은 비어 있다', async () => {
+      render(<DecisionPage />)
+      await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+      await pick()
+
+      expect(await screen.findByLabelText(/실지불가/)).toHaveValue('')
+      expect(screen.queryByText(/이 딜의 관측가/)).toBeNull()
+      expect(screen.queryByText(/배송비를 못 읽어 하한입니다/)).toBeNull()
+    })
+  })
+
   describe('WATCH(docs/17) 핀 손잡이', () => {
     it('사례를 핀하면 그 딜만 "핀함"으로 바뀐다', async () => {
       const pinDeal = vi.spyOn(api, 'pinDeal').mockResolvedValue({ watchItemId: 1 })

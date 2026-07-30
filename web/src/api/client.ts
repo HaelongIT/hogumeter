@@ -12,6 +12,7 @@ import type {
   EvaluationResponse,
   GlobalExcludeKeywordsView,
   NoteCreated,
+  BoughtPrefill,
   PinCreated,
   PinRequest,
   PrioritizedProduct,
@@ -212,8 +213,9 @@ export const api = {
   pinDeal: (req: PinRequest) =>
     request<PinCreated>('/api/v1/watch-items', { method: 'POST', body: JSON.stringify(req) }),
 
+  /** PUR 프리필(Q-83 ②) 재료를 봉투 없이 받는다 — 본문 있는 응답이라 `command()`가 아니라 `request()`. */
   markWatchItemBought: (watchItemId: number) =>
-    command(`/api/v1/watch-items/${watchItemId}/bought`, { method: 'POST' }),
+    request<BoughtPrefill>(`/api/v1/watch-items/${watchItemId}/bought`, { method: 'POST' }),
 
   dropWatchItem: (watchItemId: number) =>
     command(`/api/v1/watch-items/${watchItemId}/drop`, { method: 'POST' }),
