@@ -23,6 +23,8 @@ import dev.hogumeter.core.adapter.persistence.ReviewQueueItemEntity;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
 import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
+import dev.hogumeter.core.adapter.persistence.WatchItemEntity;
+import dev.hogumeter.core.adapter.persistence.WatchItemRepository;
 import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.application.port.out.AlertSender;
 import dev.hogumeter.core.application.port.out.ReviewNotifier;
@@ -82,6 +84,8 @@ class IngestDealsUseCaseTest {
 	AlertPolicyRepository policies;
 	@Autowired
 	RecordingReviewNotifier reviewNotifier;
+	@Autowired
+	WatchItemRepository watchItems;
 
 	private long variantId;
 	private long colorProductId;
@@ -113,9 +117,9 @@ class IngestDealsUseCaseTest {
 		return reviewQueue.findAll().stream().filter(i -> i.getType() == type).toList();
 	}
 
-	private void savePost(String site, String title, Long price, Instant when) {
-		rawPosts.save(new RawDealPost(site, "post" + postSeq++, "https://" + site + ".test/" + postSeq,
-				title, price, when, when, "ACTIVE"));
+	private long savePost(String site, String title, Long price, Instant when) {
+		return rawPosts.save(new RawDealPost(site, "post" + postSeq++, "https://" + site + ".test/" + postSeq,
+				title, price, when, when, "ACTIVE")).getId();
 	}
 
 	@Test
@@ -141,6 +145,25 @@ class IngestDealsUseCaseTest {
 		assertThat(deals).hasSize(1); // 병합
 		assertThat(deals.get(0).getStatus()).isEqualTo(DealStatus.VERIFIED);
 		assertThat(sources.findByDealEventId(deals.get(0).getId())).hasSize(2); // 2사이트 소스
+	}
+
+	/**
+	 * Q-83 ①(2026-07-30 확정) — 핀된 딜에 새 소스가 병합되면 WatchItem의 anchorPostId가 방금 병합된
+	 * 원문으로 갱신된다("최신 원문이 항상 앵커"). 핀이 없으면(대부분의 딜) 아무 일도 안 한다.
+	 */
+	@Test
+	void mergingANewSourceCarriesTheAnchorForwardOnAPinnedDeal() {
+		savePost("ppomppu", "아이폰 17 256기가 89만", 890_000L, T);
+		useCase.ingestPending();
+		long dealId = dealEvents.findByVariantId(variantId).get(0).getId();
+		watchItems.save(new WatchItemEntity(dealId, sources.findByDealEventId(dealId).get(0).getRawDealPostId(), null));
+
+		long newestPostId = savePost("ruliweb", "아이폰 17 256기가 특가", 895_000L, T.plus(Duration.ofHours(6)));
+		useCase.ingestPending();
+
+		WatchItemEntity pin = watchItems.findByDealEventIdAndState(dealId, dev.hogumeter.core.domain.watch.PinState.ACTIVE)
+				.orElseThrow();
+		assertThat(pin.getAnchorPostId()).as("최신 병합 원문으로 앵커가 갱신된다").isEqualTo(newestPostId);
 	}
 
 	/**

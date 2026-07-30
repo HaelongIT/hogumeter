@@ -11,6 +11,7 @@ import dev.hogumeter.core.adapter.persistence.RawDealPost;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemEntity;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
+import dev.hogumeter.core.adapter.persistence.WatchItemRepository;
 import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealMergePolicy;
@@ -26,6 +27,7 @@ import dev.hogumeter.core.domain.matching.ProductMatchSpec;
 import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.review.ReviewQueueItem;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
+import dev.hogumeter.core.domain.watch.PinState;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +53,7 @@ public class IngestDealsUseCase {
 	private final EvaluateAlertOnDealUseCase alertEvaluation;
 	private final VariantDemandScope demandScope;
 	private final ReviewNotifier reviewNotifier;
+	private final WatchItemRepository watchItems;
 	private final Matcher matcher = new Matcher();
 	private final DealMergePolicy mergePolicy = new DealMergePolicy();
 	private final OutlierDetector outlierDetector = new OutlierDetector();
@@ -62,7 +65,7 @@ public class IngestDealsUseCase {
 	public IngestDealsUseCase(RawDealPostRepository rawPosts, DealEventRepository dealEvents,
 			DealEventSourceRepository sources, DealEventMapper mapper, CatalogProjection catalog,
 			ReviewQueueItemRepository reviewQueue, EvaluateAlertOnDealUseCase alertEvaluation,
-			VariantDemandScope demandScope, ReviewNotifier reviewNotifier) {
+			VariantDemandScope demandScope, ReviewNotifier reviewNotifier, WatchItemRepository watchItems) {
 		this.rawPosts = rawPosts;
 		this.dealEvents = dealEvents;
 		this.sources = sources;
@@ -72,6 +75,7 @@ public class IngestDealsUseCase {
 		this.alertEvaluation = alertEvaluation;
 		this.demandScope = demandScope;
 		this.reviewNotifier = reviewNotifier;
+		this.watchItems = watchItems;
 	}
 
 	@Transactional
@@ -131,6 +135,9 @@ public class IngestDealsUseCase {
 				existing.applyMerge(merged.priceFirst(), merged.priceMin(), merged.priceMax(), merged.priceLast(),
 						merged.crossVerified(), merged.status(), merged.firstSeen(), merged.lastSeen());
 				sources.save(new DealEventSourceEntity(existing.getId(), post.getId(), post.getSite()));
+				// Q-83 ①(2026-07-30): 이 딜에 ACTIVE 핀이 있으면 앵커를 방금 병합된 최신 원문으로 승계한다.
+				watchItems.findByDealEventIdAndState(existing.getId(), PinState.ACTIVE)
+						.ifPresent(item -> item.updateAnchorPostId(post.getId()));
 				// Q-13: 흡수는 첫 알림을 다시 내지 않는다 — priceFirst는 병합으로 안 바뀌므로 같은 트리거를
 				// 재평가하면 매번 다시 SEND_NOW가 날 수 있었다(텔레그램이 켜지면 중복 문자로 드러날 결함).
 				// 대신 후속(AL-03) 대상으로만 기록한다 — PipelineScheduler가 FollowUpAlertUseCase로 넘기고,

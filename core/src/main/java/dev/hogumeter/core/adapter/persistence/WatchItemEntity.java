@@ -62,6 +62,14 @@ public class WatchItemEntity {
 		this.resolvedAt = at;
 	}
 
+	/**
+	 * 이벤트 재구성 시 자동 승계(Q-83 ①, 2026-07-30 확정) — 딜에 새 원문이 병합되면 앵커가 그 최신
+	 * 원문을 가리키도록 갱신한다. 과거 앵커 이력은 별도로 안 남긴다({@code deal_event_source}에 이미 있다).
+	 */
+	public void updateAnchorPostId(Long newAnchorPostId) {
+		this.anchorPostId = newAnchorPostId;
+	}
+
 	public Long getId() {
 		return id;
 	}
