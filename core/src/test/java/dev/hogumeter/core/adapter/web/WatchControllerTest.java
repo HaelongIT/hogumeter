@@ -95,11 +95,28 @@ class WatchControllerTest {
 		long watchItemId = Long.parseLong(body.replaceAll("\\D+", ""));
 
 		mockMvc.perform(post("/api/v1/watch-items/" + watchItemId + "/bought"))
-				.andExpect(status().isNoContent());
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.dealEventId").value(dealId));
 
 		assertThat(watchItems.findById(watchItemId).orElseThrow().getState()).isEqualTo(PinState.BOUGHT);
 		mockMvc.perform(get("/api/v1/watch-items"))
 				.andExpect(jsonPath("$[?(@.watchItemId == " + watchItemId + ")]").isEmpty());
+	}
+
+	/** PUR 프리필(Q-83 ②) 재료가 응답에 실린다 — web이 판단 화면 폼을 채우는 데 쓴다. */
+	@Test
+	void boughtResponseCarriesPrefillMaterial() throws Exception {
+		long dealId = deal();
+		String body = mockMvc.perform(post("/api/v1/watch-items").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"dealEventId\": " + dealId + ", \"note\": null}"))
+				.andReturn().getResponse().getContentAsString();
+		long watchItemId = Long.parseLong(body.replaceAll("\\D+", ""));
+
+		mockMvc.perform(post("/api/v1/watch-items/" + watchItemId + "/bought"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.variantId").isNumber())
+				.andExpect(jsonPath("$.dealEventId").value(dealId))
+				.andExpect(jsonPath("$.dealPrice").value(900_000));
 	}
 
 	@Test

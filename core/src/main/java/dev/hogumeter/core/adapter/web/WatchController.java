@@ -45,10 +45,10 @@ public class WatchController {
 		return new PinCreated(pinDeal.pin(request.dealEventId(), request.note()));
 	}
 
+	/** PUR 프리필(Q-83 ②) 재료를 봉투 없이 직접 반환(Q-2) — web이 판단 화면 폼을 채운다. */
 	@PostMapping("/{watchItemId}/bought")
-	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void markBought(@PathVariable long watchItemId) {
-		resolvePin.markBought(watchItemId);
+	public ResolvePinUseCase.BoughtPrefill markBought(@PathVariable long watchItemId) {
+		return resolvePin.markBought(watchItemId);
 	}
 
 	/** 기각·해제 둘 다 여기로 온다 — 결과가 같다(docs/17). */

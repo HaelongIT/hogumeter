@@ -63,6 +63,37 @@ class ResolvePinUseCaseTest {
 		assertThat(saved.getResolvedAt()).isNotNull();
 	}
 
+	/** PUR 프리필(Q-83 ②, 2026-07-28 확정) 재료 — web이 판단 화면 폼을 채우는 데 쓴다. */
+	@Test
+	void markBoughtReturnsPrefillMaterialFromTheLinkedDeal() {
+		long productId = products.save(new ProductEntity("프리필 테스트", "test", DemandAxisMode.GROUPED)).getId();
+		long variantId = variants.save(new VariantEntity(productId, "256GB", Map.of())).getId();
+		long dealId = dealEvents.save(new DealEventEntity(variantId, false, null, 850_000, 850_000, 850_000,
+				850_000, Origin.LIVE, false, OutlierFlag.NONE, false, DealStatus.ACTIVE,
+				Instant.parse("2026-07-01T00:00:00Z"), Instant.parse("2026-07-01T00:00:00Z"))).getId();
+		long id = watchItems.save(new WatchItemEntity(dealId, null, null)).getId();
+
+		ResolvePinUseCase.BoughtPrefill prefill = resolvePin.markBought(id);
+
+		assertThat(prefill.variantId()).isEqualTo(variantId);
+		assertThat(prefill.dealEventId()).isEqualTo(dealId);
+		assertThat(prefill.dealPrice()).isEqualTo(850_000L);
+	}
+
+	/** 미분류 딜(variant 없음)은 프리필 재료를 지어내지 않는다 — null 그대로. */
+	@Test
+	void markBoughtPrefillIsNullWhenTheDealIsUnclassified() {
+		long dealId = dealEvents.save(new DealEventEntity(null, true, null, 850_000, 850_000, 850_000, 850_000,
+				Origin.LIVE, false, OutlierFlag.NONE, false, DealStatus.ACTIVE,
+				Instant.parse("2026-07-01T00:00:00Z"), Instant.parse("2026-07-01T00:00:00Z"))).getId();
+		long id = watchItems.save(new WatchItemEntity(dealId, null, null)).getId();
+
+		ResolvePinUseCase.BoughtPrefill prefill = resolvePin.markBought(id);
+
+		assertThat(prefill.variantId()).isNull();
+		assertThat(prefill.dealPrice()).isEqualTo(850_000L);
+	}
+
 	@Test
 	void dropResolvesToDropped() {
 		long id = activePin();
