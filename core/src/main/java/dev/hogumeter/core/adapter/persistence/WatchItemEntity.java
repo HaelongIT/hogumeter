@@ -39,6 +39,10 @@ public class WatchItemEntity {
 	@Column(name = "resolved_at")
 	private Instant resolvedAt;
 
+	/** 부활 미응답 플래그(Q-83 ⑤, 2026-07-30 확정) — ACTIVE 핀의 딜이 부활하면 서고, [확인함]으로 내려간다. */
+	@Column(name = "revive_unacknowledged", nullable = false)
+	private boolean reviveUnacknowledged;
+
 	protected WatchItemEntity() {
 	}
 
@@ -70,6 +74,16 @@ public class WatchItemEntity {
 		this.anchorPostId = newAnchorPostId;
 	}
 
+	/** 부활 발생(Q-83 ⑤) — 핀 상태 전이는 없다("전이 없음+미응답 플래그 대체"). */
+	public void flagRevivalUnacknowledged() {
+		this.reviveUnacknowledged = true;
+	}
+
+	/** 사람이 [확인함]을 눌렀다 — 플래그를 내린다. */
+	public void acknowledgeRevival() {
+		this.reviveUnacknowledged = false;
+	}
+
 	public Long getId() {
 		return id;
 	}
@@ -96,5 +110,9 @@ public class WatchItemEntity {
 
 	public Instant getResolvedAt() {
 		return resolvedAt;
+	}
+
+	public boolean isReviveUnacknowledged() {
+		return reviveUnacknowledged;
 	}
 }

@@ -482,6 +482,8 @@ export interface WatchItemView {
   resolvedAt: string | null
   currentPriceLast: number | null
   dealStatus: DealStatus | null
+  /** 부활 미응답 플래그(Q-83 ⑤) — ACTIVE 핀의 딜이 부활하면 서고, [확인함]으로 내려간다. */
+  reviveUnacknowledged: boolean
 }
 
 /** POST /api/v1/watch-items */

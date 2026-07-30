@@ -29,3 +29,8 @@ export function dateLine(item: WatchItemView): string {
   }
   return `${kstDate(item.pinnedAt)} 핀`
 }
+
+/** Q-83 ⑤ — 부활 미응답 플래그. 서 있지 않으면 null(지어내지 않는다) — [확인함] 버튼을 그릴지 화면이 판단. */
+export function revivalNotice(item: WatchItemView): string | null {
+  return item.reviveUnacknowledged ? '↩️ 다시 살아남 — 아직 확인 안 함' : null
+}

@@ -1109,7 +1109,7 @@ watch_item_id=$(echo "$pin_resp" | sed 's/.*"watchItemId":\([0-9]*\).*/\1/')
 [ -n "$watch_item_id" ] || fail "핀 생성 응답에서 watchItemId를 못 찾았다: $pin_resp"
 
 active_watch=$(curl -fsS "${WEB}/api/v1/watch-items")
-for field in watchItemId dealEventId note state pinnedAt resolvedAt currentPriceLast dealStatus; do
+for field in watchItemId dealEventId note state pinnedAt resolvedAt currentPriceLast dealStatus reviveUnacknowledged; do
 	echo "$active_watch" | grep -q "\"${field}\"" ||
 		fail "web WatchItemView가 기대하는 필드 '${field}'가 응답에 없다 (계약 드리프트): $active_watch"
 done

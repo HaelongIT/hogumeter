@@ -1,3 +1,37 @@
+## 2026-07-30 (2) — [WATCH] Q-83 잔여 4건 전부 구현 (①③④⑤, 무중단)
+
+사용자 요청("사람 판단 필요한 영역 전부 지금 정하고 가자 → 그 다음 Q-83 쭉 무중단")으로 ①③④⑤를
+한 번에 정리. ①③은 코드 추적 결과 이미 배선된 소재를 재사용하는 기계적 작업이라 자율 결정(되돌리기
+쉬움), ④⑤는 AskUserQuestion으로 선택지 제시 후 사용자가 확정. 결정 전부 `decision-log.md`에 기록.
+
+- **① anchorPostId 자동 승계**: `IngestDealsUseCase`의 병합 지점(새 원문이 기존 dealEventId에 흡수)에서
+  ACTIVE 핀이 있으면 앵커를 최신 원문으로 갱신. 처음엔 "새 DealEvent 매칭 휴리스틱이 필요하다"고
+  오해했으나, REOPENED가 dealEventId를 재사용해 FK가 원래 안 끊긴다는 걸 확인하고 훨씬 작은 범위로
+  좁혔다.
+- **③ 핀 이력 딜 사후학습 제외**: `IgnoreDealUseCase.suggestKeywords`가 WatchItem 있는 dealEventId의
+  무시 제목을 빈출 카운트에서 제외. 신규 리포지토리 메서드 없이 기존 `findByDealEventId` 재사용.
+- **④ 핀 후속 인상 1회**: 새 `FollowUpKind.PINNED_PRICE_INCREASED` — 핀 자체가 자격(첫 알림 무관,
+  `FollowUpEvaluator` 유일 예외). `ReprocessDealPricesUseCase.previewPinnedPriceIncreases()`가 부수효과
+  없이 미리보기(가격 재처리보다 먼저 돌아야 함 — 순서 실수하면 인상분을 영원히 못 잡는다). 기존
+  `reprocessPrices` 시그니처(List<Long>, 방향 무관)는 안 건드리고 새 Supplier seam을 더해 스케줄러
+  테스트 20여 곳 안 깨지게 했다. **V21 마이그레이션 필요**(deal_alert.kind CHECK) — V20(REOPENED) 때
+  겪은 "enum 추가했는데 CHECK 제약 안 고쳐서 도입일부터 조용히 실패" 결함을 또 밟을 뻔했으나, 이번엔
+  같은 커밋에서 바로 잡았다(교훈이 실제로 작동한 사례).
+- **⑤ 부활 미응답 플래그 ✅ / 자격 상실 확인 알림 ❌(구조적 불가)**: `watch_item.revive_unacknowledged`
+  (V22) + `AcknowledgeRevivalUseCase` + REST + web [확인함] 버튼은 구현. 반면 "자격 상실 확인 필요
+  알림"은 **구현 전 코드 추적에서 트리거 자체가 불가능함을 발견** — C-4(이상치 판정 유입 시 1회·영속)
+  때문에 이미 핀된(outlierFlag==NONE) 딜은 이후 outlierFlag를 절대 못 잃는다(그걸 잃을 수 있는 유일한
+  경로인 리뷰 큐 승격/기각은 애초에 outlierFlag≠NONE이라 핀 자체가 불가능한 딜에만 적용된다). 근거
+  없는 알림은 안 만든다(절대 원칙 2) — `docs/99-lessons.md`에 교훈 추가("보드 항목 구현 전 그 트리거가
+  이미 잠긴 다른 결정 때문에 불가능하지 않은지 재현한다").
+- 전 항목 TDD Red→Green + 뮤테이션 검증(각 증분 원복 확인). core 전체 스위트·web 271건·전체 스모크
+  PASS(`POSTGRES_PORT=15432` — Windows 동적 포트 예약 회피, 기존 교훈 재사용). 게이트 4종 통과.
+- `docs/91` Q-83 전면 갱신(①②③④ 해소, ⑤ 절반 해소+구조적 불가 판정), `docs/17`·`docs/30` 동기화.
+
+TURN-END: ② 일감 소진 — Q-83의 사람 판단 필요 항목(④⑤ 메커니즘)을 전부 확정하고 구현까지 완료.
+남은 Q-83 ⑤ 절반(자격 상실 알림)은 "미착수"가 아니라 "구조적으로 불가능 — C-4 재검토가 트리거"로
+재분류했으므로 이 보드에서 더 열려 있을 이유가 없다. 다음 지시 대기.
+
 ## 2026-07-30 (1) — [WATCH] PUR 프리필 구현 완료 (Q-83 ②, 무중단, 3증분)
 
 사용자 지시("이어서 무중단 개발 진행 ㄱㄱ")로 2026-07-28 확정해 둔 설계를 그대로 구현. 3증분 전부

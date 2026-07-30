@@ -1,5 +1,6 @@
 package dev.hogumeter.core.adapter.web;
 
+import dev.hogumeter.core.application.AcknowledgeRevivalUseCase;
 import dev.hogumeter.core.application.GetWatchItemsUseCase;
 import dev.hogumeter.core.application.PinDealUseCase;
 import dev.hogumeter.core.application.ResolvePinUseCase;
@@ -21,11 +22,14 @@ public class WatchController {
 	private final GetWatchItemsUseCase getWatchItems;
 	private final PinDealUseCase pinDeal;
 	private final ResolvePinUseCase resolvePin;
+	private final AcknowledgeRevivalUseCase acknowledgeRevival;
 
-	public WatchController(GetWatchItemsUseCase getWatchItems, PinDealUseCase pinDeal, ResolvePinUseCase resolvePin) {
+	public WatchController(GetWatchItemsUseCase getWatchItems, PinDealUseCase pinDeal, ResolvePinUseCase resolvePin,
+			AcknowledgeRevivalUseCase acknowledgeRevival) {
 		this.getWatchItems = getWatchItems;
 		this.pinDeal = pinDeal;
 		this.resolvePin = resolvePin;
+		this.acknowledgeRevival = acknowledgeRevival;
 	}
 
 	@GetMapping
@@ -56,6 +60,13 @@ public class WatchController {
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void drop(@PathVariable long watchItemId) {
 		resolvePin.drop(watchItemId);
+	}
+
+	/** 부활 미응답 플래그 확인(Q-83 ⑤) — 핀 상태 전이는 없다, 플래그만 내린다. */
+	@PostMapping("/{watchItemId}/acknowledge-revival")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void acknowledgeRevival(@PathVariable long watchItemId) {
+		acknowledgeRevival.acknowledge(watchItemId);
 	}
 
 	public record PinRequest(long dealEventId, String note) {

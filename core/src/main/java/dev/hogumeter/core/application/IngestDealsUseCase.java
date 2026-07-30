@@ -11,6 +11,7 @@ import dev.hogumeter.core.adapter.persistence.RawDealPost;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemEntity;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
+import dev.hogumeter.core.adapter.persistence.WatchItemEntity;
 import dev.hogumeter.core.adapter.persistence.WatchItemRepository;
 import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.deal.DealEvent;
@@ -32,6 +33,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -136,8 +138,9 @@ public class IngestDealsUseCase {
 						merged.crossVerified(), merged.status(), merged.firstSeen(), merged.lastSeen());
 				sources.save(new DealEventSourceEntity(existing.getId(), post.getId(), post.getSite()));
 				// Q-83 ①(2026-07-30): 이 딜에 ACTIVE 핀이 있으면 앵커를 방금 병합된 최신 원문으로 승계한다.
-				watchItems.findByDealEventIdAndState(existing.getId(), PinState.ACTIVE)
-						.ifPresent(item -> item.updateAnchorPostId(post.getId()));
+				Optional<WatchItemEntity> activePin = watchItems.findByDealEventIdAndState(existing.getId(),
+						PinState.ACTIVE);
+				activePin.ifPresent(item -> item.updateAnchorPostId(post.getId()));
 				// Q-13: 흡수는 첫 알림을 다시 내지 않는다 — priceFirst는 병합으로 안 바뀌므로 같은 트리거를
 				// 재평가하면 매번 다시 SEND_NOW가 날 수 있었다(텔레그램이 켜지면 중복 문자로 드러날 결함).
 				// 대신 후속(AL-03) 대상으로만 기록한다 — PipelineScheduler가 FollowUpAlertUseCase로 넘기고,
@@ -147,6 +150,8 @@ public class IngestDealsUseCase {
 				// 부류가 다른 사실을 한 목록으로 흘리면 사람이 "다시 살아났다"를 "검증됐다"로 읽는다.
 				if (existingDomain.status() == DealStatus.ENDED && merged.status() != DealStatus.ENDED) {
 					tally.reopenedDealIds.add(existing.getId());
+					// Q-83 ⑤(2026-07-30): 부활 = 전이 없음 + 미응답 플래그(핀 상태는 그대로 ACTIVE).
+					activePin.ifPresent(WatchItemEntity::flagRevivalUnacknowledged);
 				}
 				else {
 					tally.mergedDealIds.add(existing.getId());

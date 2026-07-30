@@ -14,6 +14,7 @@ const activeItem = (overrides: Partial<WatchItemView> = {}): WatchItemView => ({
   resolvedAt: null,
   currentPriceLast: 850_000,
   dealStatus: 'ACTIVE',
+  reviveUnacknowledged: false,
   ...overrides,
 })
 
@@ -120,6 +121,41 @@ describe('WatchPage — 활성 탭', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('제품에 연결되지 않아')
     expect(onBought).not.toHaveBeenCalled()
+  })
+
+  /** Q-83 ⑤(2026-07-30 확정) — 부활 미응답 플래그가 서 있으면 안내 + [확인함] 버튼이 뜬다. */
+  it('부활 미응답 플래그가 서 있으면 안내와 확인함 버튼을 보여준다', async () => {
+    vi.spyOn(api, 'listActiveWatchItems').mockResolvedValue([activeItem({ reviveUnacknowledged: true })])
+
+    render(<WatchPage />)
+
+    expect(await screen.findByText(/다시 살아남/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '확인함' })).toBeInTheDocument()
+  })
+
+  it('플래그가 없으면 안내·확인함 버튼이 안 뜬다', async () => {
+    vi.spyOn(api, 'listActiveWatchItems').mockResolvedValue([activeItem({ reviveUnacknowledged: false })])
+
+    render(<WatchPage />)
+    await screen.findByText('아이폰 17 특가')
+
+    expect(screen.queryByText(/다시 살아남/)).toBeNull()
+    expect(screen.queryByRole('button', { name: '확인함' })).toBeNull()
+  })
+
+  it('확인함을 누르면 서버에 확인 처리하고 목록을 다시 불러온다', async () => {
+    const list = vi.spyOn(api, 'listActiveWatchItems')
+    list
+      .mockResolvedValueOnce([activeItem({ reviveUnacknowledged: true })])
+      .mockResolvedValueOnce([activeItem({ reviveUnacknowledged: false })])
+    const acknowledge = vi.spyOn(api, 'acknowledgeRevival').mockResolvedValue()
+
+    render(<WatchPage />)
+    await userEvent.click(await screen.findByRole('button', { name: '확인함' }))
+
+    expect(acknowledge).toHaveBeenCalledWith(1)
+    expect(await screen.findByText('아이폰 17 특가')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '확인함' })).toBeNull()
   })
 
   it('기각·해제를 누르면 활성 목록에서 사라진다', async () => {

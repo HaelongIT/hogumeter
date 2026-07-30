@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WatchItemView } from '../api/types'
-import { dateLine, priceLine, stateLabel } from './present'
+import { dateLine, priceLine, revivalNotice, stateLabel } from './present'
 
 const item = (overrides: Partial<WatchItemView> = {}): WatchItemView => ({
   watchItemId: 1,
@@ -11,6 +11,7 @@ const item = (overrides: Partial<WatchItemView> = {}): WatchItemView => ({
   resolvedAt: null,
   currentPriceLast: 850_000,
   dealStatus: 'ACTIVE',
+  reviveUnacknowledged: false,
   ...overrides,
 })
 
@@ -42,5 +43,15 @@ describe('dateLine', () => {
 
   it('활성 핀은 핀한 날짜를 보여준다 — 아직 결말이 없다', () => {
     expect(dateLine(item({ pinnedAt: '2026-07-01T00:00:00Z', resolvedAt: null }))).toBe('2026-07-01 핀')
+  })
+})
+
+describe('revivalNotice — 부활 미응답 플래그(Q-83 ⑤)', () => {
+  it('플래그가 서 있으면 안내를 낸다', () => {
+    expect(revivalNotice(item({ reviveUnacknowledged: true }))).toBe('↩️ 다시 살아남 — 아직 확인 안 함')
+  })
+
+  it('플래그가 없으면 null — 지어내지 않는다', () => {
+    expect(revivalNotice(item({ reviveUnacknowledged: false }))).toBeNull()
   })
 })

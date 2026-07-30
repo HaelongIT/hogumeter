@@ -568,9 +568,15 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **검증**: `ArchivePurchaseUseCaseTest`(CLOSED→ARCHIVED 성공·OBSERVING에서 아카이브 거부·ARCHIVED→OBSERVING 재활성 성공·CLOSED에서 재활성 거부·미상 id 거부, 5케이스), `PurchaseControllerTest`(204/409/404 HTTP 매핑). 상태기계 검증 우회 뮤테이션으로 거부 2케이스 RED 확인 후 원복.
 - **관련**: `docs/91` Q-62(부분해소, 잔여 자동 아카이브)·Q-85(이 배선이 없으면 죽은 안전망이었던 배경), `ArchivePurchaseUseCase.java`, `PurchaseController.java`, `PurchaseState.java`.
 
-## [열림] Q-83. WATCH(docs/17) 핀 생명주기 배선 후 남은 것 — anchorPostId 승계·사후학습 제외·인상 특례
+## [열림] Q-83. WATCH(docs/17) 핀 생명주기 배선 후 남은 것 — 자격 상실 확인 알림만 남음(구조적 불가 판정)
 - **맥락**: 2026-07-25 WatchItem 핵심(자격·유일성·결말 3종·REST) 배선 완료. docs/17 골자 중 아직 코드에 없는 조각들을 여기 한데 모은다 — 전부 "골자엔 있지만 이번 판엔 없음"이지, 판단이 갈리는 항목은 아니다.
-  1. **anchorPostId 자동 승계**: "이벤트 재구성 시 자동 승계 + 이력"(docs/17) — 딜이 merge window 밖에서 재구성되어 새 DealEvent로 태어나는 경우, 옛 WatchItem의 anchorPostId를 새 딜로 옮기는 배선이 없다. 지금은 핀 시점의 소스 원문 하나를 그대로 싣기만 한다(`PinDealUseCase`).
+  1. **✅ anchorPostId 자동 승계 해소(2026-07-30)**: 처음엔 "새 DealEvent가 옛 딜의 재구성임을 매칭하는
+     휴리스틱"이 필요하다고 오해했으나, 코드 추적 결과 REOPENED(부활)는 **같은 dealEventId를 재사용**해
+     WatchItem의 FK가 애초에 안 끊긴다 — 진짜 "재구성"은 `IngestDealsUseCase.confirmDeal`이 새 원문을
+     **기존 dealEventId**에 병합할 때(`DealEventSourceEntity` 추가) ACTIVE 핀의 `anchorPostId`가 안
+     갱신되던 것뿐이었다. 그 병합 지점에서 ACTIVE 핀이 있으면 앵커를 방금 병합된 최신 원문으로 갱신한다
+     (`WatchItemEntity.updateAnchorPostId`). "+이력"은 별도 컬럼 없이 `deal_event_source`가 이미 갖고
+     있다(사본 아님).
   2. **✅ PUR 프리필 해소(2026-07-30)**: "[샀어요]→BOUGHT(PUR 프리필)". `ResolvePinUseCase.markBought`가
      `BoughtPrefill`(variantId·dealEventId·dealPrice·appliedConditions, 미분류 딜이면 variantId·dealPrice는
      null)을 반환하고 `WatchController`가 204 대신 200 + 그 값을 낸다. web에서 `WatchPage`의 [샀어요]가
@@ -582,16 +588,45 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
      `main + shipping`, BM-02 저장 기준) 단일 경고는 대개 거짓이었다(설계 확정 당일 검증에서 정정).
      미분류 딜이면 이동하지 않고 그 사실을 안내한다(지어내지 않는다). 설계 근거는
      `working-area/decision-log.md`(2026-07-28) 참조.
-  3. **핀 이력 딜의 키워드 사후학습 근거 제외**: docs/17 "핀 이력 딜은 키워드 사후학습 근거 제외" — BM-07 사후학습(Q-22)이 WatchItem 존재를 아직 안 본다.
-  4. **핀 후속 특례(인상 1회)**: "핀 후속(딜 층, variant 상태 무관·ARCHIVED에도): 인하·품절·종료·검증 무조건, 인상 1회만" — 지금 AL-03 후속은 핀 여부를 안 보고 일괄 적용된다. 핀된 딜만 별도로 "가격 인상"도 1회 알리는 특례가 없다.
-  5. **자격 상실 확인 필요 알림·부활 미응답 플래그**: docs/17 결말표의 "자격 상실→전이 없음+확인 필요 알림", "부활→...+미응답 플래그"는 WatchItem 쪽에서 아직 안 낸다(DealEvent 층 REOPENED 알림은 이미 있음 — Q-81 아님, DN-C1 배선).
+  3. **✅ 핀 이력 딜의 키워드 사후학습 근거 제외 해소(2026-07-30)**: `IgnoreDealUseCase.suggestKeywords`가
+     WatchItem이 존재(상태 무관)하는 dealEventId의 무시 제목을 빈출 토큰 카운트에서 뺀다 — 사람이
+     지켜보고 싶다고 표시한 딜의 제목이 "노이즈" 학습 재료로 쓰이지 않는다.
+  4. **✅ 핀 후속 특례(인상 1회) 해소(2026-07-30)**: 새 `FollowUpKind.PINNED_PRICE_INCREASED` — 핀(WatchItem
+     ACTIVE) 자체가 자격이라 첫 알림 여부와 무관하게 발송된다(`FollowUpEvaluator`의 유일한 예외).
+     원문을 글자 그대로 읽으면 "인하·품절·종료·검증도 핀이면 무조건"까지 요구하는 것처럼 보이지만, 이미
+     동작 중인 그 후속들의 게이트(`alreadyAlerted`)를 바꾸는 건 회귀 위험이 크다고 판단해 **인상만** 핀
+     기반으로 열었다(사용자 결정, decision-log 2026-07-30). `ReprocessDealPricesUseCase.previewPinnedPriceIncreases()`
+     가 부수효과 없이 미리 골라내고(가격 재처리보다 먼저 돌아야 한다), V21이 `deal_alert.kind` CHECK
+     제약을 갱신했다(V20 REOPENED 때와 같은 실수를 이번엔 도입 커밋에서 함께 고쳤다).
+  5. **부활 미응답 플래그 ✅ 해소(2026-07-30) / 자격 상실 확인 필요 알림은 구조적으로 도달 불가능(재확인)**:
+     - **부활 미응답 플래그**: `watch_item.revive_unacknowledged`(V22) — ACTIVE 핀의 딜이 부활(DN-C1)하면
+       `IngestDealsUseCase`가 서고(전이 없음), `AcknowledgeRevivalUseCase` + `POST
+       /api/v1/watch-items/{id}/acknowledge-revival`로 사람이 [확인함]을 누르면 내려간다(명시적 버튼,
+       사용자 결정). web `WatchPage`에 안내 문구 + 버튼 배선.
+     - **자격 상실 확인 필요 알림**: 구현 전 코드 추적 결과, **현재 아키텍처에서 이 알림의 트리거 자체가
+       발생할 수 없다.** "자격 상실"은 docs/17 정의상 핀 시점 이후 `outlierFlag`가 NONE→비NONE으로
+       바뀌는 것인데, C-4 결정("이상치 판정 = 유입 시 1회·영속, 드리프트 재평가 없음")에 따라
+       `outlierFlag`는 딜 생성 시점에 `IngestDealsUseCase.classifyOutlier`가 딱 한 번 정하고 이후 어떤
+       프로덕션 코드도 안 건드린다(유일한 예외는 `ResolveReviewItemUseCase`의 승격/기각인데, 그건
+       OUTLIER_LOWER로 **이미** 큐에 오른 딜에만 적용되고, `PinEligibility.canPin`이 `outlierFlag≠NONE`인
+       딜의 핀 자체를 막으므로 그런 딜은 애초에 핀될 수 없다). 즉 "이미 핀된(outlierFlag==NONE) 딜이
+       나중에 outlierFlag를 잃는" 경로가 코드 어디에도 없다 — 근거 없는 알림을 만들 순 없어(절대 원칙 2)
+       구현하지 않는다. **재개 트리거**: C-4(이상치 유입 1회·영속) 자체가 재검토돼 딜의 outlierFlag가
+       사후에 재평가될 수 있게 바뀌는 것 — 그건 이 항목보다 훨씬 큰 정책 결정이라 `decisions-needed.md`
+       감이지 지금 여기서 조용히 확장할 사안이 아니다.
   6. **✅ web 5번째 표면 해소(2026-07-27, 사용자 지시)**: `web/src/watch/WatchPage.tsx` — 활성 탭(핀 목록 + 샀어요/기각·해제)·회고 탭(결말난 핀, 버튼 없음). 회고 조회 REST(`GET /api/v1/watch-items/resolved`, `resolvedAt` 필드)를 이 화면 착수 전에 먼저 배선했다(백엔드가 ACTIVE만 냈었다).
   7. **✅ 판단 화면 핀 손잡이 해소(2026-07-27)**: `DealEvent`·`BenchmarkView.DealRef`에 `dealEventId` 필드 추가(병합은 existing 정체성 유지, ingest 전 값은 자리표시자 0 — 저장 후 mapper가 실제 id로 재구성). `DecisionPage.tsx`의 "사례"·"최근 딜"마다 📌 핀 버튼 — 이제 딜 ID를 직접 입력하지 않고 판단 화면에서 바로 핀한다.
-- **잠정값**: 1·3·4·5(anchorPostId 승계·사후학습 제외·인상 특례·확인필요 알림)는 여전히 미착수 — web 표면과 무관한 배선 항목들이라 별개로 남는다. ②(PUR 프리필)는 2026-07-30 해소. WatchItem CRUD(REST)는 완전히 동작하므로 사람이 API·web 둘 다로 핀·결말을 조작할 수 있다.
-- **재개 트리거**: **①③④⑤**만 남는다 — 각자의 기능(BM-07 사후학습·AL-03 후속·DealEvent 재구성)이 WatchItem을 실제로 참조하게 될 때.
+- **잠정값**: 1~4·⑤의 부활 미응답 플래그 절반은 2026-07-30 전부 해소. ⑤의 **자격 상실 확인 필요 알림만**
+  구현하지 않는다 — 트리거가 현재 아키텍처에서 발생 불가능함을 코드로 확인했다(위 5번 참조). WatchItem
+  CRUD(REST)는 완전히 동작하므로 사람이 API·web 둘 다로 핀·결말을 조작할 수 있다.
+- **재개 트리거**: **자격 상실 확인 필요 알림만** 남는다 — C-4(이상치 유입 1회·영속)가 재검토돼 딜의
+  outlierFlag가 핀 이후에도 재평가될 수 있게 정책이 바뀔 때(더 큰 정책 결정, `decisions-needed.md` 감).
   > ②가 한때 "REG 화면과의 교차 배선이 필요"라는 근거로 봉인돼 있었던 건 **거짓 봉인**이었다 —
   > 실제 교차 배선 상대는 REG가 아니라 이미 판단 화면에 붙어 있던 PUR(`PurchasePanel`)이었다
-  > (CLAUDE.md ⓑ, 2026-07-28 재확인 후 2026-07-30 구현).
+  > (CLAUDE.md ⓑ, 2026-07-28 재확인 후 2026-07-30 구현). ①③④도 처음엔 "각자 기능이 WatchItem을
+  > 참조해야 열린다"고 적어 뒀으나, 전부 재확인해 보니 이미 있는 코드만으로 바로 구현 가능했다 —
+  > 이 보드도 처음 적을 땐 **가장 보수적인(제일 늦게 열리는) 추정**을 쓰기 때문에 그런 과대추정이
+  > 생긴다. 열려 있는 항목은 주기적으로 "정말 아직 막혀 있는가"를 코드로 재확인할 가치가 있다.
 - **관련**: `docs/17-feature-watchlist.md`, `working-area/progress-log.md`(2026-07-25 WATCH 배선, 2026-07-27 web 표면 기록).
 
 ## [열림] Q-82. PRI(docs/19) 대기 술어 — "ARCHIVED 아님"·"구매됨/완료" 표시 구분을 배지 표현으로 미룸

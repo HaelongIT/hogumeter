@@ -119,6 +119,26 @@ class WatchControllerTest {
 				.andExpect(jsonPath("$.dealPrice").value(900_000));
 	}
 
+	/** Q-83 ⑤(2026-07-30 확정) — 부활 미응답 플래그 확인은 전이 없이 플래그만 내린다. */
+	@Test
+	void acknowledgeRevivalClearsTheFlagWithoutResolvingThePin() throws Exception {
+		long dealId = deal();
+		String body = mockMvc.perform(post("/api/v1/watch-items").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"dealEventId\": " + dealId + ", \"note\": null}"))
+				.andReturn().getResponse().getContentAsString();
+		long watchItemId = Long.parseLong(body.replaceAll("\\D+", ""));
+		var item = watchItems.findById(watchItemId).orElseThrow();
+		item.flagRevivalUnacknowledged();
+		watchItems.save(item);
+
+		mockMvc.perform(post("/api/v1/watch-items/" + watchItemId + "/acknowledge-revival"))
+				.andExpect(status().isNoContent());
+
+		var reloaded = watchItems.findById(watchItemId).orElseThrow();
+		assertThat(reloaded.isReviveUnacknowledged()).isFalse();
+		assertThat(reloaded.getState()).isEqualTo(PinState.ACTIVE);
+	}
+
 	@Test
 	void resolvedEndpointListsBoughtPinsButNotActiveOnes() throws Exception {
 		long activeDeal = deal();

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { BoughtPrefill, WatchItemView } from '../api/types'
-import { dateLine, priceLine, stateLabel } from './present'
+import { dateLine, priceLine, revivalNotice, stateLabel } from './present'
 
 type SubTab = 'active' | 'resolved'
 
@@ -106,6 +106,20 @@ export function WatchPage({ onBought }: { onBought?: (prefill: BoughtPrefill) =>
     }
   }
 
+  /** Q-83 ⑤ — 부활 미응답 플래그 확인. 핀 상태 전이는 없다(activeList에서 안 사라짐). */
+  async function acknowledgeRevival(watchItemId: number) {
+    setBusy(watchItemId)
+    setActionError(null)
+    try {
+      await api.acknowledgeRevival(watchItemId)
+      await loadActive()
+    } catch (failure) {
+      setActionError(describeAction(failure))
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <main>
       <h1>딜 보관함</h1>
@@ -160,12 +174,24 @@ export function WatchPage({ onBought }: { onBought?: (prefill: BoughtPrefill) =>
                   <span>{subject(item)}</span>
                   <span>{priceLine(item)}</span>
                   <span>{dateLine(item)}</span>
+                  {revivalNotice(item) && (
+                    <span aria-label={`부활 안내 ${item.watchItemId}`}>{revivalNotice(item)}</span>
+                  )}
                   <button type="button" disabled={busy !== null} onClick={() => resolve(item.watchItemId, 'bought')}>
                     샀어요
                   </button>
                   <button type="button" disabled={busy !== null} onClick={() => resolve(item.watchItemId, 'drop')}>
                     기각·해제
                   </button>
+                  {item.reviveUnacknowledged && (
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => acknowledgeRevival(item.watchItemId)}
+                    >
+                      확인함
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

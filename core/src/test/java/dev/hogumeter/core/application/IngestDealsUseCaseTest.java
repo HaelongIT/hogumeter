@@ -214,6 +214,29 @@ class IngestDealsUseCaseTest {
 		assertThat(report.mergedDealIds()).as("부활을 VERIFIED로 흘리지 않는다").doesNotContain(deal.getId());
 	}
 
+	/**
+	 * Q-83 ⑤(2026-07-30 확정) — ACTIVE 핀의 딜이 부활하면 미응답 플래그가 선다("전이 없음+플래그 대체").
+	 * 핀 상태 자체는 그대로 ACTIVE다.
+	 */
+	@Test
+	void revivalOfAPinnedDealFlagsItAsUnacknowledged() {
+		savePost("ppomppu", "아이폰 17 256기가 89만", 890_000L, T);
+		useCase.ingestPending();
+		DealEventEntity deal = dealEvents.findByVariantId(variantId).get(0);
+		long dealId = deal.getId();
+		watchItems.save(new WatchItemEntity(dealId, null, null)); // ACTIVE 핀
+		deal.applyStatusChange(DealStatus.ENDED, deal.getLastSeen());
+		dealEvents.saveAndFlush(deal);
+
+		savePost("ppomppu", "아이폰 17 256기가 재입고 89만", 890_000L, T.plus(Duration.ofHours(6)));
+		useCase.ingestPending();
+
+		WatchItemEntity pin = watchItems.findByDealEventIdAndState(dealId, dev.hogumeter.core.domain.watch.PinState.ACTIVE)
+				.orElseThrow();
+		assertThat(pin.isReviveUnacknowledged()).as("부활이 미응답 플래그를 세운다").isTrue();
+		assertThat(pin.getState()).as("핀 상태 전이는 없다").isEqualTo(dev.hogumeter.core.domain.watch.PinState.ACTIVE);
+	}
+
 	@Test
 	void noPricePostIsSkipped() {
 		savePost("ppomppu", "아이폰 17 256기가 팝니다 문의", null, T);

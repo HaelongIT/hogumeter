@@ -41,10 +41,10 @@ public class GetWatchItemsUseCase {
 		DealEventEntity deal = dealEvents.findById(item.getDealEventId()).orElse(null);
 		return new WatchItemView(item.getId(), item.getDealEventId(), item.getNote(), item.getState(),
 				item.getCreatedAt(), item.getResolvedAt(), deal == null ? null : deal.getPriceLast(),
-				deal == null ? null : deal.getStatus());
+				deal == null ? null : deal.getStatus(), item.isReviveUnacknowledged());
 	}
 
 	public record WatchItemView(long watchItemId, long dealEventId, String note, PinState state, Instant pinnedAt,
-			Instant resolvedAt, Long currentPriceLast, DealStatus dealStatus) {
+			Instant resolvedAt, Long currentPriceLast, DealStatus dealStatus, boolean reviveUnacknowledged) {
 	}
 }

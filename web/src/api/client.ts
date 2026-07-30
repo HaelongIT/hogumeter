@@ -219,4 +219,8 @@ export const api = {
 
   dropWatchItem: (watchItemId: number) =>
     command(`/api/v1/watch-items/${watchItemId}/drop`, { method: 'POST' }),
+
+  /** 부활 미응답 플래그 확인(Q-83 ⑤) — 핀 상태 전이는 없다. */
+  acknowledgeRevival: (watchItemId: number) =>
+    command(`/api/v1/watch-items/${watchItemId}/acknowledge-revival`, { method: 'POST' }),
 }

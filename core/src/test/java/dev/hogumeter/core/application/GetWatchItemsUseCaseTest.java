@@ -67,6 +67,21 @@ class GetWatchItemsUseCaseTest {
 		assertThat(view.note()).isEqualTo("메모");
 		assertThat(view.state()).isEqualTo(PinState.ACTIVE);
 		assertThat(view.resolvedAt()).isNull(); // 아직 결말 안 남
+		assertThat(view.reviveUnacknowledged()).as("아직 부활 없음").isFalse();
+	}
+
+	/** Q-83 ⑤(2026-07-30 확정) — 부활 미응답 플래그가 조회 뷰에 실려야 web이 [확인함] 버튼을 낼 수 있다. */
+	@Test
+	void activeListShowsTheReviveUnacknowledgedFlag() {
+		long dealId = dealAt(850_000);
+		WatchItemEntity item = watchItems.save(new WatchItemEntity(dealId, null, null));
+		item.flagRevivalUnacknowledged();
+		watchItems.save(item);
+
+		WatchItemView view = getWatchItems.active().stream()
+				.filter(v -> v.dealEventId() == dealId).findFirst().orElseThrow();
+
+		assertThat(view.reviveUnacknowledged()).isTrue();
 	}
 
 	@Test
