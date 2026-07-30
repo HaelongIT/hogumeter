@@ -568,19 +568,30 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **검증**: `ArchivePurchaseUseCaseTest`(CLOSED→ARCHIVED 성공·OBSERVING에서 아카이브 거부·ARCHIVED→OBSERVING 재활성 성공·CLOSED에서 재활성 거부·미상 id 거부, 5케이스), `PurchaseControllerTest`(204/409/404 HTTP 매핑). 상태기계 검증 우회 뮤테이션으로 거부 2케이스 RED 확인 후 원복.
 - **관련**: `docs/91` Q-62(부분해소, 잔여 자동 아카이브)·Q-85(이 배선이 없으면 죽은 안전망이었던 배경), `ArchivePurchaseUseCase.java`, `PurchaseController.java`, `PurchaseState.java`.
 
-## [열림] Q-83. WATCH(docs/17) 핀 생명주기 배선 후 남은 것 — anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례
+## [열림] Q-83. WATCH(docs/17) 핀 생명주기 배선 후 남은 것 — anchorPostId 승계·사후학습 제외·인상 특례
 - **맥락**: 2026-07-25 WatchItem 핵심(자격·유일성·결말 3종·REST) 배선 완료. docs/17 골자 중 아직 코드에 없는 조각들을 여기 한데 모은다 — 전부 "골자엔 있지만 이번 판엔 없음"이지, 판단이 갈리는 항목은 아니다.
   1. **anchorPostId 자동 승계**: "이벤트 재구성 시 자동 승계 + 이력"(docs/17) — 딜이 merge window 밖에서 재구성되어 새 DealEvent로 태어나는 경우, 옛 WatchItem의 anchorPostId를 새 딜로 옮기는 배선이 없다. 지금은 핀 시점의 소스 원문 하나를 그대로 싣기만 한다(`PinDealUseCase`).
-  2. **PUR 프리필**: "[샀어요]→BOUGHT(PUR 프리필)" — `ResolvePinUseCase.markBought`는 상태만 바꾸고 Purchase 등록을 미리 채우지 않는다. **설계 확정(2026-07-28, decision-log 참조) — 코드는 아직 없음(착수 지시 대기).** 확정 모양: 핀 BOUGHT 전이 → 그 딜의 variant **판단 화면으로 이동** → 이미 있는 `PurchasePanel` 폼에 딜 가격(`priceLast`)·오늘(KST)·연결 딜(`linkedDealEventId`)이 채워진 채 열림 → 사람이 실지불가를 확인·수정해 [기록]. 수요축 값은 프리필하지 않는다(SPLIT은 판단 화면에서 색 고르는 기존 흐름 그대로 — 딜의 `demand_axis_value`가 "미상"이거나 사람이 고른 색과 어긋날 수 있다). 실지불가 안내는 딜의 `applied_conditions`로 3분기(`배송비미상`=하한 경고 / 카드할인=조건 경고 / 없음=관측가 안내) — **딜 가격은 이미 배송비 포함**이라(`price.py`의 `main + shipping`, BM-02 저장 기준) 단일 경고는 대개 거짓이다. 배선 지점: `ResolvePinUseCase.markBought` 반환값 + `WatchController` bought 응답 + `App.tsx` 핸드오프 + `PurchasePanel`/`buildPurchaseCommand`/`purchase/present.ts`.
+  2. **✅ PUR 프리필 해소(2026-07-30)**: "[샀어요]→BOUGHT(PUR 프리필)". `ResolvePinUseCase.markBought`가
+     `BoughtPrefill`(variantId·dealEventId·dealPrice·appliedConditions, 미분류 딜이면 variantId·dealPrice는
+     null)을 반환하고 `WatchController`가 204 대신 200 + 그 값을 낸다. web에서 `WatchPage`의 [샀어요]가
+     미분류 아닌 딜이면 `App`이 판단 화면으로 이동시켜 `PurchasePanel`(`prefill` prop)이 실지불가(딜
+     가격)·구매일(오늘 KST)·연결 딜(`linkedDealEventId`, 예전엔 항상 null이던 죽은 필드)을 채운다. 수요축
+     값은 프리필하지 않는다(SPLIT은 판단 화면에서 색 고르는 기존 흐름 그대로). 실지불가 안내는
+     `purchase/present.ts`의 `prefillNotice`가 딜의 `applied_conditions`로 3분기(`배송비미상`=하한 경고 /
+     카드할인류=조건 경고 / 없음=단순 관측가 안내) — 딜 가격은 이미 배송비 포함이라(`price.py`의
+     `main + shipping`, BM-02 저장 기준) 단일 경고는 대개 거짓이었다(설계 확정 당일 검증에서 정정).
+     미분류 딜이면 이동하지 않고 그 사실을 안내한다(지어내지 않는다). 설계 근거는
+     `working-area/decision-log.md`(2026-07-28) 참조.
   3. **핀 이력 딜의 키워드 사후학습 근거 제외**: docs/17 "핀 이력 딜은 키워드 사후학습 근거 제외" — BM-07 사후학습(Q-22)이 WatchItem 존재를 아직 안 본다.
   4. **핀 후속 특례(인상 1회)**: "핀 후속(딜 층, variant 상태 무관·ARCHIVED에도): 인하·품절·종료·검증 무조건, 인상 1회만" — 지금 AL-03 후속은 핀 여부를 안 보고 일괄 적용된다. 핀된 딜만 별도로 "가격 인상"도 1회 알리는 특례가 없다.
   5. **자격 상실 확인 필요 알림·부활 미응답 플래그**: docs/17 결말표의 "자격 상실→전이 없음+확인 필요 알림", "부활→...+미응답 플래그"는 WatchItem 쪽에서 아직 안 낸다(DealEvent 층 REOPENED 알림은 이미 있음 — Q-81 아님, DN-C1 배선).
   6. **✅ web 5번째 표면 해소(2026-07-27, 사용자 지시)**: `web/src/watch/WatchPage.tsx` — 활성 탭(핀 목록 + 샀어요/기각·해제)·회고 탭(결말난 핀, 버튼 없음). 회고 조회 REST(`GET /api/v1/watch-items/resolved`, `resolvedAt` 필드)를 이 화면 착수 전에 먼저 배선했다(백엔드가 ACTIVE만 냈었다).
   7. **✅ 판단 화면 핀 손잡이 해소(2026-07-27)**: `DealEvent`·`BenchmarkView.DealRef`에 `dealEventId` 필드 추가(병합은 existing 정체성 유지, ingest 전 값은 자리표시자 0 — 저장 후 mapper가 실제 id로 재구성). `DecisionPage.tsx`의 "사례"·"최근 딜"마다 📌 핀 버튼 — 이제 딜 ID를 직접 입력하지 않고 판단 화면에서 바로 핀한다.
-- **잠정값**: 1~5(anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례·확인필요 알림)는 여전히 미착수 — web 표면과 무관한 배선 항목들이라 별개로 남는다. WatchItem CRUD(REST)는 완전히 동작하므로 사람이 API·web 둘 다로 핀·결말을 조작할 수 있다.
-- **재개 트리거**:
-  - **②(PUR 프리필) — 트리거 이미 참(2026-07-28).** "REG 화면과의 교차 배선이 필요"가 유일한 봉인 근거였는데, 재확인해 보니 교차 배선 상대는 REG(등록)가 아니라 **PUR(`PurchasePanel`)이고 그건 이미 판단 화면에 붙어 있다**. 남은 미지수(프리필의 모양)는 사람이 정할 것이었고 2026-07-28 확정됐다. 지금 막고 있는 것은 **사용자의 착수 지시뿐**이며 기술 보류가 아니다. (CLAUDE.md ⓑ — "…라서 막혔다"는 주장은 재현해서 검증한다. 이건 거짓 봉인이었다.)
-  - **①③④⑤**: 각자의 기능(BM-07 사후학습·AL-03 후속·DealEvent 재구성)이 WatchItem을 실제로 참조하게 될 때.
+- **잠정값**: 1·3·4·5(anchorPostId 승계·사후학습 제외·인상 특례·확인필요 알림)는 여전히 미착수 — web 표면과 무관한 배선 항목들이라 별개로 남는다. ②(PUR 프리필)는 2026-07-30 해소. WatchItem CRUD(REST)는 완전히 동작하므로 사람이 API·web 둘 다로 핀·결말을 조작할 수 있다.
+- **재개 트리거**: **①③④⑤**만 남는다 — 각자의 기능(BM-07 사후학습·AL-03 후속·DealEvent 재구성)이 WatchItem을 실제로 참조하게 될 때.
+  > ②가 한때 "REG 화면과의 교차 배선이 필요"라는 근거로 봉인돼 있었던 건 **거짓 봉인**이었다 —
+  > 실제 교차 배선 상대는 REG가 아니라 이미 판단 화면에 붙어 있던 PUR(`PurchasePanel`)이었다
+  > (CLAUDE.md ⓑ, 2026-07-28 재확인 후 2026-07-30 구현).
 - **관련**: `docs/17-feature-watchlist.md`, `working-area/progress-log.md`(2026-07-25 WATCH 배선, 2026-07-27 web 표면 기록).
 
 ## [열림] Q-82. PRI(docs/19) 대기 술어 — "ARCHIVED 아님"·"구매됨/완료" 표시 구분을 배지 표현으로 미룸

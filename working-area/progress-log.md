@@ -1,3 +1,40 @@
+## 2026-07-30 (1) — [WATCH] PUR 프리필 구현 완료 (Q-83 ②, 무중단, 3증분)
+
+사용자 지시("이어서 무중단 개발 진행 ㄱㄱ")로 2026-07-28 확정해 둔 설계를 그대로 구현. 3증분 전부
+TDD Red→Green + 뮤테이션 검증 후 커밋.
+
+- **증분 1(core, `ddc67fc`)**: `ResolvePinUseCase.markBought`가 `void` 대신 `BoughtPrefill`
+  (variantId·dealEventId·dealPrice·appliedConditions) 반환. 미분류 딜·딜 행 부재는 null(지어내지
+  않는다). `WatchController` bought 응답 204→200+본문. 뮤테이션: variantId 하드코딩 → 신규 테스트
+  2건만 RED 확인.
+- **증분 2(web, `afdadbb`)**: `WatchPage`의 [샀어요]가 미분류 아닌 딜이면 `App.openDecisionForPurchase`
+  로 판단 화면 이동 + `PurchasePanel.prefill`이 실지불가(딜 가격)·구매일(오늘 KST, `shared/kst.ts`에
+  `todayKst` 추가)·연결 딜(`linkedDealEventId`, 예전엔 항상 null이던 죽은 필드)을 채운다.
+  `purchase/present.ts`의 `prefillNotice`가 딜의 `applied_conditions`로 안내를 3분기(배송비미상=하한
+  경고/카드할인류=조건 경고/없음=단순 관측가 안내) — `SHIPPING_UNKNOWN`을 `review/present.ts`에서
+  export해 재사용(사본을 늘리지 않음, `check-tag-contract.sh` 계속 통과). `scripts/smoke.sh`의 bought
+  응답 검증을 204→200+필드 존재로 갱신. web 270건 GREEN(신규 12건), 빌드·전체 스모크 PASS.
+  뮤테이션: `prefillNotice`를 단일 분기로 깨서 관련 6건만 RED 확인.
+- **환경 이슈(코드 무관)**: 스모크 첫 두 번 시도가 postgres 포트 바인딩 거부로 실패 —
+  `netsh interface ipv4 show excludedportrange`로 Windows 동적 포트 예약(55334~55433)이 기본 포트
+  55432와 겹친 것으로 확인. `POSTGRES_PORT=15432` 오버라이드(스크립트에 이미 있던 seam)로 통과.
+  `docs/99-lessons.md`에 기록(로컬 전용, CI 무관).
+- **증분 3(문서, 이 커밋)**: `docs/91` Q-83 ②를 ✅ 해소로 전환(①③④⑤만 재개 트리거 대상으로 남김),
+  거짓 봉인이었다는 사실을 명시. `docs/17`도 같은 항목 정리하면서 이미 배선됐던 "회고"·"5번째 표면"
+  항목의 낡은 "미착수" 표기도 함께 정정(2026-07-27에 이미 끝났던 것 — 눈에 띈 김에 고쳤다).
+  `docs/99-lessons.md`에 두 교훈 추가: 죽은 선택 필드(`linkedDealEventId`)는 소비처가 생기면 살아난다,
+  경고 문구는 상수로 두지 말고 시스템이 이미 아는 신호로 갈라라.
+- 게이트 재확인: `check-domain-consumers`·`check-board-references`·`check-dead-columns`·
+  `check-table-wiring`·`check-tag-contract` 전부 OK.
+
+⓵②③④ⓑ 확인(다음 일감 탐색용, 이 증분 종료 후 착수하지 않음 — 사용자가 다음 지시할 때까지 대기):
+ⓐ `docs/30` 최신 마일스톤(M6) 항목은 이번으로 WATCH·PRI 둘 다 완료 표기. ⓑ `docs/91` 열린 항목 중
+재개 트리거가 참인 것 없음(①③④⑤는 여전히 거짓, 나머지 Q들도 재확인 없이 트리거 미충족). ⓒ 이번
+증분에서 새 caller-0/producer-0 후보 감지 안 함. ⓓ 새 계약(BoughtPrefill 응답 필드) 전부 스모크에
+걸림, 뮤테이션 증명 완료.
+
+TURN-END: ② 일감 소진 — 사용자가 지시한 단일 작업(PUR 프리필 구현)을 완료. 다음 지시 대기.
+
 ## 2026-07-28 (1) — [WATCH] PUR 프리필 설계 확정 + 검증 (문서만, 구현 대기)
 
 사용자 요청으로 Q-83 ② "PUR 프리필"의 모양을 선택지 4안으로 제시하고 확정받았다. **코드는 한 줄도
