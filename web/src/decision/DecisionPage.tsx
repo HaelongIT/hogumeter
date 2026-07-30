@@ -347,7 +347,7 @@ export function DecisionPage({
       )}
 
       {/* "지금은 아니다"의 다음 행동은 "그럼 얼마면 알려줘"다. 그래서 판단 화면에 둔다(REG-03). */}
-      {variantId !== null && <AlertPolicyPanel variantId={variantId} />}
+      {variantId !== null && <AlertPolicyPanel variantId={variantId} demandAxis={demandAxis} />}
     </main>
   )
 }

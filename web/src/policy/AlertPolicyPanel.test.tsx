@@ -16,7 +16,7 @@ describe('AlertPolicyPanel', () => {
    * 실제로는 `alert_policy` 행이 없어 목표가 트리거가 발화하지 않는다(확정본 §107).
    */
   it('미설정이면 목표가 알림이 발화하지 않는다고 말한다', async () => {
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [] })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [], demandAxisFilter: [] })
 
     render(<AlertPolicyPanel variantId={7} />)
 
@@ -25,7 +25,7 @@ describe('AlertPolicyPanel', () => {
 
   /** 미설정일 때 기간 P를 지어내 채우면 그 숫자가 세 번째 사본이 된다(core의 private 상수가 진실). */
   it('미설정이면 판정 기간을 숫자로 지어내지 않는다', async () => {
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [] })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [], demandAxisFilter: [] })
 
     render(<AlertPolicyPanel variantId={7} />)
     await screen.findByRole('note', { name: '정책 미설정 안내' })
@@ -41,6 +41,7 @@ describe('AlertPolicyPanel', () => {
       quietHoursStart: 23,
       quietHoursEnd: 8,
       excludeKeywords: [],
+      demandAxisFilter: [],
     })
 
     render(<AlertPolicyPanel variantId={7} />)
@@ -52,10 +53,10 @@ describe('AlertPolicyPanel', () => {
   })
 
   it('저장하면 부재를 null로 보낸다 (0이 아니라)', async () => {
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [] })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [], demandAxisFilter: [] })
     const update = vi
       .spyOn(api, 'updateAlertPolicy')
-      .mockResolvedValue({ configured: true, targetPrice: 900_000, periodMonths: 6, excludeKeywords: [] })
+      .mockResolvedValue({ configured: true, targetPrice: 900_000, periodMonths: 6, excludeKeywords: [], demandAxisFilter: [] })
 
     render(<AlertPolicyPanel variantId={7} />)
     await screen.findByRole('note', { name: '정책 미설정 안내' })
@@ -72,13 +73,14 @@ describe('AlertPolicyPanel', () => {
         quietHoursEnd: null,
         kDisplay: 5,
         excludeKeywords: [],
+        demandAxisFilter: [],
       }),
     )
     expect(screen.queryByRole('note', { name: '정책 미설정 안내' })).toBeNull()
   })
 
   it('폼 오류는 서버에 보내지 않고 그 자리에서 말한다', async () => {
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [] })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [], demandAxisFilter: [] })
     const update = vi.spyOn(api, 'updateAlertPolicy')
 
     render(<AlertPolicyPanel variantId={7} />)
@@ -94,7 +96,7 @@ describe('AlertPolicyPanel', () => {
 
   /** 클라이언트 검증은 방어가 아니라 편의다. 서버가 거절하면 그 코드를 그대로 보여준다. */
   it('서버가 거절하면 도메인 코드를 보여준다', async () => {
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [] })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [], demandAxisFilter: [] })
     vi.spyOn(api, 'updateAlertPolicy').mockRejectedValue(new ApiFailure(400, 'REG_INVALID_ALERT_POLICY'))
 
     render(<AlertPolicyPanel variantId={7} />)
@@ -121,7 +123,7 @@ describe('AlertPolicyPanel', () => {
    */
   it('알림이 스텁이면(delivering:false) 실제로 안 나간다고 경고한다', async () => {
     vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: false })
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: true, periodMonths: 6, kDisplay: 5, excludeKeywords: [] })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: true, periodMonths: 6, kDisplay: 5, excludeKeywords: [], demandAxisFilter: [] })
 
     render(<AlertPolicyPanel variantId={7} />)
 
@@ -130,7 +132,7 @@ describe('AlertPolicyPanel', () => {
 
   it('알림이 실제로 발송되면(delivering:true) 미발송 경고를 그리지 않는다', async () => {
     vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: true, periodMonths: 6, kDisplay: 5, excludeKeywords: [] })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: true, periodMonths: 6, kDisplay: 5, excludeKeywords: [], demandAxisFilter: [] })
 
     render(<AlertPolicyPanel variantId={7} />)
 
@@ -148,10 +150,11 @@ describe('AlertPolicyPanel', () => {
       periodMonths: 6,
       kDisplay: 8,
       excludeKeywords: [],
+      demandAxisFilter: [],
     })
     const update = vi
       .spyOn(api, 'updateAlertPolicy')
-      .mockResolvedValue({ configured: true, periodMonths: 6, kDisplay: 3, excludeKeywords: [] })
+      .mockResolvedValue({ configured: true, periodMonths: 6, kDisplay: 3, excludeKeywords: [], demandAxisFilter: [] })
 
     render(<AlertPolicyPanel variantId={7} />)
 
@@ -173,10 +176,11 @@ describe('AlertPolicyPanel', () => {
       periodMonths: 6,
       kDisplay: 5,
       excludeKeywords: ['리퍼', '벌크'],
+      demandAxisFilter: [],
     })
     const update = vi
       .spyOn(api, 'updateAlertPolicy')
-      .mockResolvedValue({ configured: true, periodMonths: 6, kDisplay: 5, excludeKeywords: ['리퍼', '해외'] })
+      .mockResolvedValue({ configured: true, periodMonths: 6, kDisplay: 5, excludeKeywords: ['리퍼', '해외'], demandAxisFilter: [] })
 
     render(<AlertPolicyPanel variantId={7} />)
 
@@ -190,7 +194,78 @@ describe('AlertPolicyPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: '정책 저장' }))
 
     await waitFor(() =>
-      expect(update).toHaveBeenCalledWith(7, expect.objectContaining({ excludeKeywords: ['리퍼', '해외'] })),
+      expect(update).toHaveBeenCalledWith(7, expect.objectContaining({ excludeKeywords: ['리퍼', '해외'], demandAxisFilter: [] })),
+    )
+  })
+
+  /** Q-48 ②(2026-07-30 확정) — 없는 손잡이는 그리지 않는다. 묶음 제품엔 축 자체가 없다. */
+  it('묶음 제품(demandAxis 없음)이면 수요축 필터를 그리지 않는다', async () => {
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({
+      configured: true,
+      periodMonths: 6,
+      kDisplay: 5,
+      excludeKeywords: [],
+      demandAxisFilter: [],
+    })
+
+    render(<AlertPolicyPanel variantId={7} />)
+    await screen.findByLabelText(/임계 K/)
+
+    expect(screen.queryByRole('checkbox')).toBeNull()
+  })
+
+  /** 분리 제품이면 축의 허용값마다 체크박스를 그리고, 저장된 필터값이 체크돼 있다. */
+  it('분리 제품이면 축값 체크박스를 그리고 저장된 필터를 반영한다', async () => {
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({
+      configured: true,
+      periodMonths: 6,
+      kDisplay: 5,
+      excludeKeywords: [],
+      demandAxisFilter: ['블랙'],
+    })
+
+    render(
+      <AlertPolicyPanel
+        variantId={7}
+        demandAxis={{ axisType: 'DEMAND', name: '색상', allowedValues: ['블랙', '화이트'] }}
+      />,
+    )
+    await screen.findByLabelText(/임계 K/)
+
+    expect(screen.getByRole('checkbox', { name: '블랙' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '화이트' })).not.toBeChecked()
+  })
+
+  /** 체크박스를 고르면 저장 시 그 값들이 배열로 나간다 — 자유 입력이 아니라 선택된 값 그대로. */
+  it('체크박스로 고른 축값을 저장한다', async () => {
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({
+      configured: true,
+      periodMonths: 6,
+      kDisplay: 5,
+      excludeKeywords: [],
+      demandAxisFilter: [],
+    })
+    const update = vi.spyOn(api, 'updateAlertPolicy').mockResolvedValue({
+      configured: true,
+      periodMonths: 6,
+      kDisplay: 5,
+      excludeKeywords: [],
+      demandAxisFilter: ['화이트'],
+    })
+
+    render(
+      <AlertPolicyPanel
+        variantId={7}
+        demandAxis={{ axisType: 'DEMAND', name: '색상', allowedValues: ['블랙', '화이트'] }}
+      />,
+    )
+    await screen.findByLabelText(/임계 K/)
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '화이트' }))
+    await userEvent.click(screen.getByRole('button', { name: '정책 저장' }))
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(7, expect.objectContaining({ demandAxisFilter: ['화이트'] })),
     )
   })
 })

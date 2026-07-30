@@ -78,6 +78,12 @@ public class EvaluateAlertOnDealUseCase {
 		if (demandScope.modeOf(variantId) == DemandAxisMode.SPLIT && deal.demandAxisValue() == null) {
 			return DispatchOutcome.NO_ALERT;
 		}
+		// 수요축 필터(Q-48 ②, 2026-07-30 확정) — 사용자가 "이 축값만 알림"으로 좁혀 두면 그 외 값은
+		// 조용히 건너뛴다. 빈 목록(대부분) = 필터 없음, 기존 동작 그대로.
+		List<String> axisFilter = policy.map(AlertPolicyEntity::getDemandAxisFilter).orElse(List.of());
+		if (!axisFilter.isEmpty() && !axisFilter.contains(deal.demandAxisValue())) {
+			return DispatchOutcome.NO_ALERT;
+		}
 		// 제외 키워드에 걸리는 딜은 기준가 표본에서 뺀다(Q-28) — 리퍼가 섞인 기준가로 알림을 내면 안 된다.
 		List<DealEvent> deals = demandScope.scope(variantId,
 				excludeKeywords.filter(variantId, dealEvents.findByVariantId(variantId)).stream()

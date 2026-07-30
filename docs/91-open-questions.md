@@ -390,15 +390,29 @@ _(Q-50. OBS-04 전용 헬스 엔드포인트 — **해소됨 2026-07-10**: `adap
 - **테스트(B(A()) 관통)**: `RegisterProductUseCaseTest`(빈 이름·빈 variant·null 축·null 모드→예외 + 아무것도 저장 안 됨, null 별칭→정상 저장), `RegistrationControllerTest.invalidCommandReturns400WithDomainCode`(HTTP 400 + `REG_INVALID_PRODUCT` — 유스케이스 테스트는 예외만, 핸들러는 매핑만 증명하므로 관통 테스트를 따로 둔다), 스모크가 종단으로 빈 이름 POST → 400 + 코드를 단언.
 - **남은 것**: 없음. `spring-boot-starter-validation`(`@Valid`)은 여전히 미사용 — 유스케이스 검증이 한 곳(정본)이라 애노테이션으로 흩지 않는다.
 
-## [열림] Q-48. 알림 정책(REG-03) — REST는 생겼으나 **엔티티가 매핑하지 않는 필드 셋**이 남았다
+## [열림] Q-48. 알림 정책(REG-03) — ②(기본 기간 P 단일소유)만 남음
 - **해소된 부분(2026-07-10)**: `AlertPolicyController`(GET/PUT `/api/v1/variants/{id}/alert-policy`) + `AlertPolicySettingsUseCase` + `AlertPolicySettings`(순수 검증) + `InvalidAlertPolicyException` + `AlertPolicyExceptionHandler` — **전부 신규 파일**, core 기존 파일 무수정. 이전까지 `alert_policy`에는 **프로덕션 writer가 없었다** — `EvaluateAlertOnDealUseCase`가 읽기는 했으나 행이 영원히 생기지 않아 확정본 §107의 "OR [사용자 목표가 이하]" 트리거와 방해금지(AL-04)가 발화할 수 없었다. 스모크 5-1d가 `intensity=TARGET`으로 정책이 판정에 닿는 것을 증명한다.
-- **남은 것**: `AlertPolicyEntity`가 `k_display`·`exclude_keywords`·`demand_axis_filter`를 **매핑하지 않는다**(⚠️라벨 토글도 컬럼 부재). 그래서 REG-03의 6개 항목 중 넷(targetPrice·기간 P·quiet hours 2개)만 저장된다. 갱신은 **벌크 UPDATE**라 미매핑 컬럼을 보존한다(delete+insert였다면 DB 기본값으로 되돌아가 매핑을 붙이는 날 데이터가 사라진다 — `updatePreservesColumnsTheEntityDoesNotMap`이 못박는다).
-- **또 하나**: 미설정 variant의 GET은 `periodMonths: null`을 낸다. 알림 판정이 쓰는 기본 6개월은 `EvaluateAlertOnDealUseCase`의 **private 상수**라 어댑터가 읽을 수 없다. 지어내 채우면 그 값이 세 번째 사본이 되고 사본은 드리프트한다.
-- **잠정값**: 위 넷만. web 화면은 붙였다(`policy/AlertPolicyPanel`, 판단 화면 안 — "지금은 아니다"의 다음 행동이 "그럼 얼마면 알려줘"라서). **없는 손잡이는 그리지 않는다** — 그리면 저장되는 줄 안다. 미설정이면 "목표가 알림은 발화하지 않습니다"라고 말하고, 판정 기간의 시스템 기본값은 **숫자로 말하지 않는다**(과대약속 금지 + 세 번째 사본 금지).
-- **재개 트리거**: ① `AlertPolicyEntity`에 세 컬럼이 매핑되어야 한다 ② `DEFAULT_PERIOD_MONTHS`가 한 곳에서 소유되어 어댑터도 읽을 수 있어야 한다 ③ ~~예외 핸들러가 한 곳으로 합쳐져야 한다~~ **✅ 해소(2026-07-12)**. (구현 수단은 여러 가지다 — 위 셋은 "무엇이 참이 되어야 하는가"이지 방법이 아니다.)
+- **✅ 2026-07-30 — `AlertPolicyEntity`가 이제 전 컬럼을 매핑한다**(`k_display`·`exclude_keywords`·
+  `demand_axis_filter` 전부, ⚠️라벨 토글은 애초에 컬럼 자체가 없어 범위 밖). REG-03의 6개 항목 중 다섯
+  (targetPrice·기간 P·quiet hours 2개·K·제외 키워드) + 수요축 필터까지 저장된다.
+- **또 하나(여전히 열림, ②)**: 미설정 variant의 GET은 `periodMonths: null`을 낸다. 알림 판정이 쓰는 기본 6개월은 `EvaluateAlertOnDealUseCase`의 **private 상수**라 어댑터가 읽을 수 없다. 지어내 채우면 그 값이 세 번째 사본이 되고 사본은 드리프트한다.
+- **잠정값**: 미설정이면 "목표가 알림은 발화하지 않습니다"라고 말하고, 판정 기간의 시스템 기본값은 **숫자로 말하지 않는다**(과대약속 금지 + 세 번째 사본 금지).
+- **재개 트리거**: ② `DEFAULT_PERIOD_MONTHS`가 한 곳에서 소유되어 어댑터도 읽을 수 있어야 한다 — 그 값을 보고할 소비처가 생길 때(소비처 없이 상수만 옮기는 건 투기다). ①③은 해소됨.
 - **③ 해소(2026-07-12, core 소유권 조율)**: `AlertPolicyExceptionHandler`(별도 `@RestControllerAdvice`, "소유권 정리되면 합쳐라"는 자기 주석 포함)를 `ApiExceptionHandler`로 합치고 삭제했다. `InvalidAlertPolicyException`→400 매핑은 그대로. 핸들러가 한 곳이라 "어디를 봐야 할지" 드리프트 위험 제거. 알림 정책 테스트 GREEN.
-- **✅ ① `k_display` 해소(2026-07-16, 프론트 지휘로 생산자가 생김)**: 세 컬럼 중 **K만** 매핑했다 — 소비처(기준가 tier)와 생산자(정책 패널)가 동시에 생겼기 때문이다. `AlertPolicyEntity.kDisplay` 매핑 + `AlertPolicySettings.kDisplay`(3~10 검증, 기본값 정본 `DEFAULT_K_DISPLAY=5`) + 벌크 UPDATE에 포함. 읽기는 신규 `VariantBenchmarkParams`가 **해석 정본 한 곳**: `from(policy)`가 "미설정이면 기본 K"를 해석하고, `of(variantId)`는 읽어서 그걸 부른다(이미 정책을 읽은 `EvaluateAlertOnDealUseCase`는 `from`을 직접 써 중복 조회 회피 — 두 경로가 각자 해석하면 한쪽이 조용히 다른 K를 쓴다). `GetBenchmark`·`GetSignal`이 variant별 params를 쓴다. GET은 미설정이라도 K를 **숫자로** 낸다(정본이 상수 하나라 사본이 안 생긴다 — ②와 다른 점). web: 정책 패널에 K 선택 + 맞바꿈 안내, `PolicyForm.kDisplay`(PUT은 전체 교체라 **항상 보낸다** — 안 보내면 저장할 때마다 K가 5로 리셋). 테스트: `GetBenchmarkUseCaseTest.userKDisplayMovesTheTier`(같은 5건인데 K=10이면 SPARSE+사례), 스모크가 미설정 기본 5·왕복 8·범위 밖 400을 종단 검증. `updatePreservesColumnsTheEntityDoesNotMap`은 이제 남은 미매핑 둘(`exclude_keywords`·`demand_axis_filter`)을 지킨다.
-- **✅ ① `exclude_keywords` 해소(2026-07-21) · `demand_axis_filter`·②는 여전히 열림**: ① `exclude_keywords`는 Q-28(per-product 표본 적용)로 매핑·소비·생산자까지 살았다 — 이제 `updatePreservesColumnsTheEntityDoesNotMap`이 지키는 미매핑 컬럼은 `demand_axis_filter` **하나**다. 그건 Q-66 ①(SPLIT 분포 분리)의 수요축 **필터**가 생겨야 산다(현재 수요축은 `deal_event.demand_axis_value`로 분리하고, `alert_policy.demand_axis_filter`는 "이 variant에서 어느 축값만 볼지" 사용자 선택 손잡이라 아직 소비처가 없다). 매핑만 하면 "저장되는데 안 쓰이는" 손잡이라 원칙 위반 — **소비 기능과 함께** 매핑한다(K·제외키워드가 선례다). ② `DEFAULT_PERIOD_MONTHS` 단일소유는 **어댑터가 그 값을 보고할 소비처가 있을 때** 한다(지금 GET은 미설정 시 기간을 숫자로 말하지 않기로 결정 — 과대약속 금지). 소비처 없이 상수만 옮기는 것은 투기다.
+- **✅ ① `k_display` 해소(2026-07-16, 프론트 지휘로 생산자가 생김)**: 세 컬럼 중 **K만** 매핑했다 — 소비처(기준가 tier)와 생산자(정책 패널)가 동시에 생겼기 때문이다. `AlertPolicyEntity.kDisplay` 매핑 + `AlertPolicySettings.kDisplay`(3~10 검증, 기본값 정본 `DEFAULT_K_DISPLAY=5`) + 벌크 UPDATE에 포함. 읽기는 신규 `VariantBenchmarkParams`가 **해석 정본 한 곳**: `from(policy)`가 "미설정이면 기본 K"를 해석하고, `of(variantId)`는 읽어서 그걸 부른다(이미 정책을 읽은 `EvaluateAlertOnDealUseCase`는 `from`을 직접 써 중복 조회 회피 — 두 경로가 각자 해석하면 한쪽이 조용히 다른 K를 쓴다). `GetBenchmark`·`GetSignal`이 variant별 params를 쓴다. GET은 미설정이라도 K를 **숫자로** 낸다(정본이 상수 하나라 사본이 안 생긴다 — ②와 다른 점). web: 정책 패널에 K 선택 + 맞바꿈 안내, `PolicyForm.kDisplay`(PUT은 전체 교체라 **항상 보낸다** — 안 보내면 저장할 때마다 K가 5로 리셋). 테스트: `GetBenchmarkUseCaseTest.userKDisplayMovesTheTier`(같은 5건인데 K=10이면 SPARSE+사례), 스모크가 미설정 기본 5·왕복 8·범위 밖 400을 종단 검증. `updatePreservesColumnsTheEntityDoesNotMap`은 그 시점엔 남은 미매핑 둘(`exclude_keywords`·`demand_axis_filter`)을 지켰다(2026-07-30 전 컬럼 매핑 후 `updateWritesAllMappedColumns`로 대체).
+- **✅ ① `exclude_keywords` 해소(2026-07-21)**: Q-28(per-product 표본 적용)로 매핑·소비·생산자까지 살았다.
+- **✅ ① `demand_axis_filter` 해소(2026-07-30)** — SPLIT 제품에서 "이 축값만 알림" 손잡이. 소비처
+  (`EvaluateAlertOnDealUseCase`, 축값이 필터에 없으면 NO_ALERT)와 생산자(`AlertPolicyPanel`, `demandAxis`가
+  있을 때만 체크박스 렌더 — 없는 손잡이는 안 그린다)가 함께 생겼다. `AlertPolicyEntity`의 필드는
+  `Map<String, Object>`(키 `"values"`)로 저장한다 — `exclude_keywords`(`List<String>` + `SqlTypes.ARRAY`)와
+  같은 엔티티에 `List<String>` + `SqlTypes.JSON`을 또 붙이면 Hibernate가 스키마 검증에서 **서로의 타입을
+  잘못 요구**하는 실측 버그가 있어(`docs/99-lessons` 2026-07-30), 이미 검증된 `Map<String,Object>`+JSON
+  조합(`ReviewQueueItemEntity.payload` 선례)으로 피했다. 이제 `updatePreservesColumnsTheEntityDoesNotMap`
+  이 지키던 미매핑 컬럼이 **없다** — 그 테스트는 `updateWritesAllMappedColumns`로 대체(더 이상 보존이
+  아니라 갱신 확인). `demand_axis_filter jsonb` 컬럼 자체는 V1부터 있어 새 마이그레이션 불필요.
+- **② `DEFAULT_PERIOD_MONTHS` 단일소유는 여전히 열림**: **어댑터가 그 값을 보고할 소비처가 있을 때**
+  한다(지금 GET은 미설정 시 기간을 숫자로 말하지 않기로 결정 — 과대약속 금지). 소비처 없이 상수만
+  옮기는 것은 투기다.
 
 ## [부분해소] Q-46. 조건 태그 도달·표시·하한 취급 완료 — 알림 본문만 텔레그램(Q-20) 대기
 - **맥락**: BM-02(`docs/11`)는 "저장 기준 = 실결제가 + 배송비, **카드·쿠폰 역산 금지(as-posted)**, `appliedConditions[]`는 추출 가능 시만"을 요구한다. `normalize_price`는 `카할`(카드할인)·`유료배송(금액미상)`·`N카드`·펨코의 `조건부무료배송:와우무배` 등을 계산하고, `to_raw_records`가 `raw_deal_post.raw._derived.applied_conditions`에 보존한다(2026-07-09). 여기까지는 옳고, 테스트도 잠가 뒀다.

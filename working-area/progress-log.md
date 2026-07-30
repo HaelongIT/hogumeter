@@ -1,3 +1,34 @@
+## 2026-07-30 (3) — [REG-03] 수요축 필터 매핑 완료 (Q-48 ②, 무중단)
+
+Q-83 완료 후 다음 증분을 스스로 찾아 진행. `docs/91` 전수 재확인 중 Q-48("알림 정책 — 엔티티가
+매핑하지 않는 필드 셋")이 실제로는 `demand_axis_filter` 하나만 남아 있었고(K·제외키워드는 이미 해소),
+소비처(SPLIT 축값별 알림 억제)와 생산자(정책 패널 체크박스)를 동시에 배선하면 되는 잘 정의된 일감
+이라 착수했다.
+
+- **배선**: `EvaluateAlertOnDealUseCase`가 축값이 필터에 없으면 NO_ALERT. `AlertPolicyPanel`이
+  `DecisionPage`의 `demandAxis`(이미 계산돼 있음, 새 조회 없음)를 받아 SPLIT일 때만 체크박스 렌더.
+  빈 선택 = 필터 없음(기존 동작과 동일, 되돌리기 쉬운 기본값).
+- **🔍 실측 버그 발견·회피**: `AlertPolicyEntity`에 `List<String>`+`SqlTypes.JSON`을 붙였더니 같은
+  엔티티의 `exclude_keywords`(`List<String>`+`SqlTypes.ARRAY`)가 jsonb를 기대한다는 스키마 검증
+  오류로 컨텍스트 로드가 전부 깨졌다 — Hibernate가 같은 소거 타입에 다른 JdbcTypeCode를 섞으면
+  타입 기술자를 공유하는 것으로 보인다(`String[]`도 다른 오류로 실패). `Map<String,Object>`(키
+  "values")로 우회 — `ReviewQueueItemEntity.payload`가 이미 이 저장소에서 검증된 조합이라 재사용.
+  `docs/99-lessons.md`에 교훈 추가, `.claude/rules/core-java.md`에 한 줄 승격.
+- **🔍 스모크 자체 회귀 발견·수정**: 처음엔 GROUPED 테스트 variant(목표가 알림 테스트용)의 PUT에
+  `demandAxisFilter:["블랙"]`을 끼워 넣었다가 스모크가 FAIL — 그 variant의 딜은 demandAxisValue가
+  항상 null이라 필터에 영원히 안 걸려 TARGET 알림이 죽었다. 실제 SPLIT variant(5-1i 섹션)로 옮겨
+  왕복 검증만 분리(억제 로직 자체는 core 통합 테스트가 이미 뮤테이션 검증 끝냄, 셸에서 안 겹친다).
+- `docs/91` Q-48 전면 갱신(②만 남김), `.claude/rules/web-react.md` 낡은 "미매핑" 문구 2곳 정정,
+  `scripts/dead-columns-allowlist.txt`에서 낡은 면제 제거(게이트가 능동 차단해 잡음).
+- core 전체 스위트·web 275건·전체 스모크 PASS, 게이트 4종 통과. 뮤테이션 검증: 필터 조건문 제거 →
+  신규 테스트만 RED, web 토글 함수 무력화 → 신규 테스트만 RED. 전부 원복 후 GREEN.
+
+⓵②③④ⓑ 확인: ⓐ M1~M6 전부 코드 밖 또는 완료. ⓑ 남은 Q들(Q-52·54·57 등)은 실 운영 관측이 트리거라
+아직 거짓. ⓒ 이번 증분은 캐치-0 감사보다 보드 재검토로 일감을 찾음(Q-48이 스스로 "재검토하면 열 수
+있다"는 신호였다). ⓓ 새 계약(demandAxisFilter 필드) 스모크 필드 검증 걸림, 뮤테이션 증명 완료.
+
+TURN-END: ② 일감 소진 — Q-48 ② 완료. 다음 지시 대기.
+
 ## 2026-07-30 (2) — [WATCH] Q-83 잔여 4건 전부 구현 (①③④⑤, 무중단)
 
 사용자 요청("사람 판단 필요한 영역 전부 지금 정하고 가자 → 그 다음 Q-83 쭉 무중단")으로 ①③④⑤를

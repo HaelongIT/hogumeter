@@ -294,14 +294,19 @@ export interface AlertPolicyView {
    * 아니라 빈 목록을 내므로 `NON_NULL`이 지우지 못한다). 걸리는 딜은 기준가·신호·알림 전 통계에서 빠진다.
    */
   excludeKeywords: string[]
+  /**
+   * 수요축 필터(Q-48 ②, 2026-07-30 확정) — 분리 제품에서 "이 축값만 알림". **항상 배열로 온다**(없으면
+   * `[]` = 필터 없음, 전 축값 알림). 묶음(GROUPED) 제품엔 뜻이 없다(딜의 축값이 늘 null).
+   */
+  demandAxisFilter: string[]
 }
 
 /**
  * PUT 본문. 부재는 **null**로 명시한다 — 키를 빼면 core가 "기간 P 누락"으로 400을 낸다.
  *
  * ⚠️ PUT은 **전체 교체**다. `kDisplay`를 빼면 core가 기본값(5)으로 되돌린다 — 화면이 K를 안 보내면
- * 저장할 때마다 사용자가 고른 K가 조용히 리셋된다. 그래서 항상 보낸다. `excludeKeywords`도 같은 이유로
- * 항상 보낸다(빼면 빈 목록으로 되돌아가 사용자가 넣은 키워드가 조용히 사라진다).
+ * 저장할 때마다 사용자가 고른 K가 조용히 리셋된다. 그래서 항상 보낸다. `excludeKeywords`·
+ * `demandAxisFilter`도 같은 이유로 항상 보낸다(빼면 빈 목록으로 되돌아가 사용자가 고른 값이 사라진다).
  */
 export interface UpdateAlertPolicyCommand {
   targetPrice: number | null
@@ -310,6 +315,7 @@ export interface UpdateAlertPolicyCommand {
   quietHoursEnd: number | null
   kDisplay: number
   excludeKeywords: string[]
+  demandAxisFilter: string[]
 }
 
 /**

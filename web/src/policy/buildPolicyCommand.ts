@@ -10,6 +10,11 @@ export interface PolicyForm {
   kDisplay: string
   /** 제외 키워드(Q-28). 쉼표로 구분한 한 줄 — 걸리는 딜은 기준가·신호·알림 표본에서 빠진다. 빈 칸이면 없음. */
   excludeKeywords: string
+  /**
+   * 수요축 필터(Q-48 ②) — 분리 제품에서 알림 받을 축값들. 선택된 값 그대로(자유 입력 아님, 체크박스).
+   * 빈 배열 = 필터 없음(전 축값 알림). 묶음 제품은 이 손잡이 자체를 안 그린다.
+   */
+  demandAxisFilter: string[]
 }
 
 const digits = /^\d+$/
@@ -51,6 +56,7 @@ export function buildPolicyCommand(form: PolicyForm): UpdateAlertPolicyCommand {
     quietHoursEnd: end === '' ? null : hourOfDay(end, '방해금지 끝'),
     kDisplay: Number(k),
     excludeKeywords: parseKeywords(form.excludeKeywords),
+    demandAxisFilter: form.demandAxisFilter,
   }
 }
 

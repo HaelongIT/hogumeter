@@ -55,7 +55,7 @@ public class AlertPolicySettingsUseCase {
 		if (existing.isEmpty()) {
 			policies.save(new AlertPolicyEntity(variantId, settings.targetPrice(), settings.periodMonths(),
 					settings.quietHoursStart(), settings.quietHoursEnd(), settings.kDisplay(),
-					settings.excludeKeywords()));
+					settings.excludeKeywords(), settings.demandAxisFilter()));
 			return settings;
 		}
 		entityManager.createQuery("""
@@ -65,7 +65,8 @@ public class AlertPolicySettingsUseCase {
 				       policy.quietHoursStart = :quietHoursStart,
 				       policy.quietHoursEnd = :quietHoursEnd,
 				       policy.kDisplay = :kDisplay,
-				       policy.excludeKeywords = :excludeKeywords
+				       policy.excludeKeywords = :excludeKeywords,
+				       policy.demandAxisFilter = :demandAxisFilter
 				 where policy.variantId = :variantId
 				""")
 			.setParameter("targetPrice", settings.targetPrice())
@@ -74,6 +75,7 @@ public class AlertPolicySettingsUseCase {
 			.setParameter("quietHoursEnd", settings.quietHoursEnd())
 			.setParameter("kDisplay", settings.kDisplay())
 			.setParameter("excludeKeywords", settings.excludeKeywords())
+			.setParameter("demandAxisFilter", AlertPolicyEntity.toColumn(settings.demandAxisFilter()))
 			.setParameter("variantId", variantId)
 			.executeUpdate();
 		// 벌크 UPDATE는 영속성 컨텍스트를 우회한다 — 방금 고친 행을 다시 읽으면 캐시된 옛 값이 나온다.
@@ -91,6 +93,6 @@ public class AlertPolicySettingsUseCase {
 	private static AlertPolicySettings toSettings(AlertPolicyEntity entity) {
 		return new AlertPolicySettings(entity.getTargetPrice(), entity.getPeriodMonths(),
 				entity.getQuietHoursStart(), entity.getQuietHoursEnd(), entity.getKDisplay(),
-				entity.getExcludeKeywords());
+				entity.getExcludeKeywords(), entity.getDemandAxisFilter());
 	}
 }

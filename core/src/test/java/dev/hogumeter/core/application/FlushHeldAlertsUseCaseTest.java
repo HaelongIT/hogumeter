@@ -93,7 +93,7 @@ class FlushHeldAlertsUseCaseTest {
 
 	@Test
 	void flushesAndSendsWhenQuietHoursHavePassed() {
-		policies.save(new AlertPolicyEntity(variantId, null, 6, 0, 6, 5, List.of())); // 방해금지 0~6시 (08:00은 지남)
+		policies.save(new AlertPolicyEntity(variantId, null, 6, 0, 6, 5, List.of(), List.of())); // 방해금지 0~6시 (08:00은 지남)
 		heldAlerts.save(new HeldAlertEntity(dealId, variantId));
 
 		FlushHeldAlertsUseCase.FlushReport report = useCase.flush();
@@ -106,7 +106,7 @@ class FlushHeldAlertsUseCaseTest {
 
 	@Test
 	void leavesHeldWhileStillInQuietHours() {
-		policies.save(new AlertPolicyEntity(variantId, null, 6, 6, 10, 5, List.of())); // 방해금지 6~10시 (08:00은 안)
+		policies.save(new AlertPolicyEntity(variantId, null, 6, 6, 10, 5, List.of(), List.of())); // 방해금지 6~10시 (08:00은 안)
 		heldAlerts.save(new HeldAlertEntity(dealId, variantId));
 
 		FlushHeldAlertsUseCase.FlushReport report = useCase.flush();
@@ -122,7 +122,7 @@ class FlushHeldAlertsUseCaseTest {
 	 */
 	@Test
 	void dropsWhenTheHeldDealNoLongerQualifies() {
-		policies.save(new AlertPolicyEntity(variantId, null, 6, 0, 6, 5, List.of())); // 방해금지 지남
+		policies.save(new AlertPolicyEntity(variantId, null, 6, 0, 6, 5, List.of(), List.of())); // 방해금지 지남
 		long endedDeal = insertCrossVerifiedDeal(890_000L, DealStatus.ENDED); // 밤새 종료됨
 		heldAlerts.save(new HeldAlertEntity(endedDeal, variantId));
 

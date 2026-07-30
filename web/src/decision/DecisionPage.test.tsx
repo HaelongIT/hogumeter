@@ -61,7 +61,7 @@ describe('DecisionPage', () => {
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
     vi.spyOn(api, 'getCoupangLatestPrice').mockResolvedValue(coupangUnavailable)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([]) // 패널이 같은 화면에 있다
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [] }) // 알림 정책 패널도
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [], demandAxisFilter: [] }) // 알림 정책 패널도
     vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
   })
 
@@ -276,7 +276,7 @@ describe('DecisionPage — 수요축 분리 제품', () => {
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
     vi.spyOn(api, 'getCoupangLatestPrice').mockResolvedValue(coupangUnavailable)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([])
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [] })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [], demandAxisFilter: [] })
     vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
   })
 
@@ -308,7 +308,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
     vi.spyOn(api, 'getCoupangLatestPrice').mockResolvedValue(coupangUnavailable)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([]) // 패널이 같은 화면에 있다
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [] }) // 알림 정책 패널도
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [], demandAxisFilter: [] }) // 알림 정책 패널도
     vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
   })
 
@@ -354,7 +354,7 @@ describe('DecisionPage — 이상치 토글 (Q-11, 기본 숨김)', () => {
     vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
     vi.spyOn(api, 'getCoupangLatestPrice').mockResolvedValue(coupangUnavailable)
     vi.spyOn(api, 'listPurchases').mockResolvedValue([])
-    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [] })
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, excludeKeywords: [], demandAxisFilter: [] })
     vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
   })
 

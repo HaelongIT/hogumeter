@@ -1087,3 +1087,29 @@
   보드에 적는다 — "미착수"로 남겨 두면 다음 세션이 헛되이 트리거를 또 찾아 헤맨다.
 - **관련**: `docs/91` Q-83 ⑤(자격 상실 확인 필요 알림), C-4(`docs/90` §13 v1.3), `PinEligibility.canPin`,
   `ResolveReviewItemUseCase`.
+
+## 2026-07-30 — Hibernate가 같은 소거 타입(List<String>)에 다른 @JdbcTypeCode(ARRAY vs JSON)를 붙이면 서로의 타입을 잘못 검증한다
+
+- **맥락**: Q-48 ②(`alert_policy.demand_axis_filter`, jsonb) 매핑을 추가하며 `exclude_keywords`(text[],
+  `List<String>` + `@JdbcTypeCode(SqlTypes.ARRAY)`)와 같은 엔티티에 `demand_axis_filter`를
+  `List<String>` + `@JdbcTypeCode(SqlTypes.JSON)`로 매핑했다. 컨텍스트 로드가 전부 깨졌다 —
+  `SchemaManagementException: wrong column type encountered in column [exclude_keywords] ...
+  found [_text (Types#ARRAY)], but expecting [jsonb (Types#JSON)]`. **내가 손대지 않은 필드가
+  스키마 검증에서 실패했다.**
+- **원인**: Hibernate(Boot 4.1 기준 버전)가 같은 제네릭 소거 타입(`List<String>`)의 BasicType을
+  내부적으로 공유·캐시하는 듯하다 — 한 엔티티 안에 `List<String>` 필드가 둘 있고 서로 다른
+  `@JdbcTypeCode`(ARRAY·JSON)를 붙이면, 나중에 처리되는 쪽의 JdbcTypeCode가 앞선 필드의 검증에도
+  섞여 들어간다. `String[]`로 바꿔도 다른 오류(`Expecting BasicPluralJavaType for array class ...,
+  but got JsonJavaType`)가 나 배열 타입도 답이 아니었다.
+- **고침**: `demand_axis_filter`를 `Map<String, Object>`(키 `"values"`, 값 `List<String>`) + JSON으로
+  바꿨다 — `ReviewQueueItemEntity.payload`가 이미 이 저장소에서 검증된 `Map<String,Object>`+JSON
+  조합이라 재사용했다. 바깥 API(생성자·getter)는 여전히 `List<String>`이고, 변환은 엔티티의
+  `public static toColumn(List<String>)` 한 곳에 모아 벌크 UPDATE(JPQL)도 같은 변환을 쓰게 했다
+  (엔티티 밖에서 같은 컬럼 모양을 또 만들면 사본이 어긋난다는 기존 규칙 그대로).
+- **교훈(규칙화)**: **한 엔티티 안에서 같은 제네릭 소거 타입(`List<String>`, `Map<String,Object>` 등)에
+  서로 다른 `@JdbcTypeCode`를 섞지 않는다.** jsonb로 저장할 문자열 목록이 필요하면 `List<String>`을
+  그대로 쓰지 말고 `Map<String, Object>`(단일 키로 감싸기)처럼 이미 이 프로젝트에서 검증된 다른
+  소거 타입을 골라 충돌을 피한다. 스키마 검증 에러가 **내가 건드리지 않은 필드**를 지목하면, 그
+  필드 자체가 아니라 **같은 소거 타입을 공유하는 다른 필드와의 충돌**을 의심한다.
+- **관련**: `AlertPolicyEntity.demandAxisFilter`·`toColumn()`, `ReviewQueueItemEntity.payload`(선례),
+  `docs/91` Q-48 ②.

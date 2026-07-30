@@ -9,6 +9,7 @@ const EMPTY: PolicyForm = {
   quietHoursEnd: '',
   kDisplay: '5',
   excludeKeywords: '',
+  demandAxisFilter: [],
 }
 
 describe('buildPolicyCommand', () => {
@@ -21,7 +22,16 @@ describe('buildPolicyCommand', () => {
       quietHoursEnd: null,
       kDisplay: 5,
       excludeKeywords: [],
+      demandAxisFilter: [],
     })
+  })
+
+  /** Q-48 ②(2026-07-30 확정) — 체크박스로 고른 값 그대로 보낸다(자유 입력 아님, parseKeywords 대상 아님). */
+  it('수요축 필터는 고른 값을 그대로 보낸다', () => {
+    expect(buildPolicyCommand({ ...EMPTY, demandAxisFilter: ['블랙', '화이트'] }).demandAxisFilter).toEqual([
+      '블랙',
+      '화이트',
+    ])
   })
 
   it('제외 키워드는 쉼표로 나누고 공백 제거·빈 값 탈락·중복 접기를 한다', () => {

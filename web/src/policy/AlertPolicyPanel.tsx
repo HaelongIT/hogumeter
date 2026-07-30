@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
-import type { AlertPolicyView } from '../api/types'
+import type { AlertPolicyView, Axis } from '../api/types'
 import { InvalidForm } from '../registration/buildCommand'
 import { buildPolicyCommand, type PolicyForm } from './buildPolicyCommand'
 
@@ -11,6 +11,7 @@ const EMPTY: PolicyForm = {
   quietHoursEnd: '',
   kDisplay: '',
   excludeKeywords: '',
+  demandAxisFilter: [],
 }
 
 /** K 후보(확정본: 3~10). 낮추면 적은 표본으로도 기준가를 말하고, 높이면 더 모일 때까지 사례만 낸다. */
@@ -38,17 +39,23 @@ function toForm(policy: AlertPolicyView): PolicyForm {
     kDisplay: policy.kDisplay === undefined ? '' : String(policy.kDisplay),
     // 제외 키워드는 항상 배열로 온다(없으면 []) — 쉼표로 이어 한 줄로 보여준다.
     excludeKeywords: policy.excludeKeywords.join(', '),
+    // 수요축 필터도 항상 배열(없으면 []) — 체크박스 상태라 배열 그대로 들고 있는다.
+    demandAxisFilter: policy.demandAxisFilter,
   }
 }
 
 /**
  * REG-03 알림 정책 설정. 확정본 §7의 web 최소 슬라이스가 요구하는 "목표가 설정"이 여기다.
  *
- * <p>다루는 것은 여섯 — 목표가·기간 P·방해금지 2개 + <b>K_display</b>(Q-48 ①) + <b>제외 키워드</b>(Q-28).
- * 제외 키워드에 걸리는 딜(리퍼·벌크 등)은 기준가·신호·알림 전 통계에서 빠진다 — 신품 기준가에 중고가
- * 섞이지 않게. ⚠️라벨 모드 토글·수요축 필터는 아직 소비 기능과 함께 매핑을 기다린다(Q-66).
+ * <p>다루는 것은 일곱 — 목표가·기간 P·방해금지 2개 + <b>K_display</b>(Q-48 ①) + <b>제외 키워드</b>(Q-28)
+ * + <b>수요축 필터</b>(Q-48 ②). 제외 키워드에 걸리는 딜(리퍼·벌크 등)은 기준가·신호·알림 전 통계에서
+ * 빠진다 — 신품 기준가에 중고가 섞이지 않게. ⚠️라벨 모드 토글은 아직 소비 기능을 기다린다(Q-66).
+ *
+ * <p>{@code demandAxis}: 분리(SPLIT) 제품이면 판단 화면이 이미 알고 있는 축(이름·허용값)을 그대로
+ * 받는다 — 새로 조회하지 않는다. 묶음(GROUPED)이면 {@code null}이고 이 손잡이 자체를 그리지 않는다
+ * (없는 손잡이는 안 그린다 — 그리면 저장되는 줄 안다).
  */
-export function AlertPolicyPanel({ variantId }: { variantId: number }) {
+export function AlertPolicyPanel({ variantId, demandAxis = null }: { variantId: number; demandAxis?: Axis | null }) {
   const [form, setForm] = useState<PolicyForm>(EMPTY)
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [delivering, setDelivering] = useState<boolean | null>(null)
@@ -93,6 +100,17 @@ export function AlertPolicyPanel({ variantId }: { variantId: number }) {
   const set = (key: keyof PolicyForm) => (event: { target: { value: string } }) => {
     setSaved(false)
     setForm((current) => ({ ...current, [key]: event.target.value }))
+  }
+
+  /** 체크박스 토글 — 자유 입력이 아니라 축의 허용값 중 골라 넣고 뺀다. */
+  const toggleAxisValue = (value: string) => {
+    setSaved(false)
+    setForm((current) => ({
+      ...current,
+      demandAxisFilter: current.demandAxisFilter.includes(value)
+        ? current.demandAxisFilter.filter((v) => v !== value)
+        : [...current.demandAxisFilter, value],
+    }))
   }
 
   const submit = async (event: { preventDefault: () => void }) => {
@@ -196,6 +214,30 @@ export function AlertPolicyPanel({ variantId }: { variantId: number }) {
           제목에 이 단어가 든 딜은 <strong>기준가·신호·알림 표본에서 빠집니다</strong>(리퍼·중고·묶음이 신품
           기준가를 끌어내리지 않게). 목록을 고치면 이미 수집된 딜에도 다시 적용됩니다.
         </p>
+
+        {/*
+          수요축 필터(Q-48 ②) — 분리 제품에서만 뜻이 있다. 없는 손잡이는 그리지 않는다(demandAxis===null이면
+          묶음 제품이라 이 fieldset 자체가 안 뜬다).
+        */}
+        {demandAxis !== null && (
+          <fieldset>
+            <legend>{demandAxis.name} 필터 (체크한 값만 알림, 비우면 전체)</legend>
+            {demandAxis.allowedValues.map((value) => (
+              <label key={value}>
+                <input
+                  type="checkbox"
+                  checked={form.demandAxisFilter.includes(value)}
+                  onChange={() => toggleAxisValue(value)}
+                />
+                {value}
+              </label>
+            ))}
+            <p role="note" aria-label="수요축 필터 안내">
+              아무것도 안 고르면 <strong>모든 {demandAxis.name}에 알림</strong>이 갑니다. 하나 이상 고르면
+              그 값의 딜만 알립니다.
+            </p>
+          </fieldset>
+        )}
 
         {/* 🔥 대박딜은 방해금지를 관통한다(확정본 §102). 그 사실을 숨기면 "다 막았다"고 믿는다. */}
         <fieldset>

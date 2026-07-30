@@ -158,7 +158,7 @@ class GetBenchmarkUseCaseTest {
 		insertCrossVerifiedDeal(890_000, "2026-06-14");
 		insertCrossVerifiedDeal(920_000, "2026-06-16");
 		insertCrossVerifiedDeal(950_000, "2026-06-18");
-		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 10, List.of())); // 기본 5 → 10
+		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 10, List.of(), List.of())); // 기본 5 → 10
 
 		BenchmarkView view = useCase.getBenchmark(variantId, 6, false);
 
@@ -193,7 +193,7 @@ class GetBenchmarkUseCaseTest {
 		insertCrossVerifiedDeal(920_000, "2026-06-16");
 		insertCrossVerifiedDeal(950_000, "2026-06-18");
 		insertTitledDeal(780_000, "2026-06-20", "리퍼 아이폰 17 256GB"); // 신품보다 싼 함정
-		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 5, List.of("리퍼")));
+		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 5, List.of("리퍼"), List.of()));
 
 		BenchmarkView view = useCase.getBenchmark(variantId, 6, false);
 
@@ -214,7 +214,7 @@ class GetBenchmarkUseCaseTest {
 		insertCrossVerifiedDeal(920_000, "2026-06-16");
 		insertCrossVerifiedDeal(950_000, "2026-06-18");
 		insertTitledDeal(780_000, "2026-06-20", "리퍼 아이폰 17 256GB");
-		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 5, List.of("벌크"))); // 안 걸리는 키워드
+		policies.save(new AlertPolicyEntity(variantId, null, 6, null, null, 5, List.of("벌크"), List.of())); // 안 걸리는 키워드
 
 		BenchmarkView view = useCase.getBenchmark(variantId, 6, false);
 

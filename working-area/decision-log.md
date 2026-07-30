@@ -200,3 +200,29 @@
 - **영향**: `PinDealUseCase`/`IngestDealsUseCase`(①), `IgnoreDealUseCase`(③), `FollowUpKind`·
   `FollowUpAlertUseCase`·신규 유스케이스(④⑤), `WatchItemEntity`(⑤ 플래그 컬럼), `WatchController`/
   `WatchPage`(⑤ 확인 버튼), `docs/91` Q-83.
+
+## 2026-07-30 — Q-48 ② 수요축 필터(alert_policy.demand_axis_filter) 매핑 — 자율 결정(되돌리기 쉬움)
+
+- **맥락**: docs/91 Q-48이 오래 열려 있던 항목 — "이 variant에서 어느 축값만 알림 받을지" 필터. 컬럼은
+  V1부터 jsonb로 있었으나 "소비 기능과 함께 매핑한다"는 원칙(K_display·제외 키워드의 선례)에 따라 계속
+  미뤄져 있었다. 이번에 소비처(`EvaluateAlertOnDealUseCase`)와 생산자(`AlertPolicyPanel`)를 함께 배선.
+- **결정 1(저장 표현)**: `AlertPolicyEntity.demandAxisFilter`를 `List<String>`이 아니라
+  `Map<String,Object>`(키 `"values"`)로 매핑 — `exclude_keywords`(`List<String>`+`SqlTypes.ARRAY`)와
+  같은 엔티티에 `List<String>`+`SqlTypes.JSON`을 또 붙이면 Hibernate가 스키마 검증에서 서로의 타입을
+  잘못 요구하는 실측 버그를 만났다(`docs/99-lessons` 2026-07-30). `String[]`도 다른 오류로 실패해
+  `ReviewQueueItemEntity.payload`가 이미 쓰는 `Map<String,Object>`+JSON 조합으로 우회— 바깥 API는
+  여전히 `List<String>`(변환은 `AlertPolicyEntity.toColumn()` 한 곳).
+- **결정 2(필터 의미론)**: 빈 목록 = 필터 없음(전 축값 알림, 기존 동작과 동일 — 가장 보수적 기본값).
+  값이 있으면 **allowlist**(그 값들만 알림). 첫 알림 자격(`EvaluateAlertOnDealUseCase`)의 SPLIT+값
+  미상 스킵 바로 다음에 검사 — 값 미상 딜은 이미 그 앞에서 걸러지므로 필터는 "값이 있는데 안 맞는"
+  경우만 본다.
+- **결정 3(web UI 재료)**: `AlertPolicyPanel`이 축의 이름·허용값을 새로 조회하지 않고 `DecisionPage`가
+  이미 계산해 둔 `demandAxis`를 prop으로 받는다 — 판단 화면이 이미 그 자리에서 계산해 둔 것을
+  재사용(추가 API 호출 없음). GROUPED 제품(`demandAxis === null`)이면 이 fieldset 자체를 안 그린다
+  (없는 손잡이는 안 그린다).
+- **주체**: AI 자율 결정 — 셋 다 되돌리기 쉬운 seam(컬럼 저장 표현 1곳, 필터 의미론 1개 조건문,
+  prop 전달 1곳)이라 CLAUDE.md 자율 진행 기준에 해당. 코드 추적으로 근거를 확인했다(Hibernate 오류
+  재현, DecisionPage의 demandAxis 계산 위치 확인).
+- **영향**: `AlertPolicyEntity`·`AlertPolicySettings`·`AlertPolicySettingsUseCase`·`AlertPolicyController`·
+  `EvaluateAlertOnDealUseCase`(core), `AlertPolicyPanel`·`DecisionPage`·`buildPolicyCommand`(web),
+  `docs/91` Q-48, `.claude/rules/web-react.md`, `scripts/dead-columns-allowlist.txt`(낡은 면제 제거).

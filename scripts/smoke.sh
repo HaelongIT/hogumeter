@@ -438,6 +438,9 @@ echo "$unset_policy" | grep -q '"kDisplay":5' ||
 # Q-28: 제외 키워드는 미설정이라도 **빈 배열로** 온다(null이 아님 — core가 List.of()를 낸다).
 echo "$unset_policy" | grep -q '"excludeKeywords":\[\]' ||
 	fail "미설정 정책이 빈 제외 키워드 배열을 내지 않는다 (Q-28): $unset_policy"
+# Q-48 ②: 수요축 필터도 미설정이면 빈 배열(필터 없음 = 전 축값 알림).
+echo "$unset_policy" | grep -q '"demandAxisFilter":\[\]' ||
+	fail "미설정 정책이 빈 수요축 필터 배열을 내지 않는다 (Q-48 ②): $unset_policy"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "${WEB}/api/v1/variants/999999/alert-policy")" = 404 ] ||
 	fail "없는 variant의 정책 조회가 404가 아니다"
 
@@ -452,6 +455,9 @@ echo "$saved_policy" | grep -q '"kDisplay":8' || fail "저장한 K가 왕복하�
 # Q-28: 제외 키워드도 왕복해야 손잡이다 — text[] 컬럼이 PUT→저장→GET 종단으로 살아 있는지 본다.
 echo "$saved_policy" | grep -q '"excludeKeywords":\["리퍼","벌크"\]' ||
 	fail "저장한 제외 키워드가 왕복하지 않는다 (Q-28): $saved_policy"
+# Q-48 ②: 이 variant는 GROUPED다 — 여기서 demandAxisFilter를 채우면 이 딜의 demandAxisValue가
+# 늘 null이라 필터에 영원히 안 걸려 알림이 전부 죽는다(바로 아래 TARGET 알림 확인과 충돌한다).
+# 수요축 필터 왕복·억제 검증은 실제 SPLIT variant가 있는 5-1i에서 한다.
 # 범위 밖(3~10)은 DB CHECK로 500이 아니라 도메인 코드 400이어야 한다.
 echo '{"targetPrice":1000000,"periodMonths":6,"kDisplay":99}' >"$policy"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${WEB}/api/v1/variants/${alert_vid}/alert-policy" \
@@ -533,6 +539,15 @@ echo "$black" | grep -q '"benchmarkPrice":860000' ||
 [ "$(curl -s -o /dev/null -w '%{http_code}' \
 	"${WEB}/api/v1/variants/${split_vid}/benchmark?periodMonths=6")" = 400 ] ||
 	fail "분리 제품인데 수요축 값 없이 기준가를 내준다 (묶음의 거짓말, Q-66 ①)"
+
+# Q-48 ②: 수요축 필터는 이 variant처럼 실제 축(색상)이 있어야 뜻이 있다 — 계약 왕복만 여기서 본다
+# (억제 로직 자체는 core 통합 테스트가 이미 뮤테이션 검증까지 끝냈다 — 셸에서 또 재현하지 않는다).
+split_policy=$(mktemp)
+echo '{"targetPrice":700000,"periodMonths":6,"kDisplay":5,"demandAxisFilter":["화이트"]}' >"$split_policy"
+curl -fsS -X PUT "${WEB}/api/v1/variants/${split_vid}/alert-policy" \
+	-H 'Content-Type: application/json' -d @"$split_policy" | grep -q '"demandAxisFilter":\["화이트"\]' ||
+	fail "SPLIT variant에 수요축 필터가 저장되지 않는다 (Q-48 ②)"
+rm -f "$split_policy"
 
 # Q-66 ③: 구매도 분리면 값이 필수다. 없으면 400(성적을 어느 색 분포에 대고 낼지 알 수 없다).
 buy=$(mktemp)

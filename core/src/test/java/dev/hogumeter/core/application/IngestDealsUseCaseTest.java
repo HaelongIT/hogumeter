@@ -176,7 +176,7 @@ class IngestDealsUseCaseTest {
 	 */
 	@Test
 	void mergingASecondSiteDoesNotResendTheFirstAlert() {
-		policies.save(new AlertPolicyEntity(variantId, 900_000L, 6, null, null, 5, List.of())); // 목표가 90만
+		policies.save(new AlertPolicyEntity(variantId, 900_000L, 6, null, null, 5, List.of(), List.of())); // 목표가 90만
 		savePost("ppomppu", "아이폰 17 256기가 89만", 890_000L, T); // 첫 알림 발송(목표가 이하)
 
 		IngestReport first = useCase.ingestPending();
@@ -425,7 +425,7 @@ class IngestDealsUseCaseTest {
 	 */
 	@Test
 	void quietHoursHeldAlertIsCountedNotSent() {
-		policies.save(new AlertPolicyEntity(variantId, null, 6, 0, 6, 5, List.of())); // 방해금지 0~6시
+		policies.save(new AlertPolicyEntity(variantId, null, 6, 0, 6, 5, List.of(), List.of())); // 방해금지 0~6시
 		savePost("ppomppu", "아이폰 17 256기가 특가 89만", 890_000L, T); // CONFIRMED → GOOD 알림(SPARSE)
 
 		IngestReport report = useCase.ingestPending();
