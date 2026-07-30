@@ -130,6 +130,25 @@ class FollowUpAlertUseCaseTest {
 		assertThat(dealAlerts.existsByDealEventIdAndKind(dealId, FollowUpKind.REOPENED.name())).isTrue();
 	}
 
+	/**
+	 * Q-83 ④(2026-07-30 확정) — 핀 후속 인상은 첫 알림 여부와 무관하게 나간다("핀 자체가 자격").
+	 * 목표가 미달 등으로 첫 알림이 안 갔던 딜(=dealThatAlreadyAlerted를 안 거친 딜)로 검증한다.
+	 */
+	@Test
+	void sendsPinnedPriceIncreaseFollowUpEvenWithoutAFirstAlert() {
+		DealEventEntity deal = dealEvents.save(new DealEventEntity(variantId, false, null, 900_000, 900_000, 950_000,
+				950_000, dev.hogumeter.core.domain.deal.Origin.LIVE, false, dev.hogumeter.core.domain.deal.OutlierFlag.NONE,
+				false, DealStatus.ACTIVE, T, T));
+		assertThat(dealAlerts.existsByDealEventIdAndKind(deal.getId(), DealAlertEntity.FIRST)).isFalse();
+
+		int sent = followUp.sendFollowUps(List.of(deal.getId()), FollowUpKind.PINNED_PRICE_INCREASED);
+
+		assertThat(sent).isEqualTo(1);
+		assertThat(recordingAlertSender.sent.get(0).followUpKind()).isEqualTo(FollowUpKind.PINNED_PRICE_INCREASED);
+		assertThat(dealAlerts.existsByDealEventIdAndKind(deal.getId(), FollowUpKind.PINNED_PRICE_INCREASED.name()))
+				.isTrue();
+	}
+
 	@Test
 	void doesNotResendSameKind() {
 		long dealId = dealThatAlreadyAlerted();

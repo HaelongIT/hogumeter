@@ -81,6 +81,10 @@ public class PipelineScheduler {
 	private final Supplier<IngestReport> ingest;
 	private final Runnable preserveConditions;
 	private final Supplier<List<Long>> reprocessPrices;
+	// Q-83 ④(2026-07-30) — ACTIVE 핀 중 이번 틱에 가격이 오를 딜(부수효과 없는 미리보기). 별도 Supplier로
+	// 둔 이유: reprocessPrices의 반환 타입(List<Long>, 방향 무관)을 바꾸면 기존 스케줄러 테스트 20여 곳의
+	// seam 타입이 전부 깨진다 — 새 관심사는 새 좁은 seam으로 더한다(기존 계약은 그대로).
+	private final Supplier<List<Long>> reprocessPinnedIncreases;
 	private final Supplier<List<Long>> reprocessStatus;
 	private final BiFunction<List<Long>, FollowUpKind, Integer> followUp;
 	private final Supplier<Integer> markMissedPins; // WATCH(docs/17) ENDED 감지→MISSED 자동(DN-C1 후속)
@@ -105,7 +109,8 @@ public class PipelineScheduler {
 			JdbcTemplate jdbc) {
 		this(expireObservations::expireDueObservations, issueReportCards::issuePendingReportCards,
 				ingest::ingestPending, conditions::preserveTags,
-				prices::reprocessPriceChanges, status::reprocessEndedDeals, followUp::sendFollowUps, flushHeld::flush,
+				prices::reprocessPriceChanges, prices::previewPinnedPriceIncreases, status::reprocessEndedDeals,
+				followUp::sendFollowUps, flushHeld::flush,
 				foldUsedListings::foldPending, markMissedPins::markEndedDealsAsMissed, healthMonitor::onTick,
 				() -> new PipelineSnapshot(
 						rawPosts.count(),
@@ -130,7 +135,8 @@ public class PipelineScheduler {
 
 	/** 테스트 seam(플러시·건강 포함) — 이 프로젝트 테스트는 mock 대신 실객체·람다를 쓴다. */
 	PipelineScheduler(Runnable expireObservations, Supplier<Integer> issueReportCards, Supplier<IngestReport> ingest,
-			Runnable preserveConditions, Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
+			Runnable preserveConditions, Supplier<List<Long>> reprocessPrices,
+			Supplier<List<Long>> reprocessPinnedIncreases, Supplier<List<Long>> reprocessStatus,
 			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<FlushReport> flushHeld,
 			Supplier<FoldReport> foldUsedListings, Supplier<Integer> markMissedPins, Consumer<Boolean> healthTick,
 			Supplier<PipelineSnapshot> probe, Consumer<PipelineTickReport> report) {
@@ -139,6 +145,7 @@ public class PipelineScheduler {
 		this.ingest = ingest;
 		this.preserveConditions = preserveConditions;
 		this.reprocessPrices = reprocessPrices;
+		this.reprocessPinnedIncreases = reprocessPinnedIncreases;
 		this.reprocessStatus = reprocessStatus;
 		this.followUp = followUp;
 		this.flushHeld = flushHeld;
@@ -149,13 +156,17 @@ public class PipelineScheduler {
 		this.report = report;
 	}
 
-	/** 플러시·건강 없는 테스트 seam(기존 호출부 호환) — 발급·플러시·건강·핀 자동화를 no-op/0으로 둔다. */
+	/**
+	 * 플러시·건강 없는 테스트 seam(기존 호출부 호환) — 발급·플러시·건강·핀 자동화를 no-op/0으로 둔다.
+	 * 핀 후속 인상(Q-83 ④)도 기본 빈 목록 — 그 배선을 시험하는 테스트는 위 seam을 직접 쓴다.
+	 */
 	PipelineScheduler(Runnable expireObservations, Supplier<IngestReport> ingest, Runnable preserveConditions,
 			Supplier<List<Long>> reprocessPrices, Supplier<List<Long>> reprocessStatus,
 			BiFunction<List<Long>, FollowUpKind, Integer> followUp, Supplier<PipelineSnapshot> probe,
 			Consumer<PipelineTickReport> report) {
-		this(expireObservations, () -> 0, ingest, preserveConditions, reprocessPrices, reprocessStatus, followUp,
-				FlushReport::empty, FoldReport::empty, () -> 0, healthy -> { }, probe, report);
+		this(expireObservations, () -> 0, ingest, preserveConditions, reprocessPrices, () -> List.of(),
+				reprocessStatus, followUp, FlushReport::empty, FoldReport::empty, () -> 0, healthy -> { }, probe,
+				report);
 	}
 
 	@Scheduled(fixedDelayString = "${core.pipeline.interval-ms:60000}",
@@ -170,6 +181,11 @@ public class PipelineScheduler {
 		int reportCardsIssued = runStepReturning("issue-report-cards", issueReportCards, 0);
 		IngestReport ingestReport = runStepReturning("ingest", ingest, IngestReport.empty());
 		runStep("preserve-conditions", preserveConditions);
+		// Q-83 ④ — 핀 후속 인상의 미리보기는 가격 재처리보다 **먼저** 와야 한다. 미리보기는 "지금 DB의
+		// priceLast"와 "새 증거"를 비교하는데, reprocess-prices가 먼저 돌면 priceLast가 이미 새 값으로
+		// 바뀌어 있어 인상분을 영원히 못 잡는다(새 값 vs 새 값 비교가 되어 버린다).
+		List<Long> pinnedIncreasing = runStepReturning("reprocess-pinned-increases", reprocessPinnedIncreases,
+				List.of());
 		List<Long> priceChanged = runStepReturning("reprocess-prices", reprocessPrices, List.of());
 		List<Long> ended = runStepReturning("reprocess-status", reprocessStatus, List.of());
 		// WATCH(docs/17) 결말 자동화 — "ENDED 감지→MISSED". 종료 재처리 바로 뒤에 와서 이번 틱에 새로
@@ -190,6 +206,9 @@ public class PipelineScheduler {
 		// "교차검증됨"이 아니라 "다시 살아남"이다 — 부류가 다른 사실을 한 문구로 알리지 않는다.
 		int followUpReopened = runStepReturning("follow-up-reopened",
 				() -> followUp.apply(ingestReport.reopenedDealIds(), FollowUpKind.REOPENED), 0);
+		// 핀 후속 인상(Q-83 ④) — 핀 자체가 자격이라 첫 알림 여부와 무관하다(FollowUpEvaluator가 그 예외를 안다).
+		int followUpPinnedIncrease = runStepReturning("follow-up-pinned-increase",
+				() -> followUp.apply(pinnedIncreasing, FollowUpKind.PINNED_PRICE_INCREASED), 0);
 		// 방해금지가 끝난 보류분을 재평가해 보낸다(Q-20 ②) — 밤새 바뀐 상황을 발송 시점에 다시 판정한다.
 		FlushReport flush = runStepReturning("flush-held", flushHeld, FlushReport.empty());
 		// 중고 목록 접기는 신품 경로와 독립이다 — 순서 계약이 없어 끝에 둔다(한 단계 실패는 runStep이 격리).
@@ -201,8 +220,8 @@ public class PipelineScheduler {
 		if (before != null && after != null) {
 			// 단계가 터졌어도 보고한다 — 무엇이 처리됐고 무엇이 남았는지가 그때 더 중요하다. stepsFailed로 그 사실도 싣는다.
 			report.accept(PipelineTickReport.between(before, after, ingestReport, reportCardsIssued, followUpPrice,
-					followUpEnded, followUpVerified, followUpReopened, pinsMissed, stepFailures, flush.flushed(),
-					flush.dropped(), usedFold));
+					followUpEnded, followUpVerified, followUpReopened, followUpPinnedIncrease, pinsMissed,
+					stepFailures, flush.flushed(), flush.dropped(), usedFold));
 		}
 		healthTick.accept(healthy); // 연속 실패면 관리 알림(PipelineHealthMonitor)
 	}

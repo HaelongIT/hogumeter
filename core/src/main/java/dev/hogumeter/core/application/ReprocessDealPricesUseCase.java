@@ -7,10 +7,13 @@ import dev.hogumeter.core.adapter.persistence.DealEventSourceEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventSourceRepository;
 import dev.hogumeter.core.adapter.persistence.RawDealPost;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
+import dev.hogumeter.core.adapter.persistence.WatchItemEntity;
+import dev.hogumeter.core.adapter.persistence.WatchItemRepository;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.PriceEvidence;
 import dev.hogumeter.core.domain.deal.PriceRefresh;
+import dev.hogumeter.core.domain.watch.PinState;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -41,11 +44,13 @@ public class ReprocessDealPricesUseCase {
 	private final DealEventSourceRepository sources;
 	private final RawDealPostRepository rawPosts;
 	private final DealEventMapper mapper;
+	private final WatchItemRepository watchItems;
 
 	public ReprocessDealPricesUseCase(DealEventRepository dealEvents, DealEventSourceRepository sources,
-			RawDealPostRepository rawPosts, DealEventMapper mapper) {
+			RawDealPostRepository rawPosts, DealEventMapper mapper, WatchItemRepository watchItems) {
 		this.dealEvents = dealEvents;
 		this.sources = sources;
+		this.watchItems = watchItems;
 		this.rawPosts = rawPosts;
 		this.mapper = mapper;
 	}
@@ -60,6 +65,26 @@ public class ReprocessDealPricesUseCase {
 			}
 		}
 		return changed;
+	}
+
+	/**
+	 * Q-83 ④(2026-07-30 확정) — ACTIVE 핀이 있는 딜 중 이번 재처리로 가격이 오를 딜만 미리 골라낸다.
+	 * <b>부수효과 없음</b>(entity를 갱신하지 않는다) — {@link #reprocessPriceChanges()}가 실제 반영을 맡고,
+	 * 이 메서드는 그 전에 스케줄러가 "핀 후속 인상 1회" 대상을 알아내는 데만 쓴다. 같은 증거를 두 번
+	 * 읽지만(멱등, 부작용 없음) 상태를 공유하는 사이드채널보다 안전하다.
+	 */
+	@Transactional(readOnly = true)
+	public List<Long> previewPinnedPriceIncreases() {
+		List<Long> increased = new ArrayList<>();
+		for (WatchItemEntity pin : watchItems.findByState(PinState.ACTIVE)) {
+			dealEvents.findById(pin.getDealEventId())
+					.filter(deal -> REFRESHABLE.contains(deal.getStatus()))
+					.flatMap(deal -> PriceRefresh.from(mapper.toDomain(deal), evidenceFor(deal))
+							.filter(refresh -> refresh.priceLast() > deal.getPriceLast())
+							.map(refresh -> deal.getId()))
+					.ifPresent(increased::add);
+		}
+		return increased;
 	}
 
 	/** @return 가격이 바뀌어 반영했으면 true, 변화 없으면 false(미기록). */

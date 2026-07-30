@@ -141,3 +141,62 @@
   `PurchasePanel`·`buildPurchaseCommand`(linkedDealEventId), `purchase/present.ts`(`prefillNotice` 3분기 +
   `price.py` 표식 정본↔web 사본 드리프트 게이트), `docs/91` Q-83 ②. 계획 파일:
   `~/.claude/plans/melodic-sparking-micali.md`.
+
+## 2026-07-30 — Q-83 잔여 5건(①③④⑤) 설계 일괄 확정 — 이후 무중단 구현
+
+사용자 요청("사람의 판단이 필요한 영역에 대해서 전부다 지금 정하고 가자")으로 Q-83 잔여 전체를 코드
+추적 후 판단 필요 지점만 추려 확정. ②(PUR 프리필)는 이미 이 세션 앞부분에서 구현 완료.
+
+### ① anchorPostId 자동 승계 — 자율 결정(되돌리기 쉬움, 묻지 않음)
+- **맥락 정정**: 처음엔 "새 DealEvent가 옛 딜의 재구성임을 매칭하는 휴리스틱"이 필요하다고 오해했으나,
+  코드 추적 결과 REOPENED(부활)는 **같은 dealEventId를 재사용**해 WatchItem의 FK가 애초에 안 끊긴다.
+  실제 "재구성"은 `IngestDealsUseCase`가 새 원문을 **기존 dealEventId**에 병합할 때
+  `DealEventSourceEntity(existing.getId(), post.getId(), site)`를 추가하는 순간이다 — `PinDealUseCase`가
+  핀 시점에 소스 중 하나를 `anchorPostId`로 고정해 두는데, 그 뒤 병합으로 새 소스가 붙어도 안 갱신된다.
+- **결정**: 그 병합 지점에서 해당 dealEventId에 **ACTIVE WatchItem이 있으면 anchorPostId를 방금 병합된
+  새 소스로 갱신**한다(최신 원문이 항상 앵커). "+이력"은 별도 이력 컬럼을 추가하지 않는다 — 과거 앵커가
+  뭐였는지는 `deal_event_source` 테이블에 전부 남아 있어 필요하면 거기서 재구성 가능하다(사본 없음).
+- **근거**: 되돌리기 쉬움(FK 값 하나, 다음에 정책 바꿔도 마이그레이션 불필요) — CLAUDE.md 자율 진행 기준.
+
+### ③ 핀 이력 딜 사후학습 제외 — 자율 결정(되돌리기 쉬움, 묻지 않음)
+- **맥락**: BM-07 사후학습(`IgnoreDealUseCase.suggestKeywords`)은 `deal_ignore`(Telegram [🔕무시] 클릭)
+  테이블의 제목들에서 빈출 토큰을 뽑는다. 핀(WATCH)과 무시(Telegram 무시 버튼)는 서로 다른 표면의 독립
+  액션이라, 같은 dealEventId가 이론상 둘 다에 들어갈 수 있다 — 그러면 "사람이 원해서 지켜본 딜"의 제목이
+  "노이즈"학습 재료로 쓰인다.
+- **결정**: `suggestKeywords`가 `ignoredTitles`를 모을 때 **WatchItem이 존재(상태 무관)하는 dealEventId는
+  제외**한다(Q-83이 이미 쓰는 "핀 이력 딜" 정의 그대로 재사용 — 사본 아님). 신규 리포지토리 메서드
+  `WatchItemRepository.existsByDealEventId(long)` 하나만 추가.
+
+### ④ 핀 후속 특례(인상 1회) — 사용자 결정
+- **선택지**: (A) 인상만 핀 기반으로 열기(첫 알림 무관, 신규 FollowUpKind 하나만 추가·기존 게이트 불변)
+  vs (B) 핀되면 인하·품절·종료·검증까지 전부 첫 알림 무관 무조건(기존 `FollowUpEvaluator.alreadyAlerted`
+  게이트 자체를 변경 — 블라스트 반경 큼, 이미 배선된 알림 발화 빈도가 전 핀 딜에 늘어남).
+- **채택**: **(A)**. 새 `FollowUpKind`(가칭 `PINNED_PRICE_INCREASED`) 하나만 추가하고, 대상은 **ACTIVE
+  상태의 WatchItem**에 한정(BOUGHT·MISSED·DROPPED로 결말난 핀은 이제 와서 가격 인상을 알려도 무의미).
+  가격 증가 방향 판별은 `ReprocessDealPricesUseCase`가 이미 갖고 있는 이전/이후 가격 비교에서 파생.
+  "1회만"은 기존 `(dealEventId, kind)` 유니크 이력 패턴을 그대로 재사용 — 새 메커니즘 불필요.
+- **탈락(B) 이유**: 원문을 글자 그대로 읽으면 B가 더 가깝지만, 기존에 이미 동작 중인 VERIFIED·ENDED·
+  PRICE_CHANGED(방향 무관, 이미 "인상 무조건"을 알림 나간 딜에는 충족)의 발화 게이트 자체를 바꾸는 건
+  회귀 위험이 크고, "핀 = 알림 자격 부여"라는 새 개념을 여러 알림 종류에 동시에 얹는다. A는 새 알림
+  1종만 추가하는 좁은 변경이라 되돌리기 쉽고 검증 범위가 작다.
+
+### ⑤ 부활 미응답 플래그 — 사용자 결정
+- **해소 방식**: 명시적 **[확인함] 버튼**(WatchPage 회고 또는 활성 탭)을 채택 — 이 앱의 기존 패턴
+  (샀어요/기각·해제처럼 사람이 명시적으로 누르는 버튼)과 일관되고, "봤다"를 스크롤·렌더링으로 추정하는
+  쪽보다 테스트하기 쉽고 정직하다(절대 원칙 2: 판단은 사람).
+- **범위**: **부활 미응답 플래그만 최소로** 구현한다. 2nd-plan-intake의 "미열람 3종"(인하/확인필요-부활대체/
+  놓침확인) 통합 대시보드는 이번에 만들지 않는다 — WatchItem에 필드 여러 개 + WatchPage 배지 체계 재설계가
+  필요해 범위가 커진다. 지금은 REOPENED가 ACTIVE 핀에 발생했을 때 `WatchItemEntity`에 불리언 플래그
+  하나(`reviveUnacknowledged`)를 세우고, REST로 확인 처리(false로 되돌림)하는 좁은 슬라이스만 만든다.
+- **자격 상실 확인 필요 알림**(항목 ⑤의 나머지 절반)은 별도 결정 없이 진행 가능 — 새 `FollowUpKind`
+  추가로 충분(④와 같은 메커니즘). ACTIVE 핀의 dealEventId가 `ResolveReviewItemUseCase`/
+  `ReviewCallbackRouter`를 통해 outlierFlag NONE→비NONE 전이할 때 발화, 핀 상태 전이는 없음(그대로 ACTIVE).
+
+### 공통
+- **주체**: ①③은 CLAUDE.md 자율 진행 기준(되돌리기 쉬움)으로 AI가 결정. ④⑤는 AskUserQuestion으로
+  선택지 제시 후 사용자가 확정(2026-07-30).
+- **되돌리기**: 다섯 항목 전부 좁은 seam(신규 컬럼 1개·신규 FollowUpKind 값·리포지토리 메서드 1~2개)이라
+  개별적으로 되돌리기 쉽다.
+- **영향**: `PinDealUseCase`/`IngestDealsUseCase`(①), `IgnoreDealUseCase`(③), `FollowUpKind`·
+  `FollowUpAlertUseCase`·신규 유스케이스(④⑤), `WatchItemEntity`(⑤ 플래그 컬럼), `WatchController`/
+  `WatchPage`(⑤ 확인 버튼), `docs/91` Q-83.

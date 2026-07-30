@@ -35,6 +35,9 @@ import dev.hogumeter.core.application.IngestReport;
  * 사실의 부류가 다르다 — "다른 사이트가 확인해 줬다"와 "죽은 줄 알았던 딜이 다시 살아났다"는 사람이 취할
  * 행동이 다르다. 합쳐 세면 어느 쪽이 몰렸는지 알 수 없다.
  *
+ * <p>{@code followUpPinnedIncreaseSent}는 <b>핀 후속 인상</b>(Q-83 ④, 2026-07-30) 발송 수다. 나머지 후속과
+ * 자격 조건이 다르다 — 핀(WatchItem ACTIVE) 자체가 자격이라 첫 알림 여부와 무관하게 발송된다.
+ *
  * <p>{@code reportCardsIssued}는 이번 틱에 발급한 성적표 수다(PUR-04). 발급은 REPORT_PENDING을 CLOSED로
  * 드레인하므로, 그냥 두면 {@code purchasesExpired}(= REPORT_PENDING 증가분)가 <b>"만료 − 발급"으로 오염</b>돼
  * 음수가 될 수 있다("카운터는 오염되지 않는 쪽을 센다"). 그래서 발급 수를 스케줄러가 직접 세어 넘기고,
@@ -68,6 +71,7 @@ public record PipelineTickReport(
 		int followUpEndedSent,
 		int followUpVerifiedSent,
 		int followUpReopenedSent,
+		int followUpPinnedIncreaseSent,
 		int watchPinsMissed,
 		int stepsFailed,
 		int heldAlertsFlushed,
@@ -76,8 +80,8 @@ public record PipelineTickReport(
 
 	public static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after, IngestReport ingest,
 			int reportCardsIssued, int followUpPriceChangedSent, int followUpEndedSent, int followUpVerifiedSent,
-			int followUpReopenedSent, int watchPinsMissed, int stepsFailed, int heldAlertsFlushed,
-			int heldAlertsDropped, FoldReport usedFold) {
+			int followUpReopenedSent, int followUpPinnedIncreaseSent, int watchPinsMissed, int stepsFailed,
+			int heldAlertsFlushed, int heldAlertsDropped, FoldReport usedFold) {
 		long postsLinked = after.linkedSources() - before.linkedSources();
 		long dealsCreated = after.dealEvents() - before.dealEvents();
 		// 발급이 REPORT_PENDING을 드레인하므로 Δ만으로는 만료 수가 아니다 — 발급 수를 더해 재구성한다.
@@ -100,6 +104,7 @@ public record PipelineTickReport(
 				followUpEndedSent,
 				followUpVerifiedSent,
 				followUpReopenedSent,
+				followUpPinnedIncreaseSent,
 				watchPinsMissed,
 				stepsFailed,
 				heldAlertsFlushed,
@@ -133,7 +138,8 @@ public record PipelineTickReport(
 				+ " followUpsSent[priceChanged=" + followUpPriceChangedSent
 				+ " ended=" + followUpEndedSent
 				+ " verified=" + followUpVerifiedSent
-				+ " reopened=" + followUpReopenedSent + "]"
+				+ " reopened=" + followUpReopenedSent
+				+ " pinnedIncrease=" + followUpPinnedIncreaseSent + "]"
 				+ " watchPinsMissed=" + watchPinsMissed
 				+ " heldFlushed[sent=" + heldAlertsFlushed + " dropped=" + heldAlertsDropped + "]"
 				+ " usedBatchesFolded=" + usedFold.batches()

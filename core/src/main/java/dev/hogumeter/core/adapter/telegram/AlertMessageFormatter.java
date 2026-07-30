@@ -46,9 +46,10 @@ public class AlertMessageFormatter {
 		List<String> lines = new ArrayList<>();
 		lines.add(followUpHeadline(m));
 		lines.add(subject(m));
-		// PRICE_CHANGED는 최신가를 병기한다(AL-04). 나머지는 마지막 관측가.
-		lines.add((m.followUpKind() == dev.hogumeter.core.domain.alert.FollowUpKind.PRICE_CHANGED
-				? "최신가 " : "") + won(deal.priceLast()) + "원");
+		// PRICE_CHANGED·PINNED_PRICE_INCREASED는 최신가를 병기한다(AL-04). 나머지는 마지막 관측가.
+		boolean showsLatestPrice = m.followUpKind() == dev.hogumeter.core.domain.alert.FollowUpKind.PRICE_CHANGED
+				|| m.followUpKind() == dev.hogumeter.core.domain.alert.FollowUpKind.PINNED_PRICE_INCREASED;
+		lines.add((showsLatestPrice ? "최신가 " : "") + won(deal.priceLast()) + "원");
 		lines.add(conditionLine(deal));
 		lines.add(deal.sourceUrl());
 		return join(lines);
@@ -71,6 +72,7 @@ public class AlertMessageFormatter {
 			case PRICE_CHANGED -> "🔁 가격 변동";
 			case ENDED -> "⛔ 종료됨";
 			case REOPENED -> "↩️ 다시 살아남"; // DN-C1 부활 — 잠정 종료였던 딜이 재관측됐다
+			case PINNED_PRICE_INCREASED -> "📈 지켜보던 딜 가격 인상"; // Q-83 ④ — 핀 자격, 1회만
 		};
 	}
 

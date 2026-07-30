@@ -23,7 +23,7 @@ class PipelineTickReportTest {
 
 	/** 매칭 카운터를 안 보는 스냅샷 산술 테스트용 — 수집 리포트·후속 알림·단계 실패 수는 0으로 둔다. */
 	private static PipelineTickReport between(PipelineSnapshot before, PipelineSnapshot after) {
-		return PipelineTickReport.between(before, after, IngestReport.empty(), 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		return PipelineTickReport.between(before, after, IngestReport.empty(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 				FoldReport.empty());
 	}
 
@@ -127,7 +127,7 @@ class PipelineTickReportTest {
 		IngestReport ingest = new IngestReport(3, 1, 2, 5, 4, 2, 1, 0, List.of(), List.of());
 
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				ingest, 0, 0, 0, 0, 0, 0, 0, 0, 0, FoldReport.empty());
+				ingest, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, FoldReport.empty());
 
 		assertThat(report.ingest()).isEqualTo(ingest);
 		assertThat(report.toString()).contains(
@@ -144,12 +144,12 @@ class PipelineTickReportTest {
 	@DisplayName("후속 알림 발송 수가 종류별로 요약에 실린다 (priceChanged·ended·verified)")
 	void reportsFollowUpSendCountsByKind() {
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				IngestReport.empty(), 0, 4, 2, 3, 0, 0, 0, 0, 0, FoldReport.empty());
+				IngestReport.empty(), 0, 4, 2, 3, 0, 0, 0, 0, 0, 0, FoldReport.empty());
 
 		assertThat(report.followUpPriceChangedSent()).isEqualTo(4);
 		assertThat(report.followUpEndedSent()).isEqualTo(2);
 		assertThat(report.followUpVerifiedSent()).isEqualTo(3);
-		assertThat(report.toString()).contains("followUpsSent[priceChanged=4 ended=2 verified=3 reopened=0]");
+		assertThat(report.toString()).contains("followUpsSent[priceChanged=4 ended=2 verified=3 reopened=0 pinnedIncrease=0]");
 	}
 
 	/** DN-C1: 부활 후속 발송 수는 VERIFIED와 부류가 다르므로 따로 센다 — 합치면 어느 쪽이 몰렸는지 안 보인다. */
@@ -157,10 +157,21 @@ class PipelineTickReportTest {
 	@DisplayName("부활 후속 발송 수가 요약에 실린다 (reopened)")
 	void reportsReopenedFollowUpSendCount() {
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				IngestReport.empty(), 0, 0, 0, 0, 5, 0, 0, 0, 0, FoldReport.empty());
+				IngestReport.empty(), 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, FoldReport.empty());
 
 		assertThat(report.followUpReopenedSent()).isEqualTo(5);
 		assertThat(report.toString()).contains("reopened=5");
+	}
+
+	/** Q-83 ④(2026-07-30): 핀 후속 인상 발송 수는 나머지 후속과 부류가 다르므로 따로 센다. */
+	@Test
+	@DisplayName("핀 후속 인상 발송 수가 요약에 실린다 (pinnedIncrease)")
+	void reportsPinnedPriceIncreaseFollowUpSendCount() {
+		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
+				IngestReport.empty(), 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, FoldReport.empty());
+
+		assertThat(report.followUpPinnedIncreaseSent()).isEqualTo(6);
+		assertThat(report.toString()).contains("pinnedIncrease=6");
 	}
 
 	/**
@@ -171,7 +182,7 @@ class PipelineTickReportTest {
 	@DisplayName("단계 실패 수가 요약에 실린다 (stepsFailed)")
 	void reportsStepFailureCount() {
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				IngestReport.empty(), 0, 0, 0, 0, 0, 0, 2, 0, 0, FoldReport.empty());
+				IngestReport.empty(), 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, FoldReport.empty());
 
 		assertThat(report.stepsFailed()).isEqualTo(2);
 		assertThat(report.toString()).contains("stepsFailed=2");
@@ -182,7 +193,7 @@ class PipelineTickReportTest {
 	@DisplayName("보류 플러시 결과가 요약에 실린다 (heldFlushed sent·dropped)")
 	void reportsHeldFlushCounts() {
 		PipelineTickReport report = PipelineTickReport.between(snapshot(0, 0, 0, 0, 0, 0), snapshot(0, 0, 0, 0, 0, 0),
-				IngestReport.empty(), 0, 0, 0, 0, 0, 0, 0, 3, 1, FoldReport.empty());
+				IngestReport.empty(), 0, 0, 0, 0, 0, 0, 0, 0, 3, 1, FoldReport.empty());
 
 		assertThat(report.heldAlertsFlushed()).isEqualTo(3);
 		assertThat(report.heldAlertsDropped()).isEqualTo(1);

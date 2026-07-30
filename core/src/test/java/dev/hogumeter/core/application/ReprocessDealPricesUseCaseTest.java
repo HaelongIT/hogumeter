@@ -13,6 +13,8 @@ import dev.hogumeter.core.adapter.persistence.RawDealPost;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
+import dev.hogumeter.core.adapter.persistence.WatchItemEntity;
+import dev.hogumeter.core.adapter.persistence.WatchItemRepository;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.Origin;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
@@ -52,6 +54,8 @@ class ReprocessDealPricesUseCaseTest {
 	DealEventSourceRepository sources;
 	@Autowired
 	RawDealPostRepository rawPosts;
+	@Autowired
+	WatchItemRepository watchItems;
 
 	private long variantId;
 	private int seq;
@@ -145,6 +149,40 @@ class ReprocessDealPricesUseCaseTest {
 		useCase.reprocessPriceChanges();
 
 		assertThat(reload(dealId).getLastSeen()).isEqualTo(T2);
+	}
+
+	/**
+	 * Q-83 ④(2026-07-30 확정) — ACTIVE 핀이 있는 딜의 가격이 오르면 미리보기가 그 딜을 낸다.
+	 * 부수효과가 없다(entity를 실제로 갱신하지 않는다) — 실제 반영은 {@link #reprocessPriceChanges()}의 몫.
+	 */
+	@Test
+	@DisplayName("핀된 딜의 인상은 previewPinnedPriceIncreases가 미리 골라낸다(부수효과 없음)")
+	void previewFindsPinnedDealsWhosePriceWillIncrease() {
+		long dealId = saveActiveDeal(900_000, T1);
+		watchItems.save(new WatchItemEntity(dealId, null, null)); // ACTIVE 핀
+		linkSource(dealId, 1_100_000L, "ACTIVE", T2); // 인상
+
+		assertThat(useCase.previewPinnedPriceIncreases()).containsExactly(dealId);
+		assertThat(reload(dealId).getPriceLast()).as("미리보기는 아직 반영하지 않는다").isEqualTo(900_000);
+	}
+
+	@Test
+	@DisplayName("핀이 없는 딜은 인상해도 미리보기에 안 잡힌다")
+	void previewIgnoresUnpinnedDeals() {
+		long dealId = saveActiveDeal(900_000, T1);
+		linkSource(dealId, 1_100_000L, "ACTIVE", T2); // 인상이지만 핀 없음
+
+		assertThat(useCase.previewPinnedPriceIncreases()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("핀된 딜이라도 가격이 내리면 미리보기에 안 잡힌다")
+	void previewIgnoresPinnedDealsWhosePriceDrops() {
+		long dealId = saveActiveDeal(999_000, T1);
+		watchItems.save(new WatchItemEntity(dealId, null, null));
+		linkSource(dealId, 900_000L, "ACTIVE", T2); // 인하
+
+		assertThat(useCase.previewPinnedPriceIncreases()).isEmpty();
 	}
 
 	@Test

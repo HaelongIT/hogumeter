@@ -114,6 +114,18 @@ class AlertMessageFormatterTest {
 		assertThat(out).contains("최신가 880,000원");
 	}
 
+	/** Q-83 ④(2026-07-30 확정) — 핀 후속 인상 1회. PRICE_CHANGED와 같은 형식(최신가 병기), 헤드라인만 다르다. */
+	@Test
+	void pinnedPriceIncreaseFollowUpAnnotatesLatestPrice() {
+		DealEvent deal = aDealEvent().withPriceFirst(900_000).withPrices(900_000, 950_000, 950_000).build();
+		AlertMessage m = new AlertMessage(deal, null, null, FollowUpKind.PINNED_PRICE_INCREASED, "아이폰 17", "256GB", null);
+
+		String out = formatter.format(m);
+
+		assertThat(out).contains("📈 지켜보던 딜 가격 인상");
+		assertThat(out).contains("최신가 950,000원");
+	}
+
 	/** DN-C1 부활: 잠정 종료됐던 딜이 다시 살아났다 — "새 첫 알림이 아니라 후속"이므로 후속 포맷을 탄다. */
 	@Test
 	void reopenedFollowUpShowsRevivalHeadlineAndLatestPrice() {

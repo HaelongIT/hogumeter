@@ -197,7 +197,7 @@ class PipelineSchedulerTest {
 	@Test
 	@DisplayName("ENDED 감지로 MISSED 전이한 핀 수가 틱 리포트에 흐른다 (WATCH)")
 	void markMissedPinsCountFlowsIntoReport() {
-		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
+		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, () -> List.of(), status, followUp,
 				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, () -> 4, healthy -> { }, () -> EMPTY,
 				reported::set).tick();
 
@@ -219,7 +219,7 @@ class PipelineSchedulerTest {
 	@DisplayName("방해금지 플러시 결과가 틱 리포트에 흐른다 (Q-20 ②)")
 	void heldAlertFlushCountsFlowIntoReport() {
 		// 플러시가 (발송 2, 드롭 1)을 내면 리포트에 그대로 실려야 한다 — 배선이 끊기면 0이라 이 테스트가 잡는다.
-		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
+		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, () -> List.of(), status, followUp,
 				() -> new FlushHeldAlertsUseCase.FlushReport(2, 1), FoldReport::empty, () -> 0, healthy -> { },
 				() -> EMPTY, reported::set).tick();
 
@@ -234,7 +234,7 @@ class PipelineSchedulerTest {
 		// 그 확인 없이 유스케이스 단위 테스트만 두면 "GREEN인데 죽어 있다"를 한 층 위에 다시 만든다.
 		// 알림 수까지 함께 흐르는지 본다: 접기만 흐르고 알림이 0에 머물면 아무도 눈치채지 못한다.
 		FoldReport fold = new FoldReport(3, 5, 1, 2, 1, 4, 2, 1);
-		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
+		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, () -> List.of(), status, followUp,
 				FlushHeldAlertsUseCase.FlushReport::empty, () -> fold, () -> 0, healthy -> { }, () -> EMPTY,
 				reported::set).tick();
 
@@ -264,7 +264,7 @@ class PipelineSchedulerTest {
 			}
 		};
 
-		new PipelineScheduler(expire, issue, ingest, conditions, prices, status, followUp,
+		new PipelineScheduler(expire, issue, ingest, conditions, prices, () -> List.of(), status, followUp,
 				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, () -> 0, healthy -> { }, probe,
 				reported::set).tick();
 
@@ -289,7 +289,7 @@ class PipelineSchedulerTest {
 
 	private PipelineScheduler schedulerWithHealth(Supplier<IngestReport> ingest, Supplier<PipelineSnapshot> probe,
 			List<Boolean> health) {
-		return new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, status, followUp,
+		return new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, () -> List.of(), status, followUp,
 				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, () -> 0, health::add, probe,
 				reported::set);
 	}
@@ -442,5 +442,27 @@ class PipelineSchedulerTest {
 
 		assertThat(received.get(FollowUpKind.PRICE_CHANGED)).containsExactly(11L, 22L);
 		assertThat(received.get(FollowUpKind.ENDED)).containsExactly(33L);
+	}
+
+	/**
+	 * Q-83 ④(2026-07-30 확정) — 핀 후속 인상의 미리보기 결과가 PINNED_PRICE_INCREASED로 후속 알림에
+	 * 흘러가고, 발송 수가 틱 리포트에 실린다. 배선을 지우면(기본 seam은 항상 빈 목록) 이 테스트가 잡는다.
+	 */
+	@Test
+	@DisplayName("핀 후속 인상 미리보기 결과가 PINNED_PRICE_INCREASED로 흘러가고 리포트에 실린다")
+	void routesPinnedPriceIncreasesToFollowUpAndReport() {
+		Map<FollowUpKind, List<Long>> received = new EnumMap<>(FollowUpKind.class);
+		Supplier<List<Long>> pinnedIncreasesReturning = () -> List.of(77L);
+		BiFunction<List<Long>, FollowUpKind, Integer> capture = (ids, kind) -> {
+			received.put(kind, ids);
+			return ids.size();
+		};
+
+		new PipelineScheduler(expire, () -> 0, ingest, conditions, prices, pinnedIncreasesReturning, status, capture,
+				FlushHeldAlertsUseCase.FlushReport::empty, FoldReport::empty, () -> 0, healthy -> { }, () -> EMPTY,
+				reported::set).tick();
+
+		assertThat(received.get(FollowUpKind.PINNED_PRICE_INCREASED)).containsExactly(77L);
+		assertThat(reported.get().followUpPinnedIncreaseSent()).isEqualTo(1);
 	}
 }
