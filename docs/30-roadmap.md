@@ -79,7 +79,7 @@
 
 ## M6 — 보관함·우선순위 (2차, 조건부) — **2026-07-25 착수**(사용자 지시, PRI/SIG/PUR/DIGEST 안착 후)
 - **PRI**(`docs/19`): ✅ **완료**(백엔드 2026-07-25, web 2026-07-27 사용자 지시) — `PriorityQueue`(순수 대기 판정)·V18(`priority_rank`·`manually_completed`)·3 유스케이스·REST(`PriorityController`) + `web/src/priority/PriorityPage.tsx`(목록 정렬 1곳 + 순번·수동완료 손잡이). 배지 세분화(Q-82)는 여전히 열림.
-- **WATCH**(`docs/17`): 딜 보관함 — 유보 해제(DN-W). ✅ **완료**(핵심 배선 2026-07-25, 회고 조회·web 2026-07-27 사용자 지시) — DealEvent 재개 전이(DN-C1) + WatchItem 개체·핀 자격·유일성·결말 3종·REST(V19) + `GetWatchItemsUseCase.resolved()` + `web/src/watch/WatchPage.tsx`(활성/회고 탭). 남은 것은 `docs/91` Q-83(anchorPostId 승계·PUR 프리필·사후학습 제외·인상 특례·판단 화면 핀 손잡이).
+- **WATCH**(`docs/17`): 딜 보관함 — 유보 해제(DN-W). ✅ **완료**(핵심 배선 2026-07-25, 회고 조회·web 2026-07-27 사용자 지시, 판단 화면 핀 손잡이 2026-07-27, PUR 프리필 2026-07-30) — DealEvent 재개 전이(DN-C1) + WatchItem 개체·핀 자격·유일성·결말 3종·REST(V19) + `GetWatchItemsUseCase.resolved()` + `web/src/watch/WatchPage.tsx`(활성/회고 탭) + `DecisionPage` 📌 핀 버튼 + [샀어요]→판단 화면 이동·구매 기록 폼 프리필. 남은 것은 `docs/91` Q-83(①③④⑤ — anchorPostId 승계·사후학습 제외·인상 특례·확인필요 알림, 전부 다른 기능이 WatchItem을 참조할 때가 트리거).
 
 ## 상시
 - 각 마일스톤 종료 시: lessons 정리 → CLAUDE.md 규칙 승격 검토, NFR 체크리스트 통과 확인.
