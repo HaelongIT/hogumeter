@@ -1113,3 +1113,23 @@
   필드 자체가 아니라 **같은 소거 타입을 공유하는 다른 필드와의 충돌**을 의심한다.
 - **관련**: `AlertPolicyEntity.demandAxisFilter`·`toColumn()`, `ReviewQueueItemEntity.payload`(선례),
   `docs/91` Q-48 ②.
+
+## 2026-07-31 — 필터 배선은 "새 소비처가 하나 더 생겼는가"를 매번 물어야 한다 (CAD·PUR-05가 놓쳐 있었다)
+
+- **맥락**: "더 구현할 게 없는지 찾아봐"라는 요청으로 `docs/91` 미해소 항목을 재검증하던 중, 항목 밖에서
+  진짜 결함을 하나 찾았다. Q-28(제외 키워드)·Q-66(수요축 분리)이 완성되며 `VariantExcludeKeywords.filter`·
+  `VariantDemandScope.scope`가 생겼고, `GetBenchmarkUseCase`·`GetSignalUseCase`·`EvaluateAlertOnDealUseCase`·
+  `RecordPurchaseUseCase`가 순서대로 그 배선을 얻었다. 그런데 그 시점에 **이미 있던** `GetCadenceUseCase`
+  (CAD)와 `GetPurchaseObservationsUseCase`(PUR-05)는 배선을 못 받았다 — 새 기능(Q-28·Q-66)을 만들 때
+  "이 필터를 써야 할 기존 소비처가 있는가"를 소급 점검하지 않았기 때문이다.
+- **왜 조용했나**: 컴파일도 되고 테스트도 GREEN이었다 — 두 유스케이스 다 필터 자체를 몰라서 실패할 이유가
+  없었다. 실측(`DecisionPage.tsx`)으로만 드러났다: 판단 화면이 기준가·신호등은 고른 수요축 값으로 부르면서
+  바로 아래 딜 주기 줄만 `demandAxisValue` 없이 불렀다 — **같은 화면, 다른 표본.**
+- **교훈(규칙화)**: **"제외 키워드"·"수요축 스코프" 같이 여러 화면이 공유해야 하는 표본 필터를 도입하면,
+  그 순간 존재하는 모든 `DealEvent` 소비 유스케이스 목록을 다시 뽑아(`grep "dealEvents.findByVariantId"`
+  류) 새 필터를 받았는지 하나씩 확인한다.** 새로 만드는 유스케이스만 배선하고 끝내면, 그 필터보다 먼저
+  태어난 소비처는 영원히 조용히 뒤처진다 — 컴파일도 테스트도 그 뒤처짐을 못 잡는다(둘 다 필터의 존재
+  자체를 모르므로). 확인 방법은 코드가 아니라 **화면**이었다 — 같은 판단 화면에 표본이 다른 두 줄이
+  나란히 있는지가 가장 빠른 신호다.
+- **관련**: `docs/91` Q-29(인접 발견 기록), `GetCadenceUseCase`·`GetPurchaseObservationsUseCase`,
+  `GetCadenceUseCaseTest`·`GetPurchaseObservationsUseCaseTest`(뮤테이션 확인).

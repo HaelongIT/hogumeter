@@ -108,8 +108,11 @@ export const api = {
   getSignal: (variantId: number, demandAxisValue?: string | null) =>
     request<SignalView>(`/api/v1/variants/${variantId}/signal?${demandAxisParam(demandAxisValue).slice(1)}`),
 
-  getCadence: (variantId: number, periodMonths = 6) =>
-    request<CadenceView>(`/api/v1/variants/${variantId}/cadence?periodMonths=${periodMonths}`),
+  /** 딜 주기도 기준가·신호등과 **같은 표본**을 봐야 한다 — 안 가르면 판단 화면 바로 아래 줄만 다른 색이 섞인다. */
+  getCadence: (variantId: number, periodMonths = 6, demandAxisValue?: string | null) =>
+    request<CadenceView>(
+      `/api/v1/variants/${variantId}/cadence?periodMonths=${periodMonths}${demandAxisParam(demandAxisValue)}`,
+    ),
 
   /** CMP-01 재료 — 확장이 아직 안 보냈으면 전 필드 null(200). variant 존재 여부와 무관하게 그 모양이다. */
   getCoupangLatestPrice: (variantId: number) =>

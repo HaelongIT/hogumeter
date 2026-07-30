@@ -213,6 +213,20 @@ _(이하 2026-07-08 2차 기획 통합에서 등장한 위임 항목. 출처: `w
 - **맥락**: docs/03 3-1 세 집합 자격 술어 중 DealEvent 필드로 도출 가능한 부분(classified·outlier 3상태·status)만 `DealSets`에 구현. 나머지 components는 상태/데이터 부재로 미포함.
 - **잠정값**: `DealSets.pricingSet/occurrenceSet/signalSet`는 (분류·이상치·ENDED)만 필터. **keyword-miss(Q-28)·선택 축값(C-6, 미선택=범위외)·배치유보(PENDING_BATCH, C-4)·signalSet 신선도(3-2 관측시계)**는 미적용 — 각기 딜 제목/변형축값/배치상태/시간좌표가 필요. signalSet 신선도는 SIG(증분4)가 시간좌표로 추가 필터.
 - **재개 트리거**: 각 component의 상태가 생기면 순차 편입 — 신선도=증분2 시간좌표 후 SIG, 선택축값=C-6(수요축 모델), 배치유보=백필 배치(C-4), keyword=Q-28. `DealSets` 술어에 `&&` 추가.
+- **✅ 2026-07-31 — CAD·PUR-05는 이 술어와 별개로 자기 표본에서 keyword-miss·선택축값을 아예 안 걸렀다(발견·해소)**:
+  이 항목이 말하는 "`DealSets` 술어 미완"과는 다른 층의 결함이었다 — Q-28·Q-66이 실제로 완성한 필터링
+  (`VariantExcludeKeywords.filter`·`VariantDemandScope.scope`)을 `GetBenchmarkUseCase`·`GetSignalUseCase`는
+  호출하는데, `GetCadenceUseCase`(CAD)와 `GetPurchaseObservationsUseCase`(PUR-05)는 저장된 딜을 **필터 없이
+  그대로** 계산기에 넘기고 있었다("네 표면이 같은 표본을 봐야" 원칙의 위반, 판단 화면 실측: `DecisionPage`가
+  기준가·신호등은 고른 색으로 부르면서 바로 아래 딜 주기 줄만 `demandAxisValue` 없이 불렀다). 리퍼 딜이 CAD의
+  "발생 빈도"에 섞이거나, SPLIT 제품에서 다른 색 딜이 PUR-05의 "활성 최저가·상회분"에 섞일 수 있었다.
+  **해소**: `GetCadenceUseCase`에 `VariantExcludeKeywords`·`VariantDemandScope` 배선(페이지 단위 선택값,
+  `GetBenchmarkUseCase`와 같은 패턴) + `CadenceController`·web `client.ts`·`DecisionPage`에 `demandAxisValue`
+  관통. `GetPurchaseObservationsUseCase`는 제외 키워드는 variant 전체에 한 번, 수요축은 **구매마다 그 구매
+  자신의 `demandAxisValue`**로 스코프(PUR-01 "독립 관찰" — 구매별로 색이 다를 수 있어 페이지 선택값이 아니라
+  저장된 값을 쓴다). 테스트: `GetCadenceUseCaseTest`(제외 키워드 2건·SPLIT 스코프 2건, 뮤테이션으로 배선
+  확인)·`GetPurchaseObservationsUseCaseTest`(제외 키워드·SPLIT 스코프 각 1건, 뮤테이션 확인)·
+  `DecisionPage.test.tsx`(딜 주기도 같은 값으로 부름).
 
 ## [열림] Q-30. PUR 삭제 3행 매트릭스·백필 유예·수정 규칙 세부 미명시
 - **맥락**: docs/15 PUR-01은 "삭제=구매 전 복원(별도 경로, 아카이브 불발동, 상태별 3행 매트릭스)"라 하나 상태별(OBSERVING/REPORT_PENDING/CLOSED) 삭제 허용·부수효과 세부는 미기재. PUR-02 스냅샷 basis 동결의 백필 유예, 수정 규칙(필드별)도 use-case 레벨.

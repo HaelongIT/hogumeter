@@ -128,7 +128,7 @@ export function DecisionPage({
     Promise.all([
       api.getSignal(variantId, demandAxisValue), // 기간 무관 — core가 6개월로 고정한다
       api.getBenchmark(variantId, periodMonths, demandAxisValue, includeOutliers),
-      api.getCadence(variantId, periodMonths),
+      api.getCadence(variantId, periodMonths, demandAxisValue),
       api.getCoupangLatestPrice(variantId), // CMP-01 재료 — 확장 미연동이면 전 필드 null(실패 아님)
     ])
       .then(

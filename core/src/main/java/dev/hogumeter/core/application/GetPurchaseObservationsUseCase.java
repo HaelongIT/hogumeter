@@ -18,7 +18,10 @@ import org.springframework.stereotype.Service;
 
 /**
  * PUR-05 관찰 문맥 조회(배선). variant의 저장된 Purchase마다 현재 딜로 관찰 문맥을 산출한다.
- * 딜은 variant 전체(수요축 필터는 C-6 후속 seam) — SIG·CAD와 동일 범위.
+ * 제외 키워드(Q-28)는 variant 전체에 한 번 적용하고, 수요축(Q-66 ①)은 <b>구매마다</b> 그 구매 자신의
+ * {@code demandAxisValue}로 좁힌다 — SPLIT 제품은 구매별로 색이 다를 수 있어(PUR-01 "독립 관찰") 화면
+ * 전역 선택값이 아니라 그 구매가 실제로 기록된 색을 써야 한다. 기준가·신호등과 다른 표본을 보면 "상회분"이
+ * 거짓으로 커지거나 작아진다.
  */
 @Service
 public class GetPurchaseObservationsUseCase {
@@ -28,16 +31,21 @@ public class GetPurchaseObservationsUseCase {
 	private final ReportCardRepository reportCards;
 	private final DealEventRepository dealEvents;
 	private final DealEventMapper mapper;
+	private final VariantDemandScope demandScope;
+	private final VariantExcludeKeywords excludeKeywords;
 	private final Clock clock;
 	private final ObservationContextCalculator calculator = new ObservationContextCalculator();
 
 	public GetPurchaseObservationsUseCase(VariantRepository variants, PurchaseRepository purchases,
-			ReportCardRepository reportCards, DealEventRepository dealEvents, DealEventMapper mapper, Clock clock) {
+			ReportCardRepository reportCards, DealEventRepository dealEvents, DealEventMapper mapper,
+			VariantDemandScope demandScope, VariantExcludeKeywords excludeKeywords, Clock clock) {
 		this.variants = variants;
 		this.purchases = purchases;
 		this.reportCards = reportCards;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
+		this.demandScope = demandScope;
+		this.excludeKeywords = excludeKeywords;
 		this.clock = clock;
 	}
 
@@ -45,17 +53,20 @@ public class GetPurchaseObservationsUseCase {
 		if (!variants.existsById(variantId)) {
 			throw new VariantNotFoundException(variantId);
 		}
-		List<DealEvent> deals = dealEvents.findByVariantId(variantId).stream().map(mapper::toDomain).toList();
+		List<DealEvent> deals = excludeKeywords.filter(variantId, dealEvents.findByVariantId(variantId)).stream()
+				.map(mapper::toDomain)
+				.toList();
 		Instant now = clock.instant();
 		return purchases.findByVariantId(variantId).stream()
 				.map(entity -> {
 					Purchase purchase = entity.toDomain();
+					List<DealEvent> scoped = demandScope.scope(variantId, deals, purchase.demandAxisValue());
 					// 발급된 성적표(CLOSED만). 없으면 null — "아직 발급 안 됨"을 그대로 노출한다(정직성).
 					ReportCard reportCard = reportCards.findByPurchaseId(entity.getId())
 							.map(ReportCardEntity::toDomain)
 							.orElse(null);
 					return new PurchaseObservation(entity.getId(), purchase.state(), purchase.paidPrice(),
-							purchase.purchasedAt(), calculator.compute(purchase, deals, now), reportCard);
+							purchase.purchasedAt(), calculator.compute(purchase, scoped, now), reportCard);
 				})
 				.toList();
 	}

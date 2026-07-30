@@ -19,7 +19,8 @@ public class CadenceController {
 
 	@GetMapping("/api/v1/variants/{variantId}/cadence")
 	public CadenceView cadence(@PathVariable long variantId,
-			@RequestParam(defaultValue = "6") int periodMonths) {
-		return getCadence.getCadence(variantId, periodMonths);
+			@RequestParam(defaultValue = "6") int periodMonths,
+			@RequestParam(required = false) String demandAxisValue) {
+		return getCadence.getCadence(variantId, periodMonths, demandAxisValue);
 	}
 }

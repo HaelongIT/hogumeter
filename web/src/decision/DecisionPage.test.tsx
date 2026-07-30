@@ -289,7 +289,7 @@ describe('DecisionPage — 수요축 분리 제품', () => {
     await waitFor(() => expect(api.getBenchmark).not.toHaveBeenCalled())
   })
 
-  it('값을 고르면 신호등·기준가를 **같은 값**으로 부른다', async () => {
+  it('값을 고르면 신호등·기준가·딜 주기를 **같은 값**으로 부른다', async () => {
     render(<DecisionPage />)
     await screen.findByRole('option', { name: '갤럭시 25 — 256GB' })
     await userEvent.selectOptions(screen.getByLabelText('variant'), '21')
@@ -297,6 +297,7 @@ describe('DecisionPage — 수요축 분리 제품', () => {
 
     await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(21, 6, '블랙', false))
     expect(api.getSignal).toHaveBeenCalledWith(21, '블랙')
+    expect(api.getCadence).toHaveBeenCalledWith(21, 6, '블랙')
   })
 })
 
@@ -318,7 +319,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     await pick()
 
     await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 6, null, false))
-    expect(api.getCadence).toHaveBeenCalledWith(11, 6)
+    expect(api.getCadence).toHaveBeenCalledWith(11, 6, null)
   })
 
   it('기간을 바꾸면 그 기간으로 다시 부른다', async () => {
@@ -328,7 +329,7 @@ describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
     await userEvent.selectOptions(screen.getByLabelText('기간'), '12')
 
     await waitFor(() => expect(api.getBenchmark).toHaveBeenCalledWith(11, 12, null, false))
-    expect(api.getCadence).toHaveBeenCalledWith(11, 12)
+    expect(api.getCadence).toHaveBeenCalledWith(11, 12, null)
   })
 
   it('신호등이 기간을 따르지 않는다는 사실을 숨기지 않는다', async () => {

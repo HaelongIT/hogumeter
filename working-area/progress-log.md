@@ -1,3 +1,27 @@
+## 2026-07-31 — CAD·PUR-05 표본 배선 누락 발견·해소 (Q-29 인접, 사용자 지시로 이 증분에서 정지)
+
+사용자 지시("더 구현할 것 없는지 찾아봐")로 `docs/91` 미해소 항목을 순서대로 재검증(Q-31·Q-63~65·Q-69~80
+등 다수 확인 — 대부분 실사용 데이터·정책 결정 대기로 진짜 막혀 있었다, 거짓 봉인 아님). 그 과정에서
+Q-29("세 집합 predicate 미완")를 보다가 항목 밖의 진짜 결함을 하나 찾았다.
+
+- **발견**: Q-28(제외 키워드)·Q-66(수요축 분리)이 완성되며 `GetBenchmarkUseCase`·`GetSignalUseCase`·
+  `EvaluateAlertOnDealUseCase`·`RecordPurchaseUseCase`는 `VariantExcludeKeywords`·`VariantDemandScope`
+  배선을 받았는데, 그보다 먼저 있던 `GetCadenceUseCase`(CAD 딜 주기)와 `GetPurchaseObservationsUseCase`
+  (PUR-05 관찰 문맥)는 못 받았다 — 저장된 딜을 필터 없이 그대로 계산기에 넘기고 있었다. `DecisionPage.tsx`
+  실측: 판단 화면이 기준가·신호등은 고른 수요축 값으로 부르면서 바로 아래 딜 주기 줄만 값 없이 불렀다
+  (같은 화면, 다른 표본).
+- **해소**: `GetCadenceUseCase`에 두 배선 추가(페이지 단위 `demandAxisValue`, `GetBenchmarkUseCase`와 같은
+  패턴) + `CadenceController`·web `client.ts`·`DecisionPage`에 관통. `GetPurchaseObservationsUseCase`는
+  제외 키워드는 variant 전체 1회, 수요축은 **구매마다 그 구매 자신의 `demandAxisValue`**로 스코프(PUR-01
+  "독립 관찰" — 페이지 선택값이 아니라 저장된 값). 신규 테스트 6건(`GetCadenceUseCaseTest` 4·
+  `GetPurchaseObservationsUseCaseTest` 2) + `DecisionPage.test.tsx` 갱신, 전부 뮤테이션 확인(배선 제거 →
+  RED 확인 → 복원). core 전체·web 전체(275건) GREEN. 게이트 3종(domain-consumers·table-wiring·
+  board-references) 통과.
+- **기록**: `docs/91` Q-29에 발견·해소 추가, `docs/99-lessons.md`(새 필터 도입 시 기존 소비처 소급 점검),
+  `CLAUDE.md` 축적된 규칙에 승격(같은 교훈이 반복 적용 가능한 규칙이라 판단).
+- **TURN-END: ① 정지조건 — 사용자가 "적당한 지점에서 커밋하고 끝내라"고 지시**. 다음 세션에서 이어가려면
+  `docs/91` 남은 항목 중 아직 안 읽은 것(Q-4·Q-6·Q-16·Q-17·Q-18·Q-19·Q-37·Q-42~45·Q-58·Q-61 등)부터.
+
 ## 2026-07-30 (3) — [REG-03] 수요축 필터 매핑 완료 (Q-48 ②, 무중단)
 
 Q-83 완료 후 다음 증분을 스스로 찾아 진행. `docs/91` 전수 재확인 중 Q-48("알림 정책 — 엔티티가
