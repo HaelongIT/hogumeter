@@ -8,8 +8,11 @@ import dev.hogumeter.core.adapter.persistence.DealEventEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.adapter.persistence.ProductEntity;
 import dev.hogumeter.core.adapter.persistence.ProductRepository;
+import dev.hogumeter.core.adapter.persistence.RawDealPost;
+import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
 import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
+import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.deal.Origin;
@@ -44,6 +47,8 @@ class ResolveReviewItemUseCaseTest {
 	ProductRepository products;
 	@Autowired
 	VariantRepository variants;
+	@Autowired
+	RawDealPostRepository rawPosts;
 	@Autowired
 	JdbcTemplate jdbc;
 
@@ -110,12 +115,41 @@ class ResolveReviewItemUseCaseTest {
 	}
 
 	@Test
-	void unclassifiedPromoteIsRefusedAndLeavesItPending() {
+	void unclassifiedPromoteIsRefusedAndLeavesItPendingWithoutVariantId() {
 		long itemId = enqueue("UNCLASSIFIED", "{\"title\":\"정체불명\",\"productCandidates\":[]}");
 
 		assertThatThrownBy(() -> resolve.promote(itemId))
 				.isInstanceOf(UnclassifiedPromoteNotSupportedException.class);
 		assertThat(status(itemId)).isEqualTo("PENDING"); // 막혔으면 큐에 그대로 남는다
+	}
+
+	/** Q-15 ①(2026-07-31) — variantId가 주어지면 IngestDealsUseCase.confirmDeal과 같은 규칙으로 딜이 생긴다. */
+	@Test
+	void unclassifiedPromoteWithVariantIdCreatesADealAndTakesItOffTheQueue() {
+		RawDealPost post = rawPosts.save(new RawDealPost("ppomppu", "resolve-promote-1",
+				"https://ppomppu.test/resolve-promote-1", "정체불명 아이폰 990000원", 990_000L, T, T, "ACTIVE"));
+		long itemId = enqueue("UNCLASSIFIED",
+				"{\"title\":\"정체불명 아이폰 990000원\",\"rawDealPostId\":" + post.getId() + ",\"productCandidates\":[]}");
+
+		resolve.promote(itemId, variantId);
+
+		assertThat(status(itemId)).isEqualTo("CONFIRMED");
+		assertThat(dealEvents.findByVariantId(variantId))
+				.singleElement()
+				.satisfies(deal -> assertThat(deal.getPriceFirst()).isEqualTo(990_000L));
+	}
+
+	@Test
+	void unclassifiedPromoteWithUnknownVariantIdThrowsAndLeavesItPending() {
+		RawDealPost post = rawPosts.save(new RawDealPost("ppomppu", "resolve-promote-2",
+				"https://ppomppu.test/resolve-promote-2", "정체불명 990000원", 990_000L, T, T, "ACTIVE"));
+		long itemId = enqueue("UNCLASSIFIED",
+				"{\"title\":\"정체불명 990000원\",\"rawDealPostId\":" + post.getId() + ",\"productCandidates\":[]}");
+
+		assertThatThrownBy(() -> resolve.promote(itemId, 999_999L)).isInstanceOf(VariantNotFoundException.class);
+
+		assertThat(status(itemId)).isEqualTo("PENDING");
+		assertThat(dealEvents.findByVariantId(variantId)).isEmpty();
 	}
 
 	@Test

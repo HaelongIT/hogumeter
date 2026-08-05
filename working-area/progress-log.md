@@ -1,3 +1,31 @@
+## 2026-08-05 — Q-15 ① UNCLASSIFIED 승격 배선 + Q-46 거짓 봉인 해제 (무중단 재개)
+
+사용자 지시("이어서는 무중단으로 쭉 진행하자")로 `docs/91` 재검증부터 재개. Q-32(capturedAt≤발급)는
+아직 없는 백필 배치(C-4)와 묶여 있어 진짜 막힘으로 재확인. 대신 두 건 처리:
+
+- **🔍 거짓 봉인 발견·해제: Q-46 "알림 본문의 조건 표시"**. `AlertMessageFormatter.conditionLine`이
+  이미 2026-07-21 이전(`3ed475f`, Q-20 텔레그램 작업의 일부)에 구현·테스트돼 있었는데, Q-46 board 항목만
+  "Q-20과 함께 넣는다"고 몇 주째 방치돼 있었다. 코드 변경 없이 board만 정정(완전 해소로 전환).
+- **✅ Q-15 ① UNCLASSIFIED 승격 구현**: 매칭 실패 딜(리뷰 큐)을 사람이 `variantId`를 골라 승격할 수 있게
+  됐다 — `IngestDealsUseCase.confirmDeal`(자동 매칭 CONFIRMED가 쓰던 병합/신규 저장 규칙 그 자체)을
+  `Tally` 의존 없이 `ConfirmResult`를 반환하도록 리팩터해 재사용(정본 하나, 사본 없음). 수요축 값은
+  null(지어내지 않음) — SPLIT 제품이면 기존 DEMAND_UNKNOWN 큐 경로로 자연 합류. `variantId` 없으면
+  여전히 400(REVIEW_PROMOTE_UNSUPPORTED). web `ReviewQueuePage`에 제품·variant 선택 목록(기존
+  `api.listProducts()` 재사용) + 고르기 전엔 승격 버튼 미표시(과대약속 금지).
+- **테스트**: core 신규 5건(`ResolveReviewItemUseCaseTest` +2, `ReviewQueueEndpointTest` +1, 기존 파일
+  구조 변경으로 `IngestDealsUseCaseTest`·`ReviewCallbackRouterTest`·`TelegramInboundPollerTest` 시그니처
+  정합) + web 신규 1건(`ReviewQueuePage.test.tsx`). 뮤테이션: `confirmDeal` 호출 제거 → 신규 core 테스트
+  2건만 RED 확인 후 복원. core 전체 스위트(수백 건) GREEN, web 24개 파일 276건 GREEN, 빌드 통과, 게이트
+  4종(board-references·table-wiring·domain-consumers·dead-columns) 통과.
+- **기록**: `docs/91` Q-15·Q-46 갱신, `.claude/rules/web-react.md` 낡은 "미상은 기각만" 문구 정정,
+  `docs/99-lessons.md`에 "사람 확정은 자동 확정과 같은 규칙을 재사용" 교훈 추가.
+- **범위 밖으로 남긴 것**: `Matcher.confirm`(BM-03 AC-4, 사람 확정 시 별�칭 사전 학습)은 여전히 호출자
+  0이다 — 이 승격 순간이 바로 그 "사람 확정" 지점이라 다음 증분 후보로 적어 둔다(별도 커밋 스코프로
+  분리, alias_dictionary 유니크 제약(product_id, alias) 때문에 중복 학습 방지 로직이 별도로 필요해
+  이번 판에 안 얹었다).
+
+TURN-END(예정 — 다음 증분 착수 전 마커): 아래 계속.
+
 ## 2026-07-31 — CAD·PUR-05 표본 배선 누락 발견·해소 (Q-29 인접, 사용자 지시로 이 증분에서 정지)
 
 사용자 지시("더 구현할 것 없는지 찾아봐")로 `docs/91` 미해소 항목을 순서대로 재검증(Q-31·Q-63~65·Q-69~80

@@ -142,8 +142,15 @@ export const api = {
   // 미상 큐 — 조회 + 승격·기각(Q-15). 처리하면 그 항목은 PENDING에서 내려가 목록에서 사라진다.
   listReviewQueue: () => request<ReviewQueueItem[]>('/api/v1/review-queue'),
 
-  /** 승격 — 이상치 오탐을 정상으로(표본 복귀). 미상 항목은 core가 400으로 막는다(variant 지정 필요). */
-  promoteReviewItem: (id: number) => command(`/api/v1/review-queue/${id}/promote`, { method: 'POST' }),
+  /**
+   * 승격 — 이상치 오탐을 정상으로(표본 복귀). 미상 항목은 `variantId` 없이는 core가 400으로 막는다
+   * (Q-15 ①, 2026-07-31) — `variantId`를 주면 그 variant로 딜을 만들어 승격한다.
+   */
+  promoteReviewItem: (id: number, variantId?: number) =>
+    command(
+      `/api/v1/review-queue/${id}/promote${variantId !== undefined ? `?variantId=${variantId}` : ''}`,
+      { method: 'POST' },
+    ),
 
   /** 기각 — 사기·낚시로 영구 제외(재수집돼도 표본 복귀 없음). 미상 항목은 큐에서 내리기만 한다. */
   rejectReviewItem: (id: number) => command(`/api/v1/review-queue/${id}/reject`, { method: 'POST' }),

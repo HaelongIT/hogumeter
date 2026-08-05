@@ -1,5 +1,6 @@
 package dev.hogumeter.core.adapter.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -83,6 +84,39 @@ class ReviewQueueEndpointTest {
 		mockMvc.perform(post("/api/v1/review-queue/%d/promote".formatted(itemId)))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("REVIEW_PROMOTE_UNSUPPORTED"));
+	}
+
+	/** Q-15 ①(2026-07-31) — variantId 쿼리 파라미터가 있으면 미상 승격이 실제로 딜을 만든다. */
+	@Test
+	void promotingAnUnclassifiedItemWithVariantIdCreatesADealAndTakesItOffTheQueue() throws Exception {
+		Long productId = jdbc.queryForObject(
+				"insert into product (name, category, demand_axis_mode) values ('아이폰 17', '스마트폰', 'GROUPED') "
+						+ "returning id",
+				Long.class);
+		Long variantId = jdbc.queryForObject(
+				"insert into variant (product_id, label, price_axis_values) values (?, '256GB', '{}'::jsonb) "
+						+ "returning id",
+				Long.class, productId);
+		Long postId = jdbc.queryForObject("""
+				insert into raw_deal_post (site, post_id, url, title, headline_price, captured_at, status)
+				values ('ppomppu', 'rq-endpoint-promote', 'https://example.invalid/e2', '정체불명 990000원',
+				        990000, now(), 'ACTIVE')
+				returning id
+				""", Long.class);
+		Long itemId = jdbc.queryForObject("""
+				insert into review_queue_item (type, payload, status)
+				values ('UNCLASSIFIED', ?::jsonb, 'PENDING') returning id
+				""", Long.class, """
+				{"title":"정체불명 990000원","rawDealPostId":%d,"productCandidates":[]}""".formatted(postId));
+
+		mockMvc.perform(post("/api/v1/review-queue/%d/promote".formatted(itemId))
+					.param("variantId", variantId.toString()))
+			.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/v1/review-queue"))
+			.andExpect(jsonPath("$[?(@.id == %d)]".formatted(itemId)).isEmpty()); // 큐에서 내려갔다
+		assertThat(jdbc.queryForObject("select count(*) from deal_event where variant_id = ?", Integer.class,
+				variantId)).isEqualTo(1);
 	}
 
 	@Test

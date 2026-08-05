@@ -18,7 +18,7 @@ class ReviewCallbackRouterTest {
 		RuntimeException toThrow;
 
 		RecordingResolve() {
-			super(null, null, null); // 생성자는 필드 대입만 — 오버라이드한 메서드는 deps를 안 쓴다
+			super(null, null, null, null, null, null); // 생성자는 필드 대입만 — 오버라이드한 메서드는 deps를 안 쓴다
 		}
 
 		@Override

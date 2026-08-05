@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiFailure, api } from '../api/client'
-import type { ReviewQueueItem } from '../api/types'
+import type { ProductSummary, ReviewQueueItem } from '../api/types'
 import { ReviewQueuePage } from './ReviewQueuePage'
 
 /** 이상치는 딜(dealEventId)이 있어 승격·기각 둘 다 된다. 조건 태그는 "왜 싸 보이나"를 말한다. */
@@ -35,6 +35,8 @@ const unclassified: ReviewQueueItem = {
 describe('ReviewQueuePage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    // 승격 대상 variant 선택지 — 필요 없는 테스트에선 빈 목록으로 조용히 넘어간다.
+    vi.spyOn(api, 'listProducts').mockResolvedValue([])
   })
 
   it('큐에 쌓인 것을 원문 링크와 함께 보여준다', async () => {
@@ -59,10 +61,10 @@ describe('ReviewQueuePage', () => {
   })
 
   /**
-   * Q-15 승격·기각. 미상 항목은 딜이 없어 **승격할 대상 자체가 없다**(core도 400으로 막는다) —
-   * 못 하는 일은 버튼으로 그리지 않는다(과대약속 금지). 이상치는 딜이 있어 둘 다 된다.
+   * Q-15 승격·기각. 미상 항목은 딜이 없어 variant를 **고르기 전엔** 승격할 수 없다(core도 400으로
+   * 막는다) — 못 하는 일은 버튼으로 그리지 않는다(과대약속 금지). 이상치는 딜이 있어 둘 다 된다.
    */
-  it('이상치는 승격·기각 둘 다, 미상은 기각만 그린다', async () => {
+  it('이상치는 승격·기각 둘 다, 미상은 variant 선택 전엔 기각만 그린다', async () => {
     vi.spyOn(api, 'listReviewQueue').mockResolvedValue([outlier, unclassified])
 
     render(<ReviewQueuePage />)
@@ -70,6 +72,33 @@ describe('ReviewQueuePage', () => {
 
     expect(screen.getAllByRole('button', { name: '승격' })).toHaveLength(1) // 이상치에만
     expect(screen.getAllByRole('button', { name: '기각' })).toHaveLength(2) // 둘 다 기각은 된다
+  })
+
+  /** variant를 고르면 미상 항목도 승격이 가능해지고, 고른 variantId가 그대로 넘어간다(Q-15 ①, 2026-07-31). */
+  it('미상 항목은 variant를 고르면 승격 버튼이 나타나고 그 id로 승격한다', async () => {
+    const oneProductWithOneVariant: ProductSummary[] = [
+      {
+        productId: 7,
+        name: '아이폰 17',
+        category: '스마트폰',
+        demandAxisMode: 'GROUPED',
+        axes: [],
+        variants: [{ variantId: 21, label: '256GB', priceAxisValues: { 용량: '256GB' } }],
+      },
+    ]
+    vi.spyOn(api, 'listReviewQueue').mockResolvedValue([unclassified])
+    vi.spyOn(api, 'listProducts').mockResolvedValue(oneProductWithOneVariant)
+    const promote = vi.spyOn(api, 'promoteReviewItem').mockResolvedValue()
+
+    render(<ReviewQueuePage />)
+    await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+
+    expect(screen.queryByRole('button', { name: '승격' })).toBeNull() // 고르기 전엔 없다
+
+    await userEvent.selectOptions(screen.getByRole('combobox'), '21')
+    await userEvent.click(await screen.findByRole('button', { name: '승격' }))
+
+    expect(promote).toHaveBeenCalledWith(3, 21)
   })
 
   it('승격하면 그 항목이 큐에서 내려간다 — 처리됐다는 걸 눈으로 확인시킨다', async () => {
@@ -160,6 +189,7 @@ describe('ReviewQueuePage — 이상치는 왜 싸 보이는지 화면에 나온
       payload: { priceFirst: 700000 },
     }
     vi.spyOn(api, 'listReviewQueue').mockResolvedValue([outlier])
+    vi.spyOn(api, 'listProducts').mockResolvedValue([])
 
     render(<ReviewQueuePage />)
 

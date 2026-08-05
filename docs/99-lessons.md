@@ -1133,3 +1133,23 @@
   나란히 있는지가 가장 빠른 신호다.
 - **관련**: `docs/91` Q-29(인접 발견 기록), `GetCadenceUseCase`·`GetPurchaseObservationsUseCase`,
   `GetCadenceUseCaseTest`·`GetPurchaseObservationsUseCaseTest`(뮤테이션 확인).
+
+## 2026-08-05 — "사람 확정"은 "자동 확정"과 같은 규칙을 재사용해야 한다 (Q-15 ① UNCLASSIFIED 승격)
+
+- **맥락**: Q-15의 "UNCLASSIFIED 승격은 variant 입력 경로가 없어 막는다"를 풀 때, 딜 생성 로직을
+  `ResolveReviewItemUseCase`에 새로 짤 뻔했다 — 그런데 `IngestDealsUseCase.confirmDeal`이 이미 "variant가
+  정해진 딜을 병합하거나 새로 만드는" 바로 그 규칙(병합 허용폭·앵커 승계·부활 판정·이상치 분류·수요축 미상
+  큐 재적재까지)을 갖고 있었다. 자동 매칭(Matcher CONFIRMED)과 사람의 수동 확정(리뷰 큐 승격)은 "variant가
+  정해진 뒤 무슨 일이 일어나야 하는가"라는 질문에 대해 **정확히 같은 답**을 가져야 한다 — 매칭 방식만
+  다를 뿐 딜 생성 규칙은 하나여야 한다.
+- **고침**: `confirmDeal`을 `Tally`(파이프라인 전용 카운터) 의존 없이 `ConfirmResult`(outcome·dealEventId·
+  merged·reopened)를 반환하도록 리팩터해 package-private으로 열고, `ResolveReviewItemUseCase`가 그대로
+  재사용했다. 카운팅(파이프라인 통계)과 판정(병합·부활·알림 판정)을 분리하니 두 번째 호출자가 카운터
+  없이도 깨끗이 붙었다.
+- **교훈(규칙화)**: **"사람이 확정한다"는 기능을 만들 때, 이미 있는 "자동으로 확정된 뒤 벌어지는 일"을
+  하는 유스케이스/도메인 메서드가 있는지 먼저 찾는다.** 두 경로가 같은 결과 타입(여기선 `DealEvent`)을
+  만드는데 각자 규칙을 들면, 한쪽만 고친 다음 커밋에서 조용히 갈린다(이 저장소가 이미 여러 번 겪은
+  "정본 하나 vs 사본 드리프트" 패턴의 변주). 파이프라인 전용 부수 관심사(카운터 등)가 재사용을 막고
+  있다면, 그 관심사를 반환값으로 분리해 호출자가 선택적으로 쓰게 한다.
+- **관련**: `docs/91` Q-15 ①, `IngestDealsUseCase.confirmDeal`/`ConfirmResult`, `ResolveReviewItemUseCase`,
+  `ResolveReviewItemUseCaseTest`·`ReviewQueueEndpointTest`(뮤테이션 확인).

@@ -3,54 +3,93 @@ package dev.hogumeter.core.application;
 import dev.hogumeter.core.adapter.persistence.DealEventEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventMapper;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
+import dev.hogumeter.core.adapter.persistence.RawDealPost;
+import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
+import dev.hogumeter.core.adapter.persistence.VariantRepository;
+import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
 import dev.hogumeter.core.domain.deal.DealEvent;
+import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 미상 큐 승격·기각(Q-15 쓰기). 읽기(GetReviewQueueUseCase)까지만 있고 쓰기가 없어, 순수 도메인
- * {@code DealEvent.promoteFromOutlier()}·{@code reject()}는 프로덕션 호출자가 0이었고 {@code
+ * 미상 큐 승격·기각(Q-15 쓰기). 읽기(GetReviewQueueUseCase)까지만 있고 쓰기가 없어, 순수 도메인 {@code
+ * DealEvent.promoteFromOutlier()}·{@code reject()}는 프로덕션 호출자가 0이었고 {@code
  * review_queue_item.status}·{@code resolved_at}·{@code channel}은 항상 기본값인 죽은 컬럼이었다.
  *
  * <p><b>승격(promote)</b>: 이상치 오탐을 사람이 정상으로 판정 → {@code promoteFromOutlier}(플래그 해제,
  * 표본 복귀). <b>기각(reject)</b>: 사기·낚시로 판정 → {@code reject}(영구 제외, 재수집돼도 복귀 없음,
  * BM-05 AC-3). 판단은 순수 도메인이 하고 여기선 그 결과를 엔티티에 반영하는 IO만 한다.
  *
+ * <p><b>미상(UNCLASSIFIED) 승격(Q-15 ①, 2026-07-31)</b>: 매칭이 실패한 원문엔 딜이 없어, 승격하려면
+ * 사람이 <b>어느 variant인지</b> 골라야 한다. {@code variantId}가 주어지면 {@link IngestDealsUseCase#confirmDeal}
+ * 을 그대로 재사용해 딜을 만든다(병합/신규 저장 규칙은 그 한 곳이 정본 — 자동 매칭과 사람 승격이 서로 다른
+ * 규칙을 쓰면 둘이 조용히 갈린다). 수요축 값은 <b>지어내지 않는다</b>(null) — 매칭이 실패해 애초에 제목에서
+ * 판별하지 못했던 값이다. SPLIT 제품이면 {@code confirmDeal}이 이미 하던 대로 DEMAND_UNKNOWN 큐로 다시
+ * 올려 사람이 마저 분류한다(Q-66 ① E). {@code variantId}가 없으면 여전히 막는다
+ * ({@link UnclassifiedPromoteNotSupportedException}) — DEMAND_UNKNOWN·KEYWORD_SUGGEST 유형도 마찬가지로
+ * 승격 개념이 없다(딜은 이미 있거나 애초에 딜 대상이 아니다).
+ *
  * <p>Q-27 ④로 같은 근거는 이제 <b>한 행</b>이라, 그 한 행을 처리하면 끝난다(예전엔 매 틱 쌓인 N행이 남았다).
  * 이미 처리된(또는 없는) 항목은 {@link ReviewItemNotFoundException} — 처리는 PENDING 행에만
  * 원자적으로 건다({@code where status='PENDING'}). {@code status}·{@code resolved_at}·{@code channel}은
  * 엔티티가 매핑하지 않으므로 네이티브 SQL로 다룬다(GetReviewQueueUseCase와 같은 수법).
- *
- * <p>미상(UNCLASSIFIED) 항목은 딜이 없다 — 기각은 큐에서 내리기만 하고, 승격은 variant 지정이 필요해
- * 아직 막는다({@link UnclassifiedPromoteNotSupportedException}). 지어내 딜을 만들지 않는다.
  */
 @Service
 public class ResolveReviewItemUseCase {
 
 	private static final String OUTLIER_LOWER = "OUTLIER_LOWER";
+	private static final String UNCLASSIFIED = "UNCLASSIFIED";
 
 	private final JdbcTemplate jdbc;
 	private final DealEventRepository dealEvents;
 	private final DealEventMapper mapper;
+	private final RawDealPostRepository rawPosts;
+	private final VariantRepository variants;
+	private final IngestDealsUseCase ingestDeals;
 
-	public ResolveReviewItemUseCase(JdbcTemplate jdbc, DealEventRepository dealEvents, DealEventMapper mapper) {
+	public ResolveReviewItemUseCase(JdbcTemplate jdbc, DealEventRepository dealEvents, DealEventMapper mapper,
+			RawDealPostRepository rawPosts, VariantRepository variants, IngestDealsUseCase ingestDeals) {
 		this.jdbc = jdbc;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
+		this.rawPosts = rawPosts;
+		this.variants = variants;
+		this.ingestDeals = ingestDeals;
 	}
 
-	/** 승격 — 이상치 오탐을 정상으로. 미상 항목은 지원하지 않는다(variant 지정 필요). REST(웹) 경로. */
+	/** 승격 — 이상치 오탐을 정상으로. 미상 항목은 {@code variantId} 없이는 지원하지 않는다. REST(웹) 경로. */
 	@Transactional
 	public void promote(long reviewItemId) {
-		promote(reviewItemId, "WEB");
+		promote(reviewItemId, (Long) null);
+	}
+
+	/** {@code variantId}는 미상(UNCLASSIFIED) 승격에만 쓰인다 — 이상치는 이미 딜이 있어 무시한다. */
+	@Transactional
+	public void promote(long reviewItemId, Long variantId) {
+		promote(reviewItemId, variantId, "WEB");
+	}
+
+	/**
+	 * 어느 채널로 처리됐는지만 지정(variant 선택 없음) — 텔레그램 인라인 버튼 승격({@link ReviewCallbackRouter})
+	 * 이 쓴다. 아직 variant 선택 UI가 없어 미상 항목은 이 경로로는 여전히 거절된다(이상치는 그대로 동작).
+	 */
+	@Transactional
+	public void promote(long reviewItemId, String channel) {
+		promote(reviewItemId, null, channel);
 	}
 
 	/** 어느 채널(WEB·TELEGRAM)로 처리됐는지 남긴다 — 인라인 버튼 승격(Q-15)은 TELEGRAM으로 온다. */
 	@Transactional
-	public void promote(long reviewItemId, String channel) {
+	public void promote(long reviewItemId, Long variantId, String channel) {
 		Item item = readPending(reviewItemId);
+		if (UNCLASSIFIED.equals(item.type())) {
+			promoteUnclassified(reviewItemId, item, variantId);
+			resolve(reviewItemId, "CONFIRMED", channel);
+			return;
+		}
 		if (!OUTLIER_LOWER.equals(item.type())) {
 			throw new UnclassifiedPromoteNotSupportedException(reviewItemId);
 		}
@@ -73,13 +112,32 @@ public class ResolveReviewItemUseCase {
 		resolve(reviewItemId, "REJECTED", channel);
 	}
 
+	/**
+	 * {@code variantId} 없이는 여전히 막는다(지어내지 않는다). 있으면 {@code IngestDealsUseCase.confirmDeal}
+	 * 로 자동 매칭과 같은 규칙으로 딜을 만든다(병합/신규는 그 메서드가 정한다) — 수요축 값은 null(미상)로
+	 * 넘긴다: 매칭이 실패해 원래 판별하지 못한 값을 여기서 지어낼 근거가 없다.
+	 */
+	private void promoteUnclassified(long reviewItemId, Item item, Long variantId) {
+		if (variantId == null) {
+			throw new UnclassifiedPromoteNotSupportedException(reviewItemId);
+		}
+		if (!variants.existsById(variantId)) {
+			throw new VariantNotFoundException(variantId);
+		}
+		RawDealPost post = rawPosts.findById(item.rawDealPostId())
+				.orElseThrow(() -> new ReviewItemNotFoundException(reviewItemId));
+		ingestDeals.confirmDeal(post, variantId, null);
+	}
+
 	private Item readPending(long reviewItemId) {
 		List<Item> rows = jdbc.query("""
-				select type, status, nullif(payload ->> 'dealEventId', '')::bigint as deal_event_id
+				select type, status,
+				       nullif(payload ->> 'dealEventId', '')::bigint as deal_event_id,
+				       nullif(payload ->> 'rawDealPostId', '')::bigint as raw_deal_post_id
 				  from review_queue_item where id = ?
 				""",
 				(rs, n) -> new Item(rs.getString("type"), rs.getString("status"),
-						(Long) rs.getObject("deal_event_id")),
+						(Long) rs.getObject("deal_event_id"), (Long) rs.getObject("raw_deal_post_id")),
 				reviewItemId);
 		if (rows.isEmpty() || !"PENDING".equals(rows.get(0).status())) {
 			throw new ReviewItemNotFoundException(reviewItemId);
@@ -114,6 +172,6 @@ public class ResolveReviewItemUseCase {
 		}
 	}
 
-	private record Item(String type, String status, Long dealEventId) {
+	private record Item(String type, String status, Long dealEventId, Long rawDealPostId) {
 	}
 }

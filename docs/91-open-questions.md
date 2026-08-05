@@ -81,7 +81,7 @@ _(Q-13. BM-04 병합의 알림 억제·소급 방지는 AL 모듈 관심사 — 
 - **잠정값**: `absurdityRatio` = 0.5(±50%). `OutlierDetector.isAbsurdVsCurrent`에 **주입**(테스트/앱 레이어). BenchmarkParams(승인 seam)엔 아직 미편입 — 승인값과 미승인값을 섞지 않기 위함.
 - **재개 트리거**: 운영자 승인 요청(docs/31에 7번째 행) → 승인 시 `BenchmarkParams`로 이관 + `defaults()` 편입 + decision-log. 1차 검증에서 오염 사례 관측해 폭 재조정.
 
-## [부분해소] Q-15. 리뷰 큐 — 읽기·쓰기·web 버튼·**텔레그램 버튼** 완료. UNCLASSIFIED 승격만 후속
+## [부분해소] Q-15. 리뷰 큐 — 읽기·쓰기·web 버튼·텔레그램 버튼·**UNCLASSIFIED 승격** 완료. resolve-then-recur만 남음
 - **맥락**: AC-2 "🔥 최우선 알림", AC-3 승격/기각 UI는 알림·큐 처리 영역. BM-05(순수)는 outlierFlag 판정 + `ReviewQueueItem` 값 생성 + DealEvent 전이(promote/reject)까지만.
 - **읽기 해소(2026-07-10)**: `GetReviewQueueUseCase` + `ReviewQueueController`(`GET /api/v1/review-queue`) + web `미상 큐` 탭 — **전부 신규 파일**, core 기존 파일 무수정. 그전까지 `review_queue_item`은 **쓰이기만 하고 아무도 읽지 않았다**(`IngestDealsUseCase`가 넣고 `PipelineScheduler`가 세기만 함). 매칭이 무엇을 놓치는지 볼 방법이 없었다 — 놓침을 허용하는 시스템(원칙 3)에서 놓친 것을 못 보면 그건 유실이다. `status`·`created_at`을 엔티티가 매핑하지 않아 JPA 대신 **읽기 전용 SQL**로 읽는다.
 - **잠정값(쓰기 없음)**: `DealEvent.promoteFromOutlier()`·`reject()`는 순수 도메인에만 있고 **프로덕션 호출자가 없다.** 화면에 승격·기각 버튼을 그리지 않는다 — 못 하는 일을 버튼으로 그리면 눌러 보고 나서야 안다(과대약속 금지). 🔥 우선순위 발화는 AL 모듈(Q-20)이 OUTLIER_LOWER로 처리.
@@ -90,7 +90,19 @@ _(Q-13. BM-04 병합의 알림 억제·소급 방지는 AL 모듈 관심사 — 
 - **✅ 쓰기 해소(2026-07-12, core 소유권 조율 + Q-27④ 선결 충족)**: `ResolveReviewItemUseCase` + `POST /api/v1/review-queue/{id}/{promote|reject}`. **승격**=이상치 오탐을 정상으로(`DealEvent.promoteFromOutlier()` → outlierFlag NONE, 표본 복귀), **기각**=사기·낚시 영구 제외(`reject()` → permanentlyExcluded, BM-05 AC-3). 판단은 순수 도메인(이제 호출자 있음 — 죽은 메서드 부활), 반영은 엔티티(`setPermanentlyExcluded` 추가). status·resolved_at·**channel='WEB'**은 네이티브 SQL로 `where status='PENDING'` 원자 처리(죽은 컬럼 셋 부활). Q-27④로 같은 근거가 한 행이라 한 번 처리로 끝난다. 이미 처리/없는 항목=404(`REVIEW_ITEM_NOT_FOUND`). 테스트: `ResolveReviewItemUseCaseTest`(승격·기각·미상기각·중복처리)·`ReviewQueueEndpointTest`(HTTP 계약).
 - **✅ web 버튼 해소(2026-07-12)**: `ReviewQueuePage`에 승격·기각 버튼. 이상치=둘 다, 미상=기각만(승격 버튼을 아예 안 그린다 — core의 400과 화면이 일치). 처리 후 목록 refetch로 큐에서 내려간 걸 보여주고, 실패는 `code`를 그대로 낸다(이미 처리=`REVIEW_ITEM_NOT_FOUND`). 본문 없는 200을 위해 `client.ts`에 `command()` 추가(`request()`는 빈 본문에서 터진다). 테스트: `ReviewQueuePage.test.tsx`(타입별 버튼·refetch·에러 code).
 - **✅ 텔레그램 버튼 해소(2026-07-21, M1 "버튼으로 미상 분류" 기준 충족)**: 새 미상 항목 → 텔레그램 [승격][기각] 인라인 버튼 발송(`TelegramReviewNotifier`, 새 항목만 — recurrence 아님) → 누르면 `TelegramInboundPoller`(getUpdates 짧은 주기)가 받아 `ReviewCallbackRouter`로 처리(`channel='TELEGRAM'`). SEC-03 화이트리스트로 인바운드를 거른다(Q-61). 아웃바운드(버튼)·인바운드(콜백)가 짝. web과 같은 규칙: 이상치=[승격][기각], 미상=[기각]만. 실 발송/폴은 `telegram.enabled=true`(사용자 토큰) 뒤 — 기본은 스텁/no-op(실 네트워크 없음). getUpdates 실 파싱은 fake로만 검증(수동 스파이크). 테스트: `ReviewCallbackRouterTest`·`TelegramInboundPollerTest`·`TelegramReviewNotifierTest`·`IngestDealsUseCaseTest.notifiesOnceOnNewReviewItemNotOnRecurrence`.
-- **잔여(여전히 열림)**: ① **UNCLASSIFIED 승격**은 사람이 variant를 골라야 해 아직 막는다(400 `REVIEW_PROMOTE_UNSUPPORTED`) — 후보 선택 입력 경로가 생기면 딜 생성으로 배선. ② resolve-then-recur: dedup_key unique-global이라 기각 후 같은 근거 재발생 시 기각 행 occurrences만 증가(재오픈 안 함) — 수용(보수적).
+- **✅ ① UNCLASSIFIED 승격 해소(2026-08-05)**: `variantId` 쿼리 파라미터를 주면 승격된다 —
+  `IngestDealsUseCase.confirmDeal`(자동 매칭 CONFIRMED 경로가 쓰던 바로 그 병합/신규 저장 규칙)을
+  package-private로 열어 `ResolveReviewItemUseCase`가 재사용한다(규칙이 한 곳— 자동 매칭과 사람 승격이
+  각자 딜 생성 규칙을 들면 조용히 갈린다). 수요축 값은 지어내지 않고 null로 넘긴다 — 매칭이 실패해 애초에
+  제목에서 판별 못 한 값이라, SPLIT 제품이면 `confirmDeal`이 하던 대로 DEMAND_UNKNOWN 큐에 다시 올라간다
+  (Q-66 ① E와 자연히 합류). `variantId` 없으면 여전히 400(`REVIEW_PROMOTE_UNSUPPORTED`) — 지어낸 값으로
+  승격하지 않는다. web `ReviewQueuePage`가 제품·variant 선택 목록(`api.listProducts()`, 기존 등록 화면과
+  같은 조회 재사용)을 보여주고, 고르기 전엔 승격 버튼을 그리지 않는다(과대약속 금지). REST는 `variantId`가
+  없으면 이상치 승격과 똑같이 동작(무시)한다. 테스트: `ResolveReviewItemUseCaseTest`(딜 생성·미상 variant→
+  404 아니라 `VariantNotFoundException`) + `ReviewQueueEndpointTest`(HTTP 계약) + `ReviewQueuePage.test.tsx`
+  (선택 전엔 버튼 없음·고르면 그 id로 승격). 뮤테이션: `confirmDeal` 호출 제거 → 신규 테스트 2건만 RED 확인
+  후 복원.
+- **잔여(여전히 열림)**: ② resolve-then-recur: dedup_key unique-global이라 기각 후 같은 근거 재발생 시 기각 행 occurrences만 증가(재오픈 안 함) — 수용(보수적).
 
 ## [열림] Q-16. BM-03 CANDIDATE 임계 = 코어 토큰 1개 이상 겹침(재현율 우선)
 - **맥락**: AC-2 "부분 일치 → CANDIDATE(REJECTED 아님)"의 부분 일치 스코어 경계값이 미명시.
@@ -428,7 +440,7 @@ _(Q-50. OBS-04 전용 헬스 엔드포인트 — **해소됨 2026-07-10**: `adap
   한다(지금 GET은 미설정 시 기간을 숫자로 말하지 않기로 결정 — 과대약속 금지). 소비처 없이 상수만
   옮기는 것은 투기다.
 
-## [부분해소] Q-46. 조건 태그 도달·표시·하한 취급 완료 — 알림 본문만 텔레그램(Q-20) 대기
+## [해소 2026-08-05] Q-46. 조건 태그 도달·표시·하한 취급 — 알림 본문도 이미 됐다(거짓 봉인 해제)
 - **맥락**: BM-02(`docs/11`)는 "저장 기준 = 실결제가 + 배송비, **카드·쿠폰 역산 금지(as-posted)**, `appliedConditions[]`는 추출 가능 시만"을 요구한다. `normalize_price`는 `카할`(카드할인)·`유료배송(금액미상)`·`N카드`·펨코의 `조건부무료배송:와우무배` 등을 계산하고, `to_raw_records`가 `raw_deal_post.raw._derived.applied_conditions`에 보존한다(2026-07-09). 여기까지는 옳고, 테스트도 잠가 뒀다.
 - **🔴 그런데 거기서 끝난다(2026-07-10 실측)**: `deal_event.applied_conditions text[]` 컬럼은 **V1에 이미 있다.** 그러나 ① `DealEvent` 도메인 record에 그 필드가 **없고** ② `DealEventEntity`가 "applied_conditions·confidence는 미매핑"이라 스스로 적어 뒀으며 ③ `IngestDealsUseCase.candidateFrom`은 `post.getHeadlinePrice()`만 읽는다. **태그는 `raw` jsonb에 갇혀 아무도 읽지 않는다.**
 - **왜 위험한가 (골든 전수 실측)**: 뽐뿌 21딜 중 **2건**(9.5%), 펨코 20딜 중 **3건**(15%)이 조건 태그를 가진다 — 즉 **표본의 약 1할이 조건부 가격인데 무조건 가격으로 기준가에 들어간다.**
@@ -441,7 +453,13 @@ _(Q-50. OBS-04 전용 헬스 엔드포인트 — **해소됨 2026-07-10**: `adap
 - **정정**: "표본의 1할이 오염된다"는 이전 서술은 **과했다.** 확정본 AC-2는 "890,000이 **그대로 분포 입력**이 되고 applied_conditions에 태그만 남는다"고 한다 — 분포는 as-posted가 옳다. 결함은 오염이 아니라 **표시 누락**이었다.
 - **✅ ① 해소(화면이 태그를 말한다)**: `DealEvent`에 `appliedConditions` 필드가 생겼고(`DealEventMapper`가 읽기전용 컬럼 매핑에서 복원), `BenchmarkCalculator.toRef`가 `BenchmarkView.DealRef.conditions`에 실어 낸다. web `DecisionPage`가 각 사례에 `conditionsSuffix(deal.conditions)`("· 조건부: 카할")를 붙이고, 미상 큐(`review/present.ts`)는 `배송비미상`이면 "실제 결제가는 더 높습니다"까지 말한다. **알림 본문**만 남았다 — 발송이 스텁(텔레그램 미발급, Q-20)이라 사용자에게 안 닿으므로 **어댑터를 만드는 커밋에 함께** 넣는다(지금 지어 넣으면 검증 못 하는 죽은 문구다).
 - **✅ ② 해소(배송비미상 = 하한, 표본에서 제외)**: `DealSets.pricingSet`이 `!d.hasCondition(SHIPPING_UNKNOWN)`로 값 통계에서 뺀다 — 발생·신호 집합엔 남긴다(실제 딜이고 가격만 못 믿는다). `BenchmarkCalculator`가 median·tier보다 먼저 `pricingSet`을 부른다. **컬럼→매퍼→계산기 종단**을 `GetBenchmarkUseCaseTest.shippingUnknownDealIsExcludedFromBenchmarkThroughTheColumn` + 거울상이 잠근다(2026-07-21 — 그전엔 `DealSetsTest`가 순수 함수만 잠갔다: 손으로 만든 `DealEvent`라 매퍼·계산기 배선이 끊겨도 GREEN이었다). 표식 정본은 collector(`price.py: SHIPPING_UNKNOWN`), 사본은 `DealTags`, `check-tag-contract.sh`가 CI에서 둘의 일치를 강제.
-- **남은 것**: 알림 본문의 조건 표시(위 ①, Q-20 텔레그램 어댑터와 함께). 표본 편향은 해소됐다 — **실 폴링 전 필수였던 ②는 닫혔다.**
+- **✅ 완전 해소 — "남은 것"은 거짓 봉인이었다(2026-08-05 발견)**: 위 문단이 "알림 본문의 조건 표시는 Q-20
+  텔레그램 어댑터와 함께 넣는다"고 미뤄 뒀는데, 실측해 보니 **이미 들어가 있었다** — `AlertMessageFormatter`
+  (`3ed475f`, Q-20 텔레그램 발송 작업의 일부로 2026-07-21 이전에 구현·`AlertMessageFormatterTest`로 검증)의
+  `conditionLine`이 `deal.appliedConditions()`를 "⚠️ 조건: …" 줄로 본문에 싣고, `배송비미상`이면 "(실 결제가는
+  표시가보다 높을 수 있음)"까지 붙인다. `StubAlertSender`·`TelegramAlertSender` 둘 다 이 포맷터를 쓴다. 이
+  항목만 그 완료를 반영하지 않은 채 몇 주째 "남았다"고 방치돼 있었다 — Q-11·Q-67 등과 같은 결의 board hygiene
+  드리프트(작업은 다른 Q-ID 아래서 끝났는데 이 항목이 갱신을 못 받은 사례). 표본 편향도 이미 해소됐다.
 
 ## [열림] Q-45. 드리프트 임계 수치(window·min_success_rate·zero_yield_streak) — 미승인 잠정
 - **맥락**: REL-06 드리프트 감지(Q-40 해소)의 임계값이 `docs/31` 승인 수치에 없다. 실 수집 데이터 없이 정한 값이다.

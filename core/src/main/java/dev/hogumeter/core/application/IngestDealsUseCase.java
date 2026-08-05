@@ -105,11 +105,17 @@ public class IngestDealsUseCase {
 		switch (match.tier()) {
 			case CONFIRMED -> {
 				tally.confirmed++;
-				DispatchOutcome outcome = confirmDeal(post, match.variantId(), match.demandAxisValue(), tally);
-				if (outcome == DispatchOutcome.SENT) {
+				ConfirmResult result = confirmDeal(post, match.variantId(), match.demandAxisValue());
+				if (result.reopened()) {
+					tally.reopenedDealIds.add(result.dealEventId());
+				}
+				else if (result.merged()) {
+					tally.mergedDealIds.add(result.dealEventId());
+				}
+				if (result.outcome() == DispatchOutcome.SENT) {
 					tally.firstAlertsSent++;
 				}
-				else if (outcome == DispatchOutcome.HELD) {
+				else if (result.outcome() == DispatchOutcome.HELD) {
 					// 방해금지로 보류 — 지금은 플러시가 없어 유실된다(Q-20 ②). 세어서 보이게 한다.
 					tally.heldAlerts++;
 				}
@@ -126,8 +132,13 @@ public class IngestDealsUseCase {
 		}
 	}
 
-	/** @return 이 딜에 대한 알림 판정 결과 — 첫 알림이 실제로 나갔는지(SENT) 세기 위함(Q-57 ③). */
-	private DispatchOutcome confirmDeal(RawDealPost post, long variantId, String demandAxisValue, Tally tally) {
+	/**
+	 * variant가 확정된 딜을 병합/신규 저장한다. 자동 매칭(CONFIRMED)뿐 아니라 사람이 미상 큐에서 variant를
+	 * 골라 승격할 때도 이 메서드를 그대로 쓴다({@link ResolveReviewItemUseCase} — Q-15 ①) — 딜 생성·병합
+	 * 규칙은 한 곳(정본)이어야 한다. 알림 판정(SENT/HELD, Q-57 ③)·병합·부활(Q-13·DN-C1) 여부를
+	 * {@link ConfirmResult}로 반환한다 — 파이프라인 카운팅은 호출자(Tally)의 몫이라 여기 두지 않는다.
+	 */
+	ConfirmResult confirmDeal(RawDealPost post, long variantId, String demandAxisValue) {
 		DealEvent candidate = candidateFrom(post, variantId, demandAxisValue);
 
 		for (DealEventEntity existing : dealEvents.findByVariantId(variantId)) {
@@ -148,15 +159,13 @@ public class IngestDealsUseCase {
 				//
 				// DN-C1: 잠정 종료였던 딜이 되살아난 것(ENDED→ACTIVE)은 **교차검증이 아니라 부활**이다.
 				// 부류가 다른 사실을 한 목록으로 흘리면 사람이 "다시 살아났다"를 "검증됐다"로 읽는다.
-				if (existingDomain.status() == DealStatus.ENDED && merged.status() != DealStatus.ENDED) {
-					tally.reopenedDealIds.add(existing.getId());
+				boolean reopened = existingDomain.status() == DealStatus.ENDED
+						&& merged.status() != DealStatus.ENDED;
+				if (reopened) {
 					// Q-83 ⑤(2026-07-30): 부활 = 전이 없음 + 미응답 플래그(핀 상태는 그대로 ACTIVE).
 					activePin.ifPresent(WatchItemEntity::flagRevivalUnacknowledged);
 				}
-				else {
-					tally.mergedDealIds.add(existing.getId());
-				}
-				return DispatchOutcome.NO_ALERT;
+				return new ConfirmResult(DispatchOutcome.NO_ALERT, existing.getId(), true, reopened);
 			}
 		}
 
@@ -167,7 +176,17 @@ public class IngestDealsUseCase {
 		sources.save(new DealEventSourceEntity(created.getId(), post.getId(), post.getSite()));
 		classifyOutlier(created, variantId);
 		enqueueIfDemandUnknown(post, created, variantId); // Q-66 ① E
-		return alertEvaluation.evaluate(variantId, created.getId(), mapper.toDomain(created));
+		DispatchOutcome outcome = alertEvaluation.evaluate(variantId, created.getId(), mapper.toDomain(created));
+		return new ConfirmResult(outcome, created.getId(), false, false);
+	}
+
+	/**
+	 * @param outcome 알림 판정(파이프라인 카운팅용, Q-57 ③)
+	 * @param dealEventId 확정된(생성 또는 병합) 딜의 id
+	 * @param merged 기존 딜에 병합됐나(true) 새로 생성됐나(false)
+	 * @param reopened 병합이면서 그 병합이 부활(ENDED→비ENDED)이었나 — merged=false면 항상 false
+	 */
+	record ConfirmResult(DispatchOutcome outcome, long dealEventId, boolean merged, boolean reopened) {
 	}
 
 	/** BM-05 배선: 신규 딜을 variant 분포에 대해 판정(유입 1회·영속, C-4). LOWER는 reviewQueue(OUTLIER_LOWER). */
