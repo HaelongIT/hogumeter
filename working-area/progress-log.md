@@ -59,7 +59,43 @@ BM-05 AC-5 SPARSE 폴백)는 앱 레이어 호출자가 0이었다 — Q-14 boar
   테스트만 RED 확인 후 복원. core 전체 스위트 GREEN, 게이트 4종 통과.
 - **기록**: `docs/91` Q-14 부분해소로 전환(배선 완료, 운영자 승인만 잔여) + `docs/99-lessons.md`에
   "클래스 단위 게이트는 같은 클래스 안의 죽은 메서드를 못 잡는다" 교훈 추가.
-- **커밋 예정**: 이 증분 직후.
+- **커밋**: `d31df9f`.
+
+## 2026-08-05 (4) — caller-0 스윕 계속, 나머지는 배선하지 않기로 판단(정확히 기록)
+
+Q-14·Q-17 두 건을 잡은 방법(도메인 메서드별 `.method(` 호출수 grep)을 domain 계층 전체로 넓혀 나머지
+후보를 확인했다. **배선하지 않기로 판단한 것들과 그 이유**를 적어 둔다 — 다음 세션이 같은 조사를
+반복하지 않도록:
+
+- **`DigestWindow.occurredBeforeWindow`(docs/18 "발생 N일 전" 병기 재료)** — 호출자 0 맞다. 하지만
+  `ComputeDigestBestOpportunityUseCase`가 후보를 이미 `window.contains(firstSeen)`로 걸러 놓아, 그 필터를
+  통과한 딜은 정의상 `occurredBeforeWindow(firstSeen)`가 **항상 false**다(같은 `firstSeen`을 "가시화
+  시각"과 "발생 시각" 둘 다로 쓰고 있어서 — Q-81의 기존 "가시화 시각 근사" 한계와 같은 원인). 지금
+  이어 붙이면 **절대 안 켜지는 죽은 분기**를 만드는 "우연히 옳은 코드" 함정이라 하지 않았다.
+  `docs/91` Q-81에 정확한 이유와 함께 기록.
+- **`PinState.isTerminal()`** — 호출자 0이지만, 그 자리를 대신하는 정본이 이미 있다
+  (`findByState(PinState.ACTIVE)`/`findByStateNotOrderByResolvedAtDesc(PinState.ACTIVE)` — 쿼리 레벨
+  필터라 이 predicate 자체가 필요 없다). 기능 결손이 아니라 **채택 안 된 대안 헬퍼**라 손대지 않았다.
+- **`EvaluationInput.text/.manual/.url`** — `UsedEvaluationController`가 요청 DTO의 `kind`를 그대로
+  받아 정식 생성자로 직접 조립한다(클라이언트가 이미 타입을 결정해 보낸다). 팩토리 메서드가 필요한
+  내부 호출 지점이 없을 뿐 기능 결손 아님.
+- **`PurchaseTriggers.enabledFor`** — grep이 놓친 **같은 클래스 내부 무-리시버 호출**이었다
+  (`isEnabled`가 `enabledFor(p.state())`로 부른다, Q-85로 이미 배선 확인됨). 도구 한계 확인, 실결함 아님.
+- **`NewProductSources.boards()`** — 자신의 javadoc이 "허용집합 자체(게이트·테스트용)"라고 이미 밝혀 둔
+  의도된 헬퍼. 정상.
+
+**판단 기준(다음에도 적용)**: 호출자 0인 메서드를 발견하면 ① 그 메서드가 구현하는 요구사항(AC)이 문서에
+명시돼 있는가 ② 배선했을 때 실제로 다른 동작이 나오는가(현재 값으로 분기가 켜지는가) 를 먼저 확인한다.
+둘 다 참인 것만(`Matcher.confirm`·`OutlierDetector.isAbsurdVsCurrent`) 고쳤고, 하나라도 거짓이면(대안이
+이미 있음·필터 선행으로 죽은 분기·정당화된 헬퍼) board에 이유를 적고 넘어간다 — 배선 자체가 목적이 아니다.
+
+- **커밋**: 문서만(코드 변경 없음) — 다음 커밋에 함께 묶는다.
+
+TURN-END: ② 일감 소진 — ⓐ M1~M6 로드맵 항목 전부 코드 밖 또는 완료. ⓑ `docs/91` 재개 트리거가 참인
+나머지 항목 없음(이번 세션에서 Q-46·Q-14·Q-17·Q-81을 실측 재확인·해소/정정했고, 남은 항목은 실 데이터·
+외부 토큰·정책 결정 대기로 재확인됨). ⓒ 이번 캐치-0 감사로 4개 후보를 검증해 2개 고침·3개는 근거와 함께
+보류로 기록(위 판단 기준). ⓓ 새 계약(SPARSE 폴백 seam·별칭 학습·UNCLASSIFIED 승격) 전부 뮤테이션 검증
+완료, 게이트 4종 통과. 사용자가 다음 지시할 때까지 대기.
 
 TURN-END: 아래 갱신 예정 — 다음 증분 착수 전까지는 미확정.
 
