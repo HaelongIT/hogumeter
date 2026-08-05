@@ -36,7 +36,17 @@ PurchaseObservation·ComparisonRow/Axis·PrioritizedProduct)까지 넓혀 재확
 - **판단**: 남은 화면(WatchItemView 나머지 필드·ReviewQueueItem·AlertPolicyView·ProductSummary 등)은
   전부 재확인 완료 — 이번 재검증에서 나온 새 API-필드-소비처-0은 여기까지다. `docs/30` 로드맵(ⓐ)·
   API 필드 감사(ⓒ) 둘 다 다시 훑었고 D-9(결정 대기)를 빼면 코드로 열리는 새 일감이 없다.
-- **커밋 예정**: 이 증분 직후.
+- **커밋**: `7102cda`.
+- **마무리 스팟체크**: Q-58("`@Cacheable` 0건")·Q-52("correlationId 0건") 재grep — 둘 다 여전히 참,
+  board 문구가 낡지 않았음을 확인.
+
+TURN-END: ② 일감 소진(재검증 완료) — ⓐ `docs/30` 로드맵 전 마일스톤 재독, M4 "조회·비교 대시보드"는
+CMP-01(이미 완료)과 동일 개념임을 확인. ⓑ `docs/91` "막혔다" 주장 중 Q-58·Q-52를 재현해 여전히 참임을
+확인(다른 항목은 이전 증분들에서 이미 재확인). ⓒ API 필드 소비처 0을 `web/src/api/types.ts` 전 필드
+(123개) 기준으로 전수 재감사 — `WatchItemView.dealStatus`·`UsedSearchView.exclude`·`.bonusGroups` 3건
+발견·해소, 나머지는 전부 정상 소비. ⓓ 이번 세션 전 증분(6건)이 게이트 4종 통과 + 뮤테이션 검증 완료.
+유일하게 남은 것은 D-9(CMP-02 폴백 인증 경계, 정지조건 "시크릿 노출" 소지라 등록만 하고 대기) — 이건
+사람의 결정이지 코드로 열 수 있는 일감이 아니다. 다음 지시 대기.
 
 ## 2026-08-05 — Q-15 ① UNCLASSIFIED 승격 배선 + Q-46 거짓 봉인 해제 (무중단 재개)
 
