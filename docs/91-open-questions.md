@@ -101,7 +101,10 @@ _(Q-13. BM-04 병합의 알림 억제·소급 방지는 AL 모듈 관심사 — 
   없으면 이상치 승격과 똑같이 동작(무시)한다. 테스트: `ResolveReviewItemUseCaseTest`(딜 생성·미상 variant→
   404 아니라 `VariantNotFoundException`) + `ReviewQueueEndpointTest`(HTTP 계약) + `ReviewQueuePage.test.tsx`
   (선택 전엔 버튼 없음·고르면 그 id로 승격). 뮤테이션: `confirmDeal` 호출 제거 → 신규 테스트 2건만 RED 확인
-  후 복원.
+  후 복원. **곁들여 해소**: 이 승격이 BM-03 AC-4의 "사람 확정" 지점이라 `Matcher.confirm`(호출자 0이던
+  순수 도메인 메서드, Q-17)을 실제로 호출해 원문 제목을 별칭 사전에 학습한다 — `alias_dictionary`의
+  `unique(product_id, alias)`를 뚫지 않도록 이미 아는(정규화 동일) 표현은 다시 넣지 않는다. Q-17 잠정값이
+  전제하던 "확정 시 학습"이 이제 처음으로 실제 참이 됐다(Q-17에 정정 기록).
 - **잔여(여전히 열림)**: ② resolve-then-recur: dedup_key unique-global이라 기각 후 같은 근거 재발생 시 기각 행 occurrences만 증가(재오픈 안 함) — 수용(보수적).
 
 ## [열림] Q-16. BM-03 CANDIDATE 임계 = 코어 토큰 1개 이상 겹침(재현율 우선)
@@ -112,6 +115,12 @@ _(Q-13. BM-04 병합의 알림 억제·소급 방지는 AL 모듈 관심사 — 
 ## [열림] Q-17. BM-03 AC-4 별칭 학습 = 정규화·공백제거 제목 전체를 축적(crude)
 - **맥락**: "확정 시 표현이 별칭 사전에 추가돼 같은 제목이 다음엔 CONFIRMED"의 "표현" 추출 방식 미명시.
 - **잠정값**: `Matcher.confirm`이 `TitleNormalizer.joined(title)`(공백제거 정규화 전체)을 별칭으로 학습. "같은 제목" 재매칭엔 충분하나 일반화(다른 표기 변형)는 못함. seam = `AliasDictionary.learn`.
+- **🔴→✅ 실측 정정(2026-08-05)**: 위 "잠정값" 문단은 **호출자가 있다는 전제** 위에 쓰여 있었지만, 실제로는
+  `Matcher.confirm`이 **호출자 0**이었다(Q-15 ① UNCLASSIFIED 승격이 아직 없어 "사람 확정" 지점 자체가
+  코드에 없었다) — "확정 시 학습"이 한 번도 일어난 적이 없는 채로 이 항목만 이미 동작하는 것처럼 적혀
+  있었다. Q-15 ①(UNCLASSIFIED 승격) 구현이 그 유일한 확정 지점을 만들면서 `ResolveReviewItemUseCase.
+  learnAlias`가 처음으로 `Matcher.confirm`을 호출한다 — 이제 이 항목의 잠정값이 **실제로 참**이 됐다.
+  이 항목 자체(정규화 전체를 crude하게 축적하는 방식)는 여전히 열려 있다 — 아래 재개 트리거 그대로.
 - **재개 트리거**: 유사·변형 제목까지 CONFIRMED가 필요해지면 핵심 구절 추출(빈출 n-gram 등)로 학습 정교화.
 
 ## [열림] Q-18. BM-02 가격 파싱 휴리스틱 — 오검출 3종 수정 완료, 잔여 한계 4종

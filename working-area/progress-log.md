@@ -19,12 +19,26 @@
   4종(board-references·table-wiring·domain-consumers·dead-columns) 통과.
 - **기록**: `docs/91` Q-15·Q-46 갱신, `.claude/rules/web-react.md` 낡은 "미상은 기각만" 문구 정정,
   `docs/99-lessons.md`에 "사람 확정은 자동 확정과 같은 규칙을 재사용" 교훈 추가.
-- **범위 밖으로 남긴 것**: `Matcher.confirm`(BM-03 AC-4, 사람 확정 시 별�칭 사전 학습)은 여전히 호출자
-  0이다 — 이 승격 순간이 바로 그 "사람 확정" 지점이라 다음 증분 후보로 적어 둔다(별도 커밋 스코프로
-  분리, alias_dictionary 유니크 제약(product_id, alias) 때문에 중복 학습 방지 로직이 별도로 필요해
-  이번 판에 안 얹었다).
+- **커밋**: `e27207f`.
 
-TURN-END(예정 — 다음 증분 착수 전 마커): 아래 계속.
+## 2026-08-05 (2) — Q-17 별칭 학습 배선 (Matcher.confirm 호출자 0 해소, 무중단 계속)
+
+이전 증분에서 "범위 밖"으로 미뤄 뒀던 것을 바로 이어 착수 — Q-15 ①의 승격 지점이 정확히 BM-03 AC-4가
+말하는 "사람 확정" 순간인데, 그 학습을 하는 순수 도메인 `Matcher.confirm`은 호출자가 0이었다(Q-17
+잠정값이 "이미 동작한다"는 전제로 쓰여 있었는데 실측하니 거짓이었다).
+
+- **✅ 구현**: `ResolveReviewItemUseCase.promoteUnclassified`가 딜 생성 뒤 `learnAlias(post, productId)`를
+  부른다 — `Matcher.confirm(AliasDictionary.of(Map.of()), title, productId)`로 정규화한 표현을 얻고,
+  `alias_dictionary`(`unique(product_id, alias)`)에 이미 있는지(정규화 비교) 확인해 없을 때만 저장한다.
+  저장은 원문 그대로(등록 별칭과 같은 관례, `CatalogProjection.aliasDictionary()`가 읽을 때 정규화).
+- **테스트**: `ResolveReviewItemUseCaseTest` +2(별칭 학습됨·중복 학습 안 됨). 뮤테이션 2건: ①
+  `learnAlias` 호출 제거 → 학습 테스트만 RED ② dedup 가드 무력화 → 유니크 제약 위반으로 중복 테스트만
+  RED. 둘 다 복원 후 GREEN. core 전체 스위트 GREEN, `check-domain-consumers.sh` 등 게이트 통과.
+- **기록**: `docs/91` Q-17에 "잠정값이 전제한 호출자가 실제로는 없었다" 실측 정정 + Q-15 ①에 곁들여
+  해소 기록.
+- **커밋 예정**: 이 증분 직후.
+
+TURN-END: 아래 갱신 예정 — 다음 증분 착수 전까지는 미확정.
 
 ## 2026-07-31 — CAD·PUR-05 표본 배선 누락 발견·해소 (Q-29 인접, 사용자 지시로 이 증분에서 정지)
 

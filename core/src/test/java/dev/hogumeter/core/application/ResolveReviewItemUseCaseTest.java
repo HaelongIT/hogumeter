@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.hogumeter.core.TestcontainersConfiguration;
+import dev.hogumeter.core.adapter.persistence.AliasEntity;
+import dev.hogumeter.core.adapter.persistence.AliasRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.adapter.persistence.ProductEntity;
@@ -50,13 +52,17 @@ class ResolveReviewItemUseCaseTest {
 	@Autowired
 	RawDealPostRepository rawPosts;
 	@Autowired
+	AliasRepository aliases;
+	@Autowired
 	JdbcTemplate jdbc;
 
 	private long variantId;
+	private long productId;
 
 	@BeforeEach
 	void setUp() {
 		ProductEntity product = products.save(new ProductEntity("아이폰 17", "스마트폰", DemandAxisMode.GROUPED));
+		productId = product.getId();
 		VariantEntity variant = variants.save(new VariantEntity(product.getId(), "256GB", Map.of("용량", "256GB")));
 		variantId = variant.getId();
 	}
@@ -137,6 +143,40 @@ class ResolveReviewItemUseCaseTest {
 		assertThat(dealEvents.findByVariantId(variantId))
 				.singleElement()
 				.satisfies(deal -> assertThat(deal.getPriceFirst()).isEqualTo(990_000L));
+	}
+
+	/**
+	 * BM-03 AC-4 — 사람의 승격은 {@code Matcher.confirm}이 뜻하는 "사람 확정"이다. 표현이 별칭 사전에
+	 * 축적돼야 다음엔 같은 제목이 자동으로 CONFIRMED된다(호출자 0이던 순수 도메인 메서드가 살아난다).
+	 */
+	@Test
+	void unclassifiedPromoteLearnsTheAliasForFutureAutomaticMatching() {
+		RawDealPost post = rawPosts.save(new RawDealPost("ppomppu", "resolve-promote-alias-1",
+				"https://ppomppu.test/resolve-promote-alias-1", "아이폰17 특가 990000원", 990_000L, T, T, "ACTIVE"));
+		long itemId = enqueue("UNCLASSIFIED",
+				"{\"title\":\"아이폰17 특가 990000원\",\"rawDealPostId\":" + post.getId() + ",\"productCandidates\":[]}");
+
+		resolve.promote(itemId, variantId);
+
+		assertThat(aliases.findByProductId(productId))
+				.extracting(AliasEntity::getAlias)
+				.contains("아이폰17 특가 990000원");
+	}
+
+	/** 이미 아는 표현(정규화 동일)을 또 승격해도 alias_dictionary의 유니크 제약을 뚫지 않는다(중복 학습 없음). */
+	@Test
+	void unclassifiedPromoteDoesNotDuplicateAnAlreadyKnownAlias() {
+		aliases.save(new AliasEntity(productId, "아이폰17 특가 990000원"));
+		RawDealPost post = rawPosts.save(new RawDealPost("ppomppu", "resolve-promote-alias-2",
+				"https://ppomppu.test/resolve-promote-alias-2", "아이폰17 특가 990000원", 990_000L, T, T, "ACTIVE"));
+		long itemId = enqueue("UNCLASSIFIED",
+				"{\"title\":\"아이폰17 특가 990000원\",\"rawDealPostId\":" + post.getId() + ",\"productCandidates\":[]}");
+
+		resolve.promote(itemId, variantId);
+
+		assertThat(aliases.findByProductId(productId))
+				.filteredOn(a -> "아이폰17 특가 990000원".equals(a.getAlias()))
+				.hasSize(1); // 중복 삽입됐다면 unique 제약(product_id, alias) 위반으로 이 지점 전에 이미 터졌을 것
 	}
 
 	@Test

@@ -1,15 +1,22 @@
 package dev.hogumeter.core.application;
 
+import dev.hogumeter.core.adapter.persistence.AliasEntity;
+import dev.hogumeter.core.adapter.persistence.AliasRepository;
 import dev.hogumeter.core.adapter.persistence.DealEventEntity;
 import dev.hogumeter.core.adapter.persistence.DealEventMapper;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.adapter.persistence.RawDealPost;
 import dev.hogumeter.core.adapter.persistence.RawDealPostRepository;
+import dev.hogumeter.core.adapter.persistence.VariantEntity;
 import dev.hogumeter.core.adapter.persistence.VariantRepository;
 import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
 import dev.hogumeter.core.domain.deal.DealEvent;
+import dev.hogumeter.core.domain.matching.AliasDictionary;
+import dev.hogumeter.core.domain.matching.Matcher;
+import dev.hogumeter.core.domain.matching.TitleNormalizer;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.util.List;
+import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +39,11 @@ import org.springframework.transaction.annotation.Transactional;
  * ({@link UnclassifiedPromoteNotSupportedException}) — DEMAND_UNKNOWN·KEYWORD_SUGGEST 유형도 마찬가지로
  * 승격 개념이 없다(딜은 이미 있거나 애초에 딜 대상이 아니다).
  *
+ * <p><b>별칭 학습(BM-03 AC-4, 2026-08-05)</b>: 이 승격이 바로 {@link Matcher#confirm}이 뜻하는 "사람 확정"
+ * 순간이다 — 승격하면 그 원문 제목을 별칭 사전({@code alias_dictionary})에 저장해, 다음엔 같은 표현이 자동
+ * CONFIRMED되게 한다. {@code alias_dictionary}의 {@code unique(product_id, alias)}를 뚫지 않도록, 이미
+ * 아는(정규화 동일) 표현이면 다시 넣지 않는다.
+ *
  * <p>Q-27 ④로 같은 근거는 이제 <b>한 행</b>이라, 그 한 행을 처리하면 끝난다(예전엔 매 틱 쌓인 N행이 남았다).
  * 이미 처리된(또는 없는) 항목은 {@link ReviewItemNotFoundException} — 처리는 PENDING 행에만
  * 원자적으로 건다({@code where status='PENDING'}). {@code status}·{@code resolved_at}·{@code channel}은
@@ -48,15 +60,19 @@ public class ResolveReviewItemUseCase {
 	private final DealEventMapper mapper;
 	private final RawDealPostRepository rawPosts;
 	private final VariantRepository variants;
+	private final AliasRepository aliases;
 	private final IngestDealsUseCase ingestDeals;
+	private final Matcher matcher = new Matcher();
 
 	public ResolveReviewItemUseCase(JdbcTemplate jdbc, DealEventRepository dealEvents, DealEventMapper mapper,
-			RawDealPostRepository rawPosts, VariantRepository variants, IngestDealsUseCase ingestDeals) {
+			RawDealPostRepository rawPosts, VariantRepository variants, AliasRepository aliases,
+			IngestDealsUseCase ingestDeals) {
 		this.jdbc = jdbc;
 		this.dealEvents = dealEvents;
 		this.mapper = mapper;
 		this.rawPosts = rawPosts;
 		this.variants = variants;
+		this.aliases = aliases;
 		this.ingestDeals = ingestDeals;
 	}
 
@@ -114,19 +130,37 @@ public class ResolveReviewItemUseCase {
 
 	/**
 	 * {@code variantId} 없이는 여전히 막는다(지어내지 않는다). 있으면 {@code IngestDealsUseCase.confirmDeal}
-	 * 로 자동 매칭과 같은 규칙으로 딜을 만든다(병합/신규는 그 메서드가 정한다) — 수요축 값은 null(미상)로
-	 * 넘긴다: 매칭이 실패해 원래 판별하지 못한 값을 여기서 지어낼 근거가 없다.
+	 * 로 자동 매칭과 같은 규칙으로 딜을 만들고(병합/신규는 그 메서드가 정한다), 그 원문 제목을 별칭으로
+	 * 학습한다(BM-03 AC-4) — 수요축 값은 null(미상)로 넘긴다: 매칭이 실패해 원래 판별하지 못한 값을 여기서
+	 * 지어낼 근거가 없다.
 	 */
 	private void promoteUnclassified(long reviewItemId, Item item, Long variantId) {
 		if (variantId == null) {
 			throw new UnclassifiedPromoteNotSupportedException(reviewItemId);
 		}
-		if (!variants.existsById(variantId)) {
-			throw new VariantNotFoundException(variantId);
-		}
+		VariantEntity variant = variants.findById(variantId).orElseThrow(() -> new VariantNotFoundException(variantId));
 		RawDealPost post = rawPosts.findById(item.rawDealPostId())
 				.orElseThrow(() -> new ReviewItemNotFoundException(reviewItemId));
 		ingestDeals.confirmDeal(post, variantId, null);
+		learnAlias(post, variant.getProductId());
+	}
+
+	/**
+	 * {@link Matcher#confirm}(BM-03 AC-4, 이제 이 지점이 유일한 호출자)로 정규화한 표현을 별칭 사전에
+	 * 축적한다. {@code alias_dictionary}는 {@code unique(product_id, alias)}라 이미 아는(정규화 동일)
+	 * 표현이면 다시 넣지 않는다 — 안 그러면 같은 UNCLASSIFIED 원문이 또 승격될 때(재현율 우선 매칭이라
+	 * 흔하다) 유니크 제약을 뚫는다.
+	 */
+	private void learnAlias(RawDealPost post, Long productId) {
+		AliasDictionary learned = matcher.confirm(AliasDictionary.of(Map.of()), post.getTitle(), productId);
+		String normalized = learned.aliases().keySet().iterator().next();
+		boolean known = aliases.findByProductId(productId).stream()
+				.anyMatch(existing -> normalized.equals(TitleNormalizer.joined(existing.getAlias())));
+		if (!known) {
+			// 저장은 원문(raw) 그대로 — CatalogProjection.aliasDictionary()가 읽을 때 다시 정규화한다
+			// (RegisterProductUseCase가 등록 별칭을 저장하는 것과 같은 관례, 정규화 사본을 늘리지 않는다).
+			aliases.save(new AliasEntity(productId, post.getTitle()));
+		}
 	}
 
 	private Item readPending(long reviewItemId) {

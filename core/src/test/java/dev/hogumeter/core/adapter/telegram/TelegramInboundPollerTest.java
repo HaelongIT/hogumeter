@@ -21,7 +21,7 @@ class TelegramInboundPollerTest {
 		final List<String> calls = new ArrayList<>();
 
 		RecordingResolve() {
-			super(null, null, null, null, null, null);
+			super(null, null, null, null, null, null, null);
 		}
 
 		@Override
