@@ -34,10 +34,25 @@ public class OutlierDetector {
 	 * absurdityRatio는 아직 미승인 잠정 파라미터(docs/91 Q-14) — 주입값 사용, 승인 후 BenchmarkParams로 이관.
 	 */
 	public boolean isAbsurdVsCurrent(long price, long currentPrice, BigDecimal absurdityRatio) {
+		return classifyVsCurrent(price, currentPrice, absurdityRatio) != OutlierFlag.NONE;
+	}
+
+	/**
+	 * {@link #isAbsurdVsCurrent}와 같은 밴드지만 <b>방향</b>까지 낸다 — {@link #classify}와 같은 반환
+	 * 계약이라 SPARSE(n&lt;5, Tukey 불안정) 구간에서 호출부가 두 판정을 나란히 다룰 수 있다(Q-14).
+	 * LOWER=밴드보다 너무 쌈(리뷰 큐 대상), UPPER=너무 비쌈. 경계는 이상치 아님(포함, classify와 동일 관례).
+	 */
+	public OutlierFlag classifyVsCurrent(long price, long currentPrice, BigDecimal absurdityRatio) {
 		BigDecimal current = BigDecimal.valueOf(currentPrice);
 		BigDecimal lowerBand = current.multiply(BigDecimal.ONE.subtract(absurdityRatio));
 		BigDecimal upperBand = current.multiply(BigDecimal.ONE.add(absurdityRatio));
 		BigDecimal p = BigDecimal.valueOf(price);
-		return p.compareTo(lowerBand) < 0 || p.compareTo(upperBand) > 0;
+		if (p.compareTo(lowerBand) < 0) {
+			return OutlierFlag.LOWER;
+		}
+		if (p.compareTo(upperBand) > 0) {
+			return OutlierFlag.UPPER;
+		}
+		return OutlierFlag.NONE;
 	}
 }

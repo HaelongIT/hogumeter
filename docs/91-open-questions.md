@@ -76,10 +76,12 @@ _(Q-5. 뽐뿌 golden fixture 재채취 — **해소됨 2026-07-09**: 재채취 *
 
 _(Q-13. BM-04 병합의 알림 억제·소급 방지는 AL 모듈 관심사 — **해소됨 2026-07-23**: 배경 에이전트의 docs/91 "거짓 봉인" 스캔이 재개 트리거("AL 착수 시")가 이미 오래전 참이 됨을 지적 → 원문 대조로 실결함 확인. `IngestDealsUseCase.confirmDeal`의 병합(흡수) 분기가 신규 딜과 **똑같이** `alertEvaluation.evaluate(...)`를 호출하고 있었다 — `priceFirst`는 병합으로 안 바뀌므로 같은 트리거가 매번 다시 SEND_NOW를 냈을 결함(AC-3·AC-4 위반, 텔레그램 실전송 시 중복 문자로 드러날 것). `StubAlertSender`가 로그만 남겨 지금까지 조용했다. 수정: 병합은 `DispatchOutcome.NO_ALERT`만 반환하고 병합된 딜 id를 `IngestReport.mergedDealIds()`로 모아 `PipelineScheduler`가 이미 검증된 멱등 메커니즘 `FollowUpAlertUseCase.sendFollowUps(ids, FollowUpKind.VERIFIED)`로 넘긴다(AL-03의 세 번째 종류 VERIFIED — 선언은 됐으나 프로덕션 호출자가 0이던 것도 같이 배선). 회귀 테스트(`IngestDealsUseCaseTest#mergingASecondSiteDoesNotResendTheFirstAlert` 등)는 수정을 되돌려 RED를 확인한 뒤 복원해 뮤테이션 검증. `scripts/smoke.sh` 5-1h에 종단 단언 추가(병합 딜의 첫 알림이 정확히 1번, VERIFIED 후속이 스텁 로그·틱 카운터에 남음) — 격리 컨테이너로 실행해 통과 확인. decision-log 참조. 여기서 제거.)_
 
-## [열림] Q-14. SPARSE 폴백 컷 밴드폭(absurdityRatio) — 미승인 잠정 파라미터
+## [부분해소] Q-14. SPARSE 폴백 컷 밴드폭(absurdityRatio) — 배선 완료, 승인만 미결
 - **맥락**: BM-05 AC-5 SPARSE 구간 폴백 컷은 "현재가 대비 비상식 가격"을 걸러야 하나, 그 밴드 폭이 docs/31 승인 6개 파라미터에 없다(신규 정책 수치).
-- **잠정값**: `absurdityRatio` = 0.5(±50%). `OutlierDetector.isAbsurdVsCurrent`에 **주입**(테스트/앱 레이어). BenchmarkParams(승인 seam)엔 아직 미편입 — 승인값과 미승인값을 섞지 않기 위함.
-- **재개 트리거**: 운영자 승인 요청(docs/31에 7번째 행) → 승인 시 `BenchmarkParams`로 이관 + `defaults()` 편입 + decision-log. 1차 검증에서 오염 사례 관측해 폭 재조정.
+- **잠정값**: `absurdityRatio` = 0.5(±50%). `IngestDealsUseCase`의 `private static final BigDecimal ABSURDITY_RATIO`로 **주입**. BenchmarkParams(승인 seam)엔 아직 미편입 — 승인값과 미승인값을 섞지 않기 위함.
+- **🔍 실측 정정(2026-08-05)**: 위 "주입(테스트/앱 레이어)"이라는 문구는 **거짓이었다** — `OutlierDetector.isAbsurdVsCurrent`는 `OutlierDetectorTest`에서만 불렸고, 앱 레이어(`IngestDealsUseCase.classifyOutlier`) 어디에서도 호출되지 않았다(호출자 0, "이름이 나타난다 ≠ 사용된다"의 또 다른 사례). 그 결과 **SPARSE(n<5) 딜은 지금까지 어떤 이상치 판정도 받지 않고 있었다** — Tukey(n≥5 전용)도, 이 폴백도 둘 다 미적용.
+- **✅ 배선 해소(2026-08-05)**: `OutlierDetector.classifyVsCurrent`(방향까지 내는 자매 메서드, `classify`와 같은 반환 계약) 신설 + `IngestDealsUseCase.classifyOutlier`가 `distribution.size() < 5`일 때 `CurrentPriceProvider.currentPriceFor`로 현재가를 얻어 이 폴백을 태운다. 현재가가 null이면(Q-3, 네이버 키 미발급 — **운영 기본값이 항상 이 경로**) 조용히 스킵한다(지어내지 않는다) — 즉 **지금 당장은 여전히 대부분 무동작**이지만, seam이 서 있어 Q-3 해소 시 코드 변경 없이 자동으로 살아난다. 테스트: `OutlierDetectorTest`(방향 판정 7케이스) + `IngestDealsUseCaseTest`(현재가 있음→LOWER 플래그+큐잉, 없음→미판정 회귀). 뮤테이션: 폴백 분기 제거 → "현재가 있음" 테스트만 RED 확인 후 복원.
+- **재개 트리거**: 운영자 승인 요청(docs/31에 7번째 행) → 승인 시 `BenchmarkParams`로 이관 + `defaults()` 편입 + decision-log. 1차 검증에서 오염 사례 관측해 폭 재조정. (배선 자체는 더 이상 막혀 있지 않다 — 값 승인만 남았다.)
 
 ## [부분해소] Q-15. 리뷰 큐 — 읽기·쓰기·web 버튼·텔레그램 버튼·**UNCLASSIFIED 승격** 완료. resolve-then-recur만 남음
 - **맥락**: AC-2 "🔥 최우선 알림", AC-3 승격/기각 UI는 알림·큐 처리 영역. BM-05(순수)는 outlierFlag 판정 + `ReviewQueueItem` 값 생성 + DealEvent 전이(promote/reject)까지만.

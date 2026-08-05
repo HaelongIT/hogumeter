@@ -36,6 +36,29 @@
   RED. 둘 다 복원 후 GREEN. core 전체 스위트 GREEN, `check-domain-consumers.sh` 등 게이트 통과.
 - **기록**: `docs/91` Q-17에 "잠정값이 전제한 호출자가 실제로는 없었다" 실측 정정 + Q-15 ①에 곁들여
   해소 기록.
+- **커밋**: `7265629`.
+
+## 2026-08-05 (3) — Q-14 SPARSE 폴백(OutlierDetector.classifyVsCurrent) 배선 (무중단 계속)
+
+`Matcher.confirm`을 잡은 같은 방법(순수 도메인 메서드별 `.method(` 호출수 grep)을 domain 계층 전체로
+넓히다 두 번째 caller-0를 찾았다. `check-domain-consumers.sh`는 클래스 단위라 `OutlierDetector`는
+`classify()`가 쓰이고 있어 "소비됨"으로 통과했지만, **같은 클래스의 다른 메서드**(`isAbsurdVsCurrent`,
+BM-05 AC-5 SPARSE 폴백)는 앱 레이어 호출자가 0이었다 — Q-14 board 문구 "주입(테스트/앱 레이어)"가 거짓
+전제였다(Q-17과 같은 모양). **결과**: 표본 5건 미만인 variant는 Tukey도 이 폴백도 둘 다 안 걸린 채
+운영돼 왔다.
+
+- **✅ 구현**: `OutlierDetector.classifyVsCurrent`(방향까지 내는 신설 메서드, `classify`와 같은 반환
+  계약) + `IngestDealsUseCase.classifyOutlier`가 SPARSE(n<5)일 때 `CurrentPriceProvider.currentPriceFor`
+  로 현재가를 얻어 이 폴백을 태운다. 현재가 null(Q-3, 네이버 키 미발급 — 운영 기본값)이면 조용히
+  스킵(지어내지 않음) — **지금은 대부분 여전히 무동작**이지만 seam이 서 있어 Q-3 해소 시 자동으로
+  산다. `IngestDealsUseCase` 생성자에 `CurrentPriceProvider` 추가(직접 `new`하는 테스트가 0곳이라
+  블라스트 반경 작음, Spring DI가 기존 스텁 빈을 자동 주입).
+- **테스트**: `OutlierDetectorTest` +7(방향 판정 파라미터라이즈드), `IngestDealsUseCaseTest` +2(현재가
+  있음→LOWER 플래그+큐잉, 없음→미판정 회귀 — 후자는 기존 동작이 안 바뀜을 증명). 테스트 인프라:
+  `FakeCurrentPriceProvider`(@Primary, 기본 null) 신설. 뮤테이션: 폴백 분기 제거 → "현재가 있음"
+  테스트만 RED 확인 후 복원. core 전체 스위트 GREEN, 게이트 4종 통과.
+- **기록**: `docs/91` Q-14 부분해소로 전환(배선 완료, 운영자 승인만 잔여) + `docs/99-lessons.md`에
+  "클래스 단위 게이트는 같은 클래스 안의 죽은 메서드를 못 잡는다" 교훈 추가.
 - **커밋 예정**: 이 증분 직후.
 
 TURN-END: 아래 갱신 예정 — 다음 증분 착수 전까지는 미확정.

@@ -13,6 +13,7 @@ import dev.hogumeter.core.adapter.persistence.ReviewQueueItemEntity;
 import dev.hogumeter.core.adapter.persistence.ReviewQueueItemRepository;
 import dev.hogumeter.core.adapter.persistence.WatchItemEntity;
 import dev.hogumeter.core.adapter.persistence.WatchItemRepository;
+import dev.hogumeter.core.application.port.out.CurrentPriceProvider;
 import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.deal.DealMergePolicy;
@@ -29,6 +30,7 @@ import dev.hogumeter.core.domain.product.DemandAxisMode;
 import dev.hogumeter.core.domain.review.ReviewQueueItem;
 import dev.hogumeter.core.domain.review.ReviewQueueType;
 import dev.hogumeter.core.domain.watch.PinState;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -56,18 +58,22 @@ public class IngestDealsUseCase {
 	private final VariantDemandScope demandScope;
 	private final ReviewNotifier reviewNotifier;
 	private final WatchItemRepository watchItems;
+	private final CurrentPriceProvider currentPriceProvider;
 	private final Matcher matcher = new Matcher();
 	private final DealMergePolicy mergePolicy = new DealMergePolicy();
 	private final OutlierDetector outlierDetector = new OutlierDetector();
 	private final BenchmarkParams params = BenchmarkParams.defaults();
 
-	/** SPARSE(n<5) 구간은 IQR 불안정 → 이상치 판정 보류(폴백 컷은 Q-14 후속). 이 이상에서만 IQR 판정. */
+	/** SPARSE(n<5) 구간은 IQR 불안정 → Tukey 대신 현재가 대비 폴백(AC-5, Q-14). 이 이상에서만 IQR 판정. */
 	private static final int OUTLIER_MIN_DISTRIBUTION = 5;
+	/** Q-14 잠정값(±50%) — 운영자 미승인이라 BenchmarkParams(승인 seam)와 분리해 여기 주입. */
+	private static final BigDecimal ABSURDITY_RATIO = new BigDecimal("0.5");
 
 	public IngestDealsUseCase(RawDealPostRepository rawPosts, DealEventRepository dealEvents,
 			DealEventSourceRepository sources, DealEventMapper mapper, CatalogProjection catalog,
 			ReviewQueueItemRepository reviewQueue, EvaluateAlertOnDealUseCase alertEvaluation,
-			VariantDemandScope demandScope, ReviewNotifier reviewNotifier, WatchItemRepository watchItems) {
+			VariantDemandScope demandScope, ReviewNotifier reviewNotifier, WatchItemRepository watchItems,
+			CurrentPriceProvider currentPriceProvider) {
 		this.rawPosts = rawPosts;
 		this.dealEvents = dealEvents;
 		this.sources = sources;
@@ -78,6 +84,7 @@ public class IngestDealsUseCase {
 		this.demandScope = demandScope;
 		this.reviewNotifier = reviewNotifier;
 		this.watchItems = watchItems;
+		this.currentPriceProvider = currentPriceProvider;
 	}
 
 	@Transactional
@@ -194,10 +201,19 @@ public class IngestDealsUseCase {
 		List<Long> distribution = dealEvents.findByVariantId(variantId).stream()
 				.map(DealEventEntity::getPriceFirst)
 				.toList();
+		OutlierFlag flag;
 		if (distribution.size() < OUTLIER_MIN_DISTRIBUTION) {
-			return;
+			// AC-5 폴백: Tukey는 표본이 적으면 불안정하다 — 현재가가 있으면 그 대비로만 비상식을 가른다.
+			// 현재가도 없으면(네이버 키 미발급, Q-3) 판정 근거가 아예 없다 — 조용히 스킵(지어내지 않는다).
+			Long currentPrice = currentPriceProvider.currentPriceFor(variantId);
+			if (currentPrice == null) {
+				return;
+			}
+			flag = outlierDetector.classifyVsCurrent(created.getPriceFirst(), currentPrice, ABSURDITY_RATIO);
 		}
-		OutlierFlag flag = outlierDetector.classify(created.getPriceFirst(), distribution, params);
+		else {
+			flag = outlierDetector.classify(created.getPriceFirst(), distribution, params);
+		}
 		if (flag == OutlierFlag.NONE) {
 			return;
 		}

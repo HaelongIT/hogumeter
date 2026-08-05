@@ -39,4 +39,14 @@ class OutlierDetectorTest {
 	void sparseFallbackFlagsAbsurdPricesVsCurrent(long price, boolean expected) {
 		assertThat(detector.isAbsurdVsCurrent(price, 1_000_000L, new BigDecimal("0.5"))).isEqualTo(expected);
 	}
+
+	// ---- AC-5 SPARSE 폴백 방향(classify와 같은 반환 계약) — classifyOutlier(IngestDealsUseCase)가 쓴다 ----
+	@ParameterizedTest(name = "price={0}, current=1,000,000 → {1}")
+	@CsvSource({
+			"300000, LOWER", "499999, LOWER", "500000, NONE", "900000, NONE",
+			"1500000, NONE", "1500001, UPPER", "2000000, UPPER"
+	})
+	void classifiesVsCurrentByDirection(long price, OutlierFlag expected) {
+		assertThat(detector.classifyVsCurrent(price, 1_000_000L, new BigDecimal("0.5"))).isEqualTo(expected);
+	}
 }

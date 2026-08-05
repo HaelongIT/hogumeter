@@ -86,6 +86,8 @@ class IngestDealsUseCaseTest {
 	RecordingReviewNotifier reviewNotifier;
 	@Autowired
 	WatchItemRepository watchItems;
+	@Autowired
+	FakeCurrentPriceProvider currentPriceProvider;
 
 	private long variantId;
 	private long colorProductId;
@@ -107,6 +109,7 @@ class IngestDealsUseCaseTest {
 		productAxes.save(new ProductAxisEntity(colorProductId, AxisType.DEMAND, "색상", List.of("블랙", "화이트")));
 
 		recordingAlertSender.sent.clear(); // 스파이는 싱글톤 — @Transactional이 롤백하지 않으므로 매 케이스 초기화
+		currentPriceProvider.price = null; // 기본은 미확립(운영 스텁과 동일) — 켜는 테스트만 채운다
 	}
 
 	/**
@@ -371,6 +374,40 @@ class IngestDealsUseCaseTest {
 		assertThat(queuedOf(ReviewQueueType.OUTLIER_LOWER)).hasSize(1);
 	}
 
+	/**
+	 * AC-5 SPARSE 폴백(Q-14) — 표본 5건 미만이면 Tukey 대신 현재가 대비로 판정한다.
+	 * {@code OutlierDetector.classifyVsCurrent}가 호출자 0이던 것을 여기서 배선했다.
+	 */
+	@Test
+	void sparseDistributionFallsBackToCurrentPriceWhenAvailable() {
+		currentPriceProvider.price = 1_000_000L;
+		savePost("ppomppu", "아이폰 17 256기가 특가", 890_000L, T); // 딜 1건 → SPARSE
+		useCase.ingestPending();
+		savePost("ppomppu", "아이폰 17 256기가 특가", 300_000L, T); // 병합 안 됨(허용폭 초과) + 현재가 대비 -70%
+
+		useCase.ingestPending();
+
+		DealEventEntity absurd = dealEvents.findByVariantId(variantId).stream()
+				.filter(d -> d.getPriceFirst() == 300_000L).findFirst().orElseThrow();
+		assertThat(absurd.getOutlierFlag()).isEqualTo(OutlierFlag.LOWER);
+		assertThat(queuedOf(ReviewQueueType.OUTLIER_LOWER)).hasSize(1);
+	}
+
+	/** 현재가가 없으면(Q-3 네이버 키 미발급, 운영 기본값) 표본이 적을 때 판정 근거가 아예 없다 — 지어내지 않는다. */
+	@Test
+	void sparseDistributionWithoutCurrentPriceIsNotFlagged() {
+		savePost("ppomppu", "아이폰 17 256기가 특가", 890_000L, T);
+		useCase.ingestPending();
+		savePost("ppomppu", "아이폰 17 256기가 특가", 300_000L, T); // currentPriceProvider.price는 null(기본)
+
+		useCase.ingestPending();
+
+		DealEventEntity notFlagged = dealEvents.findByVariantId(variantId).stream()
+				.filter(d -> d.getPriceFirst() == 300_000L).findFirst().orElseThrow();
+		assertThat(notFlagged.getOutlierFlag()).isEqualTo(OutlierFlag.NONE);
+		assertThat(queuedOf(ReviewQueueType.OUTLIER_LOWER)).isEmpty();
+	}
+
 	@Test
 	void initiallySoldOutPostIsBornEndedAndNotAlerted() {
 		// Q-27③: 최초 수집 시 이미 품절인 원문 → 딜은 ENDED로 태어나고 알림이 나가지 않는다.
@@ -471,6 +508,24 @@ class IngestDealsUseCaseTest {
 		@Primary
 		Clock testClock() {
 			return Clock.fixed(Instant.parse("2026-07-21T02:00:00Z"), ZoneOffset.UTC);
+		}
+
+		/** SPARSE(n&lt;5) 폴백(AC-5, Q-14)을 시험하려면 currentPrice를 실제로 켤 수 있어야 한다 —
+		 *  기본(운영) 스텁은 항상 null(Q-3, 네이버 키 미발급)이라 값을 못 만든다. */
+		@Bean
+		@Primary
+		FakeCurrentPriceProvider fakeCurrentPriceProvider() {
+			return new FakeCurrentPriceProvider();
+		}
+	}
+
+	/** 기본은 스텁과 동일하게 null(미확립) — 켜야 하는 테스트만 {@code price}를 채운다. */
+	static class FakeCurrentPriceProvider implements dev.hogumeter.core.application.port.out.CurrentPriceProvider {
+		Long price;
+
+		@Override
+		public Long currentPriceFor(long variantId) {
+			return price;
 		}
 	}
 

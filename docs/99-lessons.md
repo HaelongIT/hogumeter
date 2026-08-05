@@ -1153,3 +1153,22 @@
   있다면, 그 관심사를 반환값으로 분리해 호출자가 선택적으로 쓰게 한다.
 - **관련**: `docs/91` Q-15 ①, `IngestDealsUseCase.confirmDeal`/`ConfirmResult`, `ResolveReviewItemUseCase`,
   `ResolveReviewItemUseCaseTest`·`ReviewQueueEndpointTest`(뮤테이션 확인).
+
+## 2026-08-05 (2) — 도메인 함수의 caller-0 감사는 "테스트/앱 레이어"라는 board 문구도 못 믿는다 (Q-14)
+
+- **맥락**: `docs/91` Q-14가 "`absurdityRatio`는 `OutlierDetector.isAbsurdVsCurrent`에 **주입**(테스트/앱
+  레이어)"라고 적어 뒀는데, 실측 grep(`\.isAbsurdVsCurrent\(`)해 보니 **앱 레이어 호출자가 0**이었다 —
+  `IngestDealsUseCase.classifyOutlier`는 `distribution.size() < 5`(SPARSE)면 그냥 `return`하고 끝이었다.
+  즉 표본이 5건 미만인 variant는 Tukey도 이 폴백도 **둘 다 안 걸린 채** 지금까지 운영됐다.
+  `Matcher.confirm`(같은 날 먼저 찾은 사례, Q-17)과 정확히 같은 모양 — board 산문이 "이미 배선됐다"는
+  전제로 쓰여 있으면 그 전제 자체를 의심 대상에서 빼게 된다.
+- **왜 기계적 스캔이 놓쳤나**: `check-domain-consumers.sh`는 **클래스** 단위로 소비 여부를 본다 —
+  `OutlierDetector`는 `classify()`가 소비되고 있어 클래스 자체는 "소비됨"으로 통과했다. **같은 클래스
+  안에 소비되는 메서드와 안 되는 메서드가 섞여 있으면 클래스 단위 게이트는 못 잡는다.**
+  이번엔 수작업 grep(메서드 이름 → 전체 소스에서 `.methodName(` 호출 수)으로 잡았다.
+- **교훈(규칙화)**: **"주입(테스트/앱 레이어)"·"~에서 쓴다" 같이 board가 이미 배선됐다고 서술하는 문장도
+  실측 대상이다** — 특히 그 메서드가 속한 **클래스**가 이미 domain-consumers 게이트를 통과했다면 더
+  의심해야 한다(게이트가 "이 클래스는 안전하다"는 착각을 준다). 클래스 단위 소비 감사를 통과한 뒤에도,
+  값진 순수 판정 함수 하나하나를 정기적으로 `grep '\.methodName\('`로 재확인한다.
+- **관련**: `docs/91` Q-14(해소), `OutlierDetector.classifyVsCurrent`, `IngestDealsUseCase.classifyOutlier`,
+  `IngestDealsUseCaseTest`(뮤테이션 확인).
