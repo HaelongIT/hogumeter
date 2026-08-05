@@ -189,6 +189,13 @@ export function UsedSearchPage({ onRegistered }: { onRegistered?: (productId: nu
                   {search.targetPrice !== null && <> · 목표가 {search.targetPrice.toLocaleString('en-US')}원</>}
                   {' · '}
                   {search.pollIntervalMin}분 주기
+                  {search.exclude.length > 0 && <> · 제외: {search.exclude.join(', ')}</>}
+                  {search.bonusGroups.length > 0 && (
+                    <>
+                      {' · 보너스: '}
+                      {search.bonusGroups.map((group) => `${group.keywords.join(', ')}(${group.mode})`).join(' / ')}
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

@@ -19,6 +19,23 @@
     뮤테이션: 렌더링 호출 제거 → 신규 테스트만 RED 확인 후 복원. web 283건 GREEN, 빌드 통과.
 - **기록**: `docs/91` Q-79·Q-83 ⑧ 갱신, `working-area/decisions-needed.md` D-9 신규,
   `docs/99-lessons.md`에 ""완료" 마일스톤도 API 필드 소비처 0 감사에서 면제하지 않는다" 교훈 추가.
+- **커밋**: `9020e85`.
+
+## 2026-08-05 (6) — API 필드 소비처 0 재감사 계속, `UsedSearchView.exclude`·`.bonusGroups` 추가 발견·해소
+
+같은 방법(응답 인터페이스 필드 123개 전수 grep)을 나머지 화면(BenchmarkView·SignalView·CadenceView·
+PurchaseObservation·ComparisonRow/Axis·PrioritizedProduct)까지 넓혀 재확인 — 전부 정상 소비 중이었다
+(이미 여러 차례 감사를 거친 판단 화면이 특히 깨끗했다). USED 등록 화면에서 하나 더 나왔다.
+
+- **✅ 해소**: "등록된 중고 검색" 목록이 `required`·`targetPrice`·`pollIntervalMin`만 되읽고 `exclude`·
+  `bonusGroups`는 되읽지 않았다 — 검색을 여러 개 등록하면 어느 것에 어떤 제외·보너스 조건을 걸었는지
+  다시 확인할 방법이 없었다. `UsedSearchPage.tsx` 목록 항목에 두 줄 추가(비어 있으면 안 그림).
+- **테스트**: `UsedSearchPage.test.tsx` +2. 뮤테이션: 렌더링 제거 → 신규 테스트만 RED 확인 후 복원.
+  web 285건 GREEN, 빌드 통과.
+- **기록**: `docs/91` Q-72(M2 완료 표시 이후 발견)에 곁들여 기록.
+- **판단**: 남은 화면(WatchItemView 나머지 필드·ReviewQueueItem·AlertPolicyView·ProductSummary 등)은
+  전부 재확인 완료 — 이번 재검증에서 나온 새 API-필드-소비처-0은 여기까지다. `docs/30` 로드맵(ⓐ)·
+  API 필드 감사(ⓒ) 둘 다 다시 훑었고 D-9(결정 대기)를 빼면 코드로 열리는 새 일감이 없다.
 - **커밋 예정**: 이 증분 직후.
 
 ## 2026-08-05 — Q-15 ① UNCLASSIFIED 승격 배선 + Q-46 거짓 봉인 해제 (무중단 재개)

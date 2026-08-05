@@ -71,6 +71,54 @@ describe('UsedSearchPage', () => {
     expect(item).toHaveTextContent('10분 주기')
   })
 
+  /**
+   * 2026-08-05 발견 — `exclude`·`bonusGroups`(API 필드)를 목록이 지금까지 안 읽고 있었다. 등록해 둔
+   * 검색이 여럿이면 어느 검색에 어떤 제외·보너스 조건을 걸어 뒀는지 다시 볼 방법이 없었다.
+   */
+  it('제외 키워드·보너스 그룹이 있으면 등록된 검색 목록에도 보여준다', async () => {
+    vi.spyOn(api, 'listUsedSearches').mockResolvedValue([
+      {
+        usedSearchId: 5,
+        platform: 'BUNJANG',
+        required: ['아이폰17', '256'],
+        exclude: ['파손', '침수'],
+        targetPrice: null,
+        pollIntervalMin: 10,
+        bonusGroups: [{ keywords: ['미개봉', '새제품'], mode: 'TRIGGER' }],
+      },
+    ])
+    const user = userEvent.setup()
+    render(<UsedSearchPage />)
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: '제품' }), '1')
+
+    const item = await screen.findByText(/아이폰17 \+ 256/)
+    expect(item).toHaveTextContent('제외: 파손, 침수')
+    expect(item).toHaveTextContent('보너스: 미개봉, 새제품(TRIGGER)')
+  })
+
+  it('제외 키워드·보너스 그룹이 없으면 그 줄을 그리지 않는다 — 군더더기', async () => {
+    vi.spyOn(api, 'listUsedSearches').mockResolvedValue([
+      {
+        usedSearchId: 5,
+        platform: 'BUNJANG',
+        required: ['아이폰17'],
+        exclude: [],
+        targetPrice: null,
+        pollIntervalMin: 10,
+        bonusGroups: [],
+      },
+    ])
+    const user = userEvent.setup()
+    render(<UsedSearchPage />)
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: '제품' }), '1')
+
+    const item = await screen.findByText(/아이폰17/)
+    expect(item).not.toHaveTextContent('제외:')
+    expect(item).not.toHaveTextContent('보너스:')
+  })
+
   it('필수 키워드 없이 제출하면 core를 부르지 않고 에러를 보여준다', async () => {
     const user = userEvent.setup()
     render(<UsedSearchPage />)
