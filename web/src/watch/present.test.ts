@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WatchItemView } from '../api/types'
-import { dateLine, priceLine, revivalNotice, stateLabel } from './present'
+import { dateLine, endedNotice, priceLine, revivalNotice, stateLabel } from './present'
 
 const item = (overrides: Partial<WatchItemView> = {}): WatchItemView => ({
   watchItemId: 1,
@@ -43,6 +43,24 @@ describe('dateLine', () => {
 
   it('활성 핀은 핀한 날짜를 보여준다 — 아직 결말이 없다', () => {
     expect(dateLine(item({ pinnedAt: '2026-07-01T00:00:00Z', resolvedAt: null }))).toBe('2026-07-01 핀')
+  })
+})
+
+/**
+ * 활성 탭은 지금까지 `currentPriceLast`만 보여주고 `dealStatus`(API 필드)를 화면 어디서도 안 읽었다 —
+ * 딜이 이미 종료됐어도 사람은 그걸 모른 채 [샀어요]를 누르러 갈 뻔했다(2026-08-05 발견).
+ */
+describe('endedNotice', () => {
+  it('딜이 종료됐으면 그 사실을 말한다', () => {
+    expect(endedNotice(item({ dealStatus: 'ENDED' }))).toBe('⛔ 이 딜은 이미 종료됐습니다')
+  })
+
+  it.each(['NEW', 'ACTIVE', 'VERIFIED'] as const)('%s면 안내하지 않는다 — 아직 살아있다', (status) => {
+    expect(endedNotice(item({ dealStatus: status }))).toBeNull()
+  })
+
+  it('딜 자체가 사라져 상태를 모르면(방어적 null) 지어내지 않는다', () => {
+    expect(endedNotice(item({ dealStatus: null }))).toBeNull()
   })
 })
 

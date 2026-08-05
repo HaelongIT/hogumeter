@@ -34,3 +34,12 @@ export function dateLine(item: WatchItemView): string {
 export function revivalNotice(item: WatchItemView): string | null {
   return item.reviveUnacknowledged ? '↩️ 다시 살아남 — 아직 확인 안 함' : null
 }
+
+/**
+ * 지켜보던 딜이 이미 종료됐으면(품절·삭제 등) 그 사실을 말한다 — 활성 탭에 그대로 있어도 [샀어요]가
+ * 이미 늦었을 수 있다. `NEW`·`ACTIVE`·`VERIFIED`는 아직 살아있다는 뜻이라 안내하지 않는다. 딜 자체가
+ * 사라져 상태를 모르면(방어적 null, `priceLine`이 이미 그 경우를 "현재가 미확인"으로 말한다) 지어내지 않는다.
+ */
+export function endedNotice(item: WatchItemView): string | null {
+  return item.dealStatus === 'ENDED' ? '⛔ 이 딜은 이미 종료됐습니다' : null
+}

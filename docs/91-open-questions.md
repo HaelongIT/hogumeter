@@ -599,8 +599,13 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **남은 것(둘 다 진짜 코드 밖)**:
   1. **네이버 판매처 leg** — `CurrentPriceProvider`가 여전히 스텁(Q-3, 키 미발급)이라 "다른 몰 최저가"를 별도로 보여줄 재료가 없다. 이미 `BenchmarkView.currentPrice`/`gapLine`이 그 자리를 대신 채우고 있어(같은 포트), 실은 CMP-01의 "네이버" 열은 판단 화면의 갭 표시와 **개념이 겹친다** — Q-3 해소 시 별도 열로 분리할지, 지금처럼 겹쳐 둘지는 그때 재확인.
   2. **쿠팡 크롬 확장 자체(코드)** — ingest 수신부는 끝났지만 송신부(manifest·content script·DOM 파서)가 없다. **지금 만들면 위험하다**: 실 쿠팡 상품 페이지의 DOM 셀렉터를 확인할 방법이 fixture 없이는 없고, 손으로 지어낸 셀렉터는 "우연히 옳은 코드"(docs/99 — 다음 쿠팡 개편에 조용히 틀려진다)가 되기 쉽다. 실 쿠팡 페이지 캡처는 사람이 브라우저로 방문해야 하는 일이라 자동화 정지조건과 같은 성격이다.
-- **재개 트리거**(무엇이 참이 되어야 하는가): ① 네이버 키 발급(Q-3) — 그 순간 겹침 여부를 판단해 반영. ② 사용자가 실 쿠팡 상품 페이지 HTML(또는 스크린샷 기반 DOM 구조)을 fixture로 제공 — 그러면 파싱 로직을 TDD로(fixture golden) 만들고, manifest/content script는 그 위에 얹는다.
-- **관련**: Q-3(네이버 키), Q-78(레이트리밋 잠정치).
+  3. **🔍 발견(2026-08-05) — CMP-02 폴백(반자동 붙여넣기 웹 폼) 자체가 없다**: `docs/13`이 "확장 부재/고장
+     시 반자동 붙여넣기 입력(웹 폼)"을 명시하는데, `web/src` 전수 확인 결과 그런 폼이 없다(읽기 `coupangPriceLine`
+     만 있다). 이전 이 항목이 "남은 것 둘"로만 적어 이 폴백의 부재 자체를 놓치고 있었다. 막힌 이유는 구현
+     난이도가 아니라 **인증 경계**(`X-Extension-Token`을 웹 클라이언트에 심을지) — `working-area/decisions-needed.md`
+     D-9로 등록(정지조건 "시크릿 노출" 소지가 있어 임의로 못 정함).
+- **재개 트리거**(무엇이 참이 되어야 하는가): ① 네이버 키 발급(Q-3) — 그 순간 겹침 여부를 판단해 반영. ② 사용자가 실 쿠팡 상품 페이지 HTML(또는 스크린샷 기반 DOM 구조)을 fixture로 제공 — 그러면 파싱 로직을 TDD로(fixture golden) 만들고, manifest/content script는 그 위에 얹는다. ③ D-9 결정 시 웹 폼 착수.
+- **관련**: Q-3(네이버 키), Q-78(레이트리밋 잠정치), D-9(신규, 폴백 인증 경계).
 
 ## [해소 2026-07-27] Q-84. DealEvent 상태 전이 안전망 — DB 갱신 메서드가 우연히만 옳았다
 - **맥락**: Q-10 정리 뒤 이어서 "호출자 0" 감사를 domain 계층 전체로 넓히다 발견. `DealEvent.activate()`·`.verify()`·`.end()`(그리고 그 안의 `DealStatus.transitionTo`)는 프로덕션 호출자가 0이었다 — 실제 상태 변경은 `IngestDealsUseCase`(신규 딜은 raw 생성자로 조립)·`DealMergePolicy.merge()`(병합 상태 계산, 검증 없이 직접 대입)·`DealEventEntity.applyStatusChange`(단순 필드 대입, 검증 없음) 세 경로가 대신하고 있었다. 즉 "허용 전이만 통과"라는 상태기계의 계약이 도메인 계층엔 있지만 DB에 실제로 쓰는 지점엔 강제되지 않았다.
@@ -673,6 +678,14 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
        감이지 지금 여기서 조용히 확장할 사안이 아니다.
   6. **✅ web 5번째 표면 해소(2026-07-27, 사용자 지시)**: `web/src/watch/WatchPage.tsx` — 활성 탭(핀 목록 + 샀어요/기각·해제)·회고 탭(결말난 핀, 버튼 없음). 회고 조회 REST(`GET /api/v1/watch-items/resolved`, `resolvedAt` 필드)를 이 화면 착수 전에 먼저 배선했다(백엔드가 ACTIVE만 냈었다).
   7. **✅ 판단 화면 핀 손잡이 해소(2026-07-27)**: `DealEvent`·`BenchmarkView.DealRef`에 `dealEventId` 필드 추가(병합은 existing 정체성 유지, ingest 전 값은 자리표시자 0 — 저장 후 mapper가 실제 id로 재구성). `DecisionPage.tsx`의 "사례"·"최근 딜"마다 📌 핀 버튼 — 이제 딜 ID를 직접 입력하지 않고 판단 화면에서 바로 핀한다.
+  8. **✅ `WatchItemView.dealStatus` 소비처 0 해소(2026-08-05)**: API 필드 소비처 0 감사(응답 인터페이스
+     필드를 하나씩 grep)로 발견 — `dealStatus`(NEW/ACTIVE/VERIFIED/ENDED)는 core가 처음부터 내고
+     있었지만, `watch/present.ts`는 `currentPriceLast`만 읽고 이 필드는 화면 어디서도 안 봤다. **활성
+     탭에 그대로 남아 있는 핀의 딜이 이미 품절·삭제됐어도 사람이 알 방법이 없었다** — [샀어요]를 눌러
+     보고서야 늦었다는 걸 알 수 있었다. `endedNotice(item)`(`dealStatus === 'ENDED'`면 "⛔ 이 딜은 이미
+     종료됐습니다")를 추가해 활성 탭 각 항목에 병기. 테스트: `present.test.ts` +5(ENDED/NEW/ACTIVE/
+     VERIFIED/null 분기)·`WatchPage.test.tsx` +2(렌더링 여부). 뮤테이션: 렌더링 호출 제거 → 신규
+     테스트만 RED 확인 후 복원.
 - **잠정값**: 1~4·⑤의 부활 미응답 플래그 절반은 2026-07-30 전부 해소. ⑤의 **자격 상실 확인 필요 알림만**
   구현하지 않는다 — 트리거가 현재 아키텍처에서 발생 불가능함을 코드로 확인했다(위 5번 참조). WatchItem
   CRUD(REST)는 완전히 동작하므로 사람이 API·web 둘 다로 핀·결말을 조작할 수 있다.

@@ -56,3 +56,35 @@ _(D-6. 루리웹 잘린 제목 가격 복구 — **해소됨 2026-07-24**: 등�
 **지금 상태**: 급하지 않음 — 수동 아카이브로 사람이 원할 때 직접 끌 수 있어 Q-85 억제 로직이 죽어 있지 않다. 자동화는 순수 편의 기능.
 
 **연결**: `docs/91` Q-62(부분해소)·Q-30(삭제 3행 매트릭스)·Q-85(ARCHIVED 억제), `working-area/progress-log.md`(2026-07-27 Q-86 기록).
+
+---
+
+## D-9. CMP-02 폴백(반자동 붙여넣기 웹 폼)이 아예 없다 — 인증 경계를 어디로 둘지
+
+**무엇이 걸렸나**
+- `docs/13` CMP-02는 "확장 부재/고장 시 반자동 붙여넣기 입력(웹 폼)"을 명시하지만, 2026-08-05 재검증에서
+  이 폴백이 **어디에도 없다**는 걸 확인했다 — `web/src`를 전수 grep해도 쿠팡 가격을 수동 입력하는 컴포넌트가
+  없고, `DecisionPage`는 `getCoupangLatestPrice`(읽기)만 부른다. 이전 board(Q-79)는 "남은 것은 코드 밖
+  둘(네이버 leg·크롬 확장 자체)"이라고만 적어 이 폴백 자체의 부재를 놓치고 있었다.
+- **막힌 지점은 인증 경계다.** `POST /api/v1/coupang/observations`(`CoupangObservationController`)는
+  `X-Extension-Token`(고정 공유 비밀, `EXTENSION_INGEST_TOKEN`)을 core 레벨에서 강제한다 — nginx의 Basic
+  Auth(SEC-02, `/api/`도 서버 레벨로 같이 걸림)와는 **별개의 두 번째 인증**이다. 웹 폼이 이 엔드포인트를
+  그대로 쓰려면 토큰을 클라이언트 번들에 심어야 하는데, 그러면 "view source"로 누구나 꺼낼 수 있어 확장
+  전용으로 설계된 시크릿의 신뢰 경계가 흐려진다. 정지조건(CLAUDE.md "보안 게이트를 넓히거나 끄는 변경·
+  시크릿 노출")에 해당할 수 있어 임의로 못 정한다.
+- **선택지(참고용)**:
+  1. core에 **별도 엔드포인트**(예: `POST /api/v1/coupang/variants/{id}/manual-observation`)를 신설해
+     `X-Extension-Token` 없이 nginx Basic Auth 경계만으로 신뢰한다 — "확장의 신뢰"와 "로그인한 사람의
+     신뢰"를 구조적으로 분리. 단, core 자체엔 원래 인증이 없다는 전제(nginx.conf 주석)가 깨져 core를
+     리버스프록시 뒤에서만 쓴다는 가정이 더 굳어진다.
+  2. 웹 빌드/배포 시점에 토큰을 주입(예: nginx가 특정 sub-path 프록시에 `proxy_set_header`로 붙여
+     클라이언트 JS는 아예 토큰을 안 본다) — 클라이언트 노출은 막지만 nginx 설정에 시크릿이 들어간다
+     (배포 시크릿 관리 범위, `pre-deploy-checklist.md`와 연동 필요).
+  3. 폴백 자체를 안 만든다 — 확장이 나올 때까지(Q-79, fixture 대기) CMP-02는 완전히 코드 밖으로 둔다.
+     `docs/13`의 "반자동 붙여넣기" 요구를 축소 해석.
+
+**지금 상태**: 급하지 않음 — 크롬 확장 본체도 fixture 대기 중이라(Q-79) 이 폴백이 없어도 CMP-01의
+"쿠팡 관측 미확인" 정직한 표시로 정상 동작한다. 결정이 안 나도 막히는 다른 일감은 없다.
+
+**연결**: `docs/91` Q-79(CMP-02), `docs/13-feature-price-comparison.md`, `CoupangObservationController`,
+`web/nginx.conf`(SEC-02 Basic Auth 서버 레벨 적용).

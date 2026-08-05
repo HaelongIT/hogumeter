@@ -143,6 +143,27 @@ describe('WatchPage — 활성 탭', () => {
     expect(screen.queryByRole('button', { name: '확인함' })).toBeNull()
   })
 
+  /**
+   * 2026-08-05 발견 — `dealStatus`(API 필드)를 활성 탭이 지금까지 안 읽고 있었다. 딜이 이미 종료됐어도
+   * 사람은 그걸 모른 채 [샀어요]를 누르러 갈 뻔했다.
+   */
+  it('핀한 딜이 종료됐으면 그 사실을 활성 탭에서도 보여준다', async () => {
+    vi.spyOn(api, 'listActiveWatchItems').mockResolvedValue([activeItem({ dealStatus: 'ENDED' })])
+
+    render(<WatchPage />)
+
+    expect(await screen.findByText(/이미 종료됐습니다/)).toBeInTheDocument()
+  })
+
+  it('딜이 아직 살아있으면 종료 안내가 안 뜬다', async () => {
+    vi.spyOn(api, 'listActiveWatchItems').mockResolvedValue([activeItem({ dealStatus: 'ACTIVE' })])
+
+    render(<WatchPage />)
+    await screen.findByText('아이폰 17 특가')
+
+    expect(screen.queryByText(/이미 종료됐습니다/)).toBeNull()
+  })
+
   it('확인함을 누르면 서버에 확인 처리하고 목록을 다시 불러온다', async () => {
     const list = vi.spyOn(api, 'listActiveWatchItems')
     list

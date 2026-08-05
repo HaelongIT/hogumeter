@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { BoughtPrefill, WatchItemView } from '../api/types'
-import { dateLine, priceLine, revivalNotice, stateLabel } from './present'
+import { dateLine, endedNotice, priceLine, revivalNotice, stateLabel } from './present'
 
 type SubTab = 'active' | 'resolved'
 
@@ -174,6 +174,9 @@ export function WatchPage({ onBought }: { onBought?: (prefill: BoughtPrefill) =>
                   <span>{subject(item)}</span>
                   <span>{priceLine(item)}</span>
                   <span>{dateLine(item)}</span>
+                  {endedNotice(item) && (
+                    <span aria-label={`종료 안내 ${item.watchItemId}`}>{endedNotice(item)}</span>
+                  )}
                   {revivalNotice(item) && (
                     <span aria-label={`부활 안내 ${item.watchItemId}`}>{revivalNotice(item)}</span>
                   )}
