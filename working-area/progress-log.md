@@ -1,3 +1,32 @@
+## 2026-08-06 (1) — CLAUDE.md 3계층 개편 커밋 후 "정말 끝났나" 재검증 → REG-04 백필 배선(Q-87)
+
+사용자가 CLAUDE.md 개편 커밋 뒤 "확실히 더 없는 게 맞아? 기획 문서 다 보고 확인한 거 맞음?"이라고
+직접 도전 — `docs/30`·`decisions-needed`·`progress-log`를 다시 읽고 코드와 대조했다.
+
+- **찾은 것**: M1 완료 기준의 "④ 백필(REG-04) 미구현"이 `docs/91`·`decisions-needed` 어디에도
+  Q/D 번호 없이 로드맵 산문 한 줄로만 몇 주째 방치돼 있었다(loose-end 라우팅 표 위반 구체 사례,
+  `docs/99` 2026-08-06 기록). 부수로 `docs/30` M1 §5("D-3 미결")도 낡음 확인 — D-3은 2026-07-24
+  해소, 그걸로 풀린 Q-59(폴링 커서 영속화)도 같은 날 이미 구현됨.
+- **한 일**: REG-04 origin 배선(TDD) — `raw_deal_post.origin`(V23/R23, 기본 LIVE·additive) →
+  `RawDealPost` 엔티티 → `IngestDealsUseCase.candidateFrom`(하드코딩 `Origin.LIVE` 제거) →
+  collector `RawDealRecord.origin`(기본 "LIVE") → `raw_deal_sink.py`(posted_at과 같은 불변 정책).
+  덤으로 `DealMergePolicy`의 기존 origin 병합 로직(테스트 0건이었음)을 소급 테스트. core 831 테스트
+  GREEN(`DealMergePolicyTest` 4케이스·`IngestDealsUseCaseTest` 1케이스 신규), collector 306+44
+  테스트 GREEN(`test_raw_deal_sink.py` 2케이스 신규).
+- **자율로 정한 것**(되돌리기 쉬움): origin은 posted_at과 같은 "최초 발견 후 불변" 정책(재수집으로
+  안 덮임) — deal_event.origin이 이미 "유입 1회 판정"(C-4류) 패턴이라 정합. 기존 19개 `RawDealPost`
+  생성자 호출부는 건드리지 않고(원본 시그니처 유지, 내부적으로 origin="LIVE" 위임) 새 9-arg
+  오버로드만 추가 — 최소 침습.
+- **의도적으로 안 한 것**: 실제 소급 수집기(사이트 검색결과 페이지 fetch·파서)는 fixture 없이 지으면
+  "우연히 옳은 코드"가 되므로 손대지 않았다 — `docs/91` Q-87로 등록(사람의 fixture 캡처가 재개
+  트리거). `Origin.java`의 "BACKFILL은 교차검증 면제" javadoc이 코드로 재현 안 되는 것도 발견했으나
+  실제 BACKFILL 데이터가 없어 지금은 무해 — 의미 확정을 임의로 안 하고 Q-87에 묶어 기록.
+- **환경 잡음(코드 무관)**: 오늘도 로컬 `./gradlew test`가 미완료 JDK 설치로 데몬 스캔에서 죽었다
+  — `--no-daemon` + 인라인 `JAVA_HOME` 우회(기존 2026-07-27 기록과 동일 증상, 새 교훈 아님).
+- **다음**: 사용자 지시("둘 다 순서대로")에 따라 `docs/91`의 나머지 51개 열린 항목 재개 트리거를
+  순차 재검증 계속.
+- ⚠️ **당신이 볼 것**: 없음 — 전부 되돌리기 쉬운 additive 배선, 실 네트워크·정책 결정 없음.
+
 ## 2026-08-05 (7) — 무중단 계속 지시, 감사 범위 확장 + 실 스택 스모크로 최종 확인
 
 사용자 지시("계속 무중단으로 진행")로 캐치-0 감사를 이전에 안 본 층으로 넓혔다. 전부 GREEN이라 새

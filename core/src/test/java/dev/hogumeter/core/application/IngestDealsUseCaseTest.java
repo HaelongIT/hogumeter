@@ -29,6 +29,7 @@ import dev.hogumeter.core.application.port.out.AlertMessage;
 import dev.hogumeter.core.application.port.out.AlertSender;
 import dev.hogumeter.core.application.port.out.ReviewNotifier;
 import dev.hogumeter.core.domain.deal.DealStatus;
+import dev.hogumeter.core.domain.deal.Origin;
 import dev.hogumeter.core.domain.deal.OutlierFlag;
 import dev.hogumeter.core.domain.product.AxisType;
 import dev.hogumeter.core.domain.product.DemandAxisMode;
@@ -125,6 +126,11 @@ class IngestDealsUseCaseTest {
 				title, price, when, when, "ACTIVE")).getId();
 	}
 
+	private long savePost(String site, String title, Long price, Instant when, String origin) {
+		return rawPosts.save(new RawDealPost(site, "post" + postSeq++, "https://" + site + ".test/" + postSeq,
+				title, price, when, when, "ACTIVE", origin)).getId();
+	}
+
 	@Test
 	void confirmedMatchCreatesDealEvent() {
 		savePost("ppomppu", "아이폰 17 256기가 자급제 89만", 890_000L, T);
@@ -135,6 +141,22 @@ class IngestDealsUseCaseTest {
 		assertThat(deals).hasSize(1);
 		assertThat(deals.get(0).getPriceFirst()).isEqualTo(890_000L);
 		assertThat(sources.findByDealEventId(deals.get(0).getId())).hasSize(1);
+	}
+
+	/**
+	 * REG-04(Q-87): raw_deal_post.origin=BACKFILL이 deal_event.origin까지 그대로 닿는다.
+	 * 과거엔 candidateFrom이 Origin.LIVE를 하드코딩해 이 값이 core에 닿을 방법이 없었다 — 백필
+	 * 수집기 자체는 여전히 없지만(fixture 대기), 배선 결함은 여기서 먼저 없앤다.
+	 */
+	@Test
+	void backfillOriginPropagatesToDealEvent() {
+		savePost("ppomppu", "아이폰 17 256기가 자급제 89만", 890_000L, T, "BACKFILL");
+
+		useCase.ingestPending();
+
+		List<DealEventEntity> deals = dealEvents.findByVariantId(variantId);
+		assertThat(deals).hasSize(1);
+		assertThat(deals.get(0).getOrigin()).isEqualTo(Origin.BACKFILL);
 	}
 
 	@Test

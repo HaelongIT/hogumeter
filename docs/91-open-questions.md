@@ -772,6 +772,38 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **잠정값**: **알리지 않는다.** `FoldUsedListingsUseCase`가 같은 행을 되살리고(`revive`) 승격 표식은 보존하므로, 이후 가격하락·소실은 다시 알린다. seam = 되살리기 분기 1곳. 보수적인 쪽(놓침 < 오알림의 예외 — 이건 "같은 매물을 두 번 알리는" 스팸이라 오알림에 가깝다)을 택했다.
 - **재개 트리거**(무엇이 참이 되어야 하는가): 실 폴링에서 revive가 유의미하게 잦고(틱 리포트 `usedLifecycle[revived=..]`) 그중 "정말 다시 살 수 있게 된 매물"이 있는 것 — 그때 저강도 알림으로 분리한다. revived가 0에 가까우면 이 질문은 그대로 닫는다.
 
+## [열림] Q-87. REG-04 백필 — origin 배선은 뚫었으나 소급 수집기 자체가 없다
+- **맥락**: M1 완료 기준("등록 → **백필** → 실 핫딜 유입 → …")의 일부인데 `docs/91`·`decisions-needed`
+  어디에도 Q/D 번호가 없었다(2026-08-06 발견 — `docs/30` 로드맵 산문에만 "④ 백필 미구현"으로 적혀
+  있었다). `deal_event.origin`(V1)·`Origin` enum·`DealMergePolicy.merge()`의 LIVE 우선 승격 규칙은
+  전부 갖춰져 있었지만 `IngestDealsUseCase.candidateFrom`이 `Origin.LIVE`를 하드코딩해 BACKFILL이
+  core에 닿을 방법이 아예 없었다 — 설계는 끝났는데 입구가 막힌 형태.
+- **✅ 오늘 해소한 부분(배선)**: `raw_deal_post.origin` 컬럼 신설(V23/R23, 기본 LIVE·additive)
+  → `RawDealPost.getOrigin()` → `candidateFrom`이 하드코딩 대신 이 값을 읽는다. collector
+  `RawDealRecord.origin`(기본 "LIVE") → `raw_deal_sink.py` 업서트(최초 발견 경로라 `posted_at`처럼
+  재수집으로 안 바뀜). 종단 테스트: core `IngestDealsUseCaseTest#backfillOriginPropagatesToDealEvent`,
+  collector `test_raw_deal_sink.py`(기본값·불변성 2건). `DealMergePolicy`의 origin 병합 규칙은 이미
+  구현돼 있었는데 테스트가 0건이었다 — `DealMergePolicyTest#mergedOriginIsLiveWheneverEitherSideIsLive`로
+  소급 작성(4케이스).
+- **여전히 없는 것(진짜 백필 자체)**: collector에 "등록 제품의 과거 게시물을 찾아 과거 시점 딜을
+  만드는" 수집기가 없다. 필요한 것: ① 사이트별 검색/과거목록 페이지 fetch(뽐뿌·루리웹·펨코 각각
+  URL 패턴 다름) ② 그 페이지의 파서(현재 파서는 목록 첫 페이지 구조만 안다 — 검색결과 페이지는
+  구조가 다를 수 있어 fixture 없이 셀렉터를 지으면 Q-80·Q-79와 같은 "우연히 옳은 코드" 함정) ③ 등록
+  시점에 이 수집을 트리거하는 REST/유스케이스 ④ `origin=BACKFILL`로 적재.
+- **부수 발견(미해결, 여기 묶어 기록)**: `Origin.java`의 javadoc "BACKFILL(과거 소급, **교차검증
+  면제**·표기가 그대로)"은 코드로 재현이 안 된다 — `DealEvent.crossVerified()`는 `sourceSites().size()
+  >= 2`만 보고 origin을 전혀 고려하지 않는다(`DealMergePolicy.merge()`의 VERIFIED 승격도 마찬가지).
+  "면제"가 정확히 무엇을 뜻하는지(같은 사이트 내 백필 2건은 교차검증 아님? BACKFILL 사이트는
+  crossVerified 카운트에서 통째로 제외?)가 미확정이라 지금 고치면 추측이 된다 — 실제 백필 수집기가
+  없어 오늘은 아무 영향 없다(운영 데이터에 BACKFILL이 존재하지 않는다).
+- **잠정값**: 백필 트리거는 REG-01 화면에 없다(등록해도 자동 백필 없음, 수동 폴링만). 현재 동작
+  영향 없음 — seam은 `candidateFrom`(origin 소스) + 신규 수집기 진입점(아직 없음) 둘.
+- **재개 트리거**(무엇이 참이 되어야 하는가): ① 백필 자체 — 뽐뿌/루리웹/펨코 검색결과 페이지 fixture
+  1건씩 확보(사람이 캡처, 실 네트워크라 정지조건) → 파서 TDD → 등록 트리거 배선. ② crossVerified
+  면제 — 실제 BACKFILL 데이터가 생겨 "같은 사이트 백필 2건이 VERIFIED로 잘못 오르는" 사례가 실측되면
+  그때 정확한 의미를 결정(`decisions-needed`행, 표본 없이 임의로 안 정한다).
+- **관련**: `docs/30` M1 완료기준 ④, `Origin.java`, `DealMergePolicy.java:40-41`.
+
 ## [해소 2026-07-23] Q-72. M2 어댑터 미배선 — V3 스키마는 섰으나 생산자가 막혔다
 - **맥락**: V3 used 스키마 7테이블 중 `used_search`·`used_search_bonus_group`은 등록 REST(`RegisterUsedSearchUseCase`·`UsedSearchController`)가 배선했다. 나머지 5테이블은 어댑터 미배선 → `check-table-wiring`이 잡는다(allowlist에 이 Q로 선언).
 - **✅ 해소된 것(2026-07-22)** — 이 항목이 "막혔다"고 적어 둔 근거 중 **둘이 틀렸다**:

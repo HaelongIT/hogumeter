@@ -26,10 +26,10 @@ from ..pipeline.ingest import RawDealRecord
 
 _UPSERT = """
 insert into raw_deal_post
-    (site, post_id, url, title, headline_price, posted_at, captured_at, reaction_score, status, raw)
+    (site, post_id, url, title, headline_price, posted_at, captured_at, reaction_score, status, raw, origin)
 values
     (%(site)s, %(post_id)s, %(url)s, %(title)s, %(headline_price)s, %(posted_at)s,
-     %(captured_at)s, %(reaction_score)s, %(status)s, %(raw)s)
+     %(captured_at)s, %(reaction_score)s, %(status)s, %(raw)s, %(origin)s)
 on conflict (site, post_id) do update set
     url            = excluded.url,
     title          = excluded.title,
@@ -40,6 +40,8 @@ on conflict (site, post_id) do update set
     raw            = excluded.raw,
     -- 발생 시각은 불변(C-2). 처음에 못 얻었으면 그때 채운다.
     posted_at      = coalesce(raw_deal_post.posted_at, excluded.posted_at)
+    -- origin은 갱신하지 않는다 — 최초 발견 경로(LIVE/BACKFILL)는 불변(REG-04, Q-87).
+    -- deal_event.origin과 같은 정책(유입 1회 판정, C-4류).
 """
 
 
@@ -71,6 +73,7 @@ def _params(record: RawDealRecord) -> dict:
         "reaction_score": record.reaction_score,
         "status": record.status,
         "raw": Jsonb(record.raw),  # jsonb 컬럼 — 크롤링 원본 보관 전용
+        "origin": record.origin,
     }
 
 

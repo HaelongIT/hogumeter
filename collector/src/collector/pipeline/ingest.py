@@ -60,7 +60,9 @@ def oversized(deals: list[ParsedDeal]) -> list[Oversized]:
 class RawDealRecord:
     """raw_deal_post 한 행. collector가 `(site, post_id)` 업서트로 적재하는 계약 형태(core가 소비 후 매칭·병합).
 
-    상태·가격 변화는 기존 행에 반영된다(BM-01 AC-2). `posted_at`만 불변(발생 시각, C-2).
+    상태·가격 변화는 기존 행에 반영된다(BM-01 AC-2). `posted_at`·`origin`만 불변(발생 시각 C-2 /
+    최초 발견 경로 — REG-04, docs/91 Q-87). 이 폴링 경로(`to_raw_records`)는 실시간 수집만 하므로
+    `origin`은 항상 기본값 LIVE — 백필 수집기(fixture 대기)가 생기면 그쪽에서만 BACKFILL을 채운다.
     """
 
     site: str
@@ -73,6 +75,7 @@ class RawDealRecord:
     posted_at: datetime | None = None
     reaction_score: int | None = None
     raw: dict = field(default_factory=dict)
+    origin: str = "LIVE"
 
 
 def to_raw_records(deals: list[ParsedDeal], captured_at: datetime) -> list[RawDealRecord]:

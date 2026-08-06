@@ -40,6 +40,21 @@ class DealMergePolicyTest {
 		assertThat(merged.priceMax()).isEqualTo(1_010_000L);
 	}
 
+	// ---- origin 병합 = LIVE 우선(Origin.java: BACKFILL은 실시간 관측이 하나라도 붙으면 LIVE로 승격) ----
+	// 소급 작성(docs/99-lessons) — DealMergePolicy:40-41이 먼저 구현됐고 이 테스트가 없었다.
+	@ParameterizedTest(name = "existing={0}, incoming={1} → merged={2}")
+	@CsvSource({ "LIVE, LIVE, LIVE", "LIVE, BACKFILL, LIVE", "BACKFILL, LIVE, LIVE", "BACKFILL, BACKFILL, BACKFILL" })
+	void mergedOriginIsLiveWheneverEitherSideIsLive(Origin existingOrigin, Origin incomingOrigin, Origin expected) {
+		DealEvent existing = aDealEvent().withVariantId(1L).withPriceFirst(1_000_000).withSite("ppomppu")
+				.withSourceSites("ppomppu").firstSeen("2026-06-01T00:00:00Z").origin(existingOrigin).build();
+		DealEvent incoming = aDealEvent().withVariantId(1L).withPriceFirst(1_010_000).withSite("ruliweb")
+				.withSourceSites("ruliweb").firstSeen("2026-06-01T06:00:00Z").origin(incomingOrigin).build();
+
+		DealEvent merged = policy.merge(existing, incoming);
+
+		assertThat(merged.origin()).isEqualTo(expected);
+	}
+
 	// ---- AC-2 가격 경계(기준=기존가 1,000,000, 허용 ±20,000) ----
 	@ParameterizedTest(name = "incoming={0} → merge={1}")
 	@CsvSource({ "1020000, true", "1020001, false", "980000, true", "979999, false" })

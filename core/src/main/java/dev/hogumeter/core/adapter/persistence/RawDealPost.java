@@ -45,15 +45,26 @@ public class RawDealPost {
 	@Column(nullable = false)
 	private String status;
 
+	/** LIVE(실시간 폴링) / BACKFILL(등록 후 소급 수집, REG-04·docs/91 Q-87). V23__raw_deal_post_origin.sql. */
+	@Column(nullable = false)
+	private String origin;
+
 	protected RawDealPost() {
 	}
 
+	/** 기존 호출부 호환 — origin 생략 시 LIVE(지금까지의 유일한 실제 경로). */
 	public RawDealPost(String site, String postId, String url, String title, Instant capturedAt, String status) {
-		this(site, postId, url, title, null, null, capturedAt, status);
+		this(site, postId, url, title, null, null, capturedAt, status, "LIVE");
+	}
+
+	/** 기존 호출부 호환 — origin 생략 시 LIVE. */
+	public RawDealPost(String site, String postId, String url, String title, Long headlinePrice, Instant postedAt,
+			Instant capturedAt, String status) {
+		this(site, postId, url, title, headlinePrice, postedAt, capturedAt, status, "LIVE");
 	}
 
 	public RawDealPost(String site, String postId, String url, String title, Long headlinePrice, Instant postedAt,
-			Instant capturedAt, String status) {
+			Instant capturedAt, String status, String origin) {
 		this.site = site;
 		this.postId = postId;
 		this.url = url;
@@ -62,6 +73,7 @@ public class RawDealPost {
 		this.postedAt = postedAt;
 		this.capturedAt = capturedAt;
 		this.status = status;
+		this.origin = origin;
 	}
 
 	public Long getId() {
@@ -98,6 +110,10 @@ public class RawDealPost {
 
 	public String getStatus() {
 		return status;
+	}
+
+	public String getOrigin() {
+		return origin;
 	}
 
 	/** 재수집 시 변화 가능한 필드 갱신(상태 변화 감지 등, BM-01 AC-2). */

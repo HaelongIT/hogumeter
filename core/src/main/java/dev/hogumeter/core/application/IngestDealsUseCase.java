@@ -250,7 +250,9 @@ public class IngestDealsUseCase {
 		// 수요축 값은 매칭이 제목에서 판별한 것을 그대로 싣는다(Q-66 ①). null = 값 미상 — 지어내지 않는다.
 		// dealEventId는 저장 전이라 아직 없다(자리표시자 0) — confirmDeal이 실제 저장 후 mapper.toDomain(created)로
 		// 진짜 id를 다시 채운 값을 쓴다. 이 값 자체는 읽히지 않는다.
-		return new DealEvent(variantId, false, Set.of(), price, price, price, price, Origin.LIVE,
+		// origin은 raw_deal_post.origin을 그대로 옮긴다(REG-04, Q-87) — 과거엔 Origin.LIVE 하드코딩이라
+		// BACKFILL 경로가 core에 닿을 수조차 없었다. 병합 시 LIVE 승격은 DealMergePolicy가 이미 담당.
+		return new DealEvent(variantId, false, Set.of(), price, price, price, price, Origin.valueOf(post.getOrigin()),
 				Set.of(post.getSite()), OutlierFlag.NONE, false, DealStatus.fromRawPostStatus(post.getStatus()),
 				firstSeen, firstSeen, post.getSite(), post.getUrl(), Set.of(), demandAxisValue, 0L);
 	}

@@ -1190,3 +1190,34 @@
   끝난 화면"이라 여겨 다시 보지 않는다.
 - **관련**: `docs/91` Q-83 ⑧, `watch/present.ts` `endedNotice`, `WatchPage.tsx`, `WatchPage.test.tsx`
   (뮤테이션 확인).
+
+## 2026-08-06 — REG-04 백필이 산문으로만 "막혔다"고 적혀 Q-번호 없이 방치돼 있었다
+
+- **맥락**: 사용자가 "정말 더 할 게 없는지, 기획 문서를 다 보고 확인한 게 맞는지"를 물어 `docs/30`
+  로드맵을 처음부터 다시 읽었다. M1 완료 기준의 "④ 백필(REG-04) 미구현"이 `docs/91`·`decisions-needed`
+  어디에도 Q/D 번호 없이 로드맵 산문 한 줄로만 존재했다 — CLAUDE.md 작업 방식의 loose-end 라우팅
+  표를 어긴 채 몇 주째 방치.
+- **코드를 열어 보니 절반은 이미 돼 있었다**: `deal_event.origin` 컬럼(V1)·`Origin` enum·
+  `DealMergePolicy.merge()`의 LIVE 우선 승격 규칙까지 전부 갖춰져 있었는데, `IngestDealsUseCase
+  .candidateFrom`이 `Origin.LIVE`를 하드코딩해 `BACKFILL`이 core에 닿을 방법이 없었다 — "설계는
+  끝났는데 입구 한 줄이 막힌" 형태. `raw_deal_post`엔 애초에 `origin` 컬럼조차 없었다(로드맵 산문이
+  정확히 지적했던 부분).
+- **덤으로 발견**: `DealMergePolicy`의 origin 병합 로직(LIVE 우선)은 구현은 있는데 **테스트가 0건**이었다
+  — "규칙의 주장도 코드로 재현해 확인한다"(기존 원칙)의 새 사례. `Origin.java`의 "BACKFILL은 교차검증
+  면제" javadoc도 `crossVerified()`가 origin을 전혀 안 봐서 **코드로 재현이 안 되는 아스피레이션**이었다
+  (다만 실제 BACKFILL 데이터가 아직 없어 지금은 무해 — 백필 수집기 자체가 없다).
+- **한 일**: `raw_deal_post.origin`(V23/R23, 기본 LIVE·additive) 신설 → 엔티티·`candidateFrom` 배선 →
+  collector `RawDealRecord.origin`(기본 "LIVE") → `raw_deal_sink.py`(최초 발견 경로라 재수집으로 불변,
+  `posted_at`과 같은 정책). 소급 테스트: `DealMergePolicyTest`(4케이스)·`IngestDealsUseCaseTest`
+  (종단 1건)·`test_raw_deal_sink.py`(기본값·불변성 2건). 실제 소급 수집기(사이트 검색결과 페이지
+  fetch·파서)는 fixture 없이는 "우연히 옳은 코드"가 되므로 손대지 않고 `docs/91` **Q-87**로 등록
+  (crossVerified 면제 미결도 같이 묶음).
+- **교훈**: 로드맵 같은 "진행 상태" 산문에 적힌 "코드 밖" 서술은 **loose-end 라우팅 표를 우회하는
+  경로**가 된다 — Q/D 번호가 없으면 세션 시작 브리핑(`session-brief.sh`)에도 안 뜨고, 다음 세션은
+  그 줄의 존재 자체를 모른다. 새 규칙은 아니다(CLAUDE.md 작업 방식 표·`docs/30` 자체의 "⚠️ 보드가
+  막혔다고 적어 두면 검증하지 않는다" 경고가 이미 있다) — 이번엔 그 경고를 다시 어긴 구체 사례.
+- **환경 잡음(코드 무관, 이미 2026-07-27에 기록됨)**: 오늘도 `./gradlew test`가 미완료 로컬 JDK
+  설치(`Eclipse Adoptium`) 때문에 데몬 스캔 단계에서 죽었다 — `--no-daemon` + 인라인 `JAVA_HOME`
+  우회가 이번에도 통했다. 새 기록 아님, 기존 항목(2026-07-27) 참조.
+- **관련**: `docs/91` Q-87, `docs/30` M1 §4·5(정정), `IngestDealsUseCase.candidateFrom`,
+  `DealMergePolicyTest#mergedOriginIsLiveWheneverEitherSideIsLive`.

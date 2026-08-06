@@ -116,6 +116,27 @@ def test_posted_at_is_filled_in_when_it_was_unknown(connection):
     assert posted_at == POSTED
 
 
+def test_origin_defaults_to_live(connection):
+    """REG-04(Q-87): 이 폴링 경로는 실시간 수집만 하므로 origin은 기본 LIVE로 착지한다."""
+    sink = RawDealSink(connection)
+
+    sink.upsert_all([_record()])
+
+    (origin,), = _rows(connection, "origin")
+    assert origin == "LIVE"
+
+
+def test_origin_is_immutable_once_recorded(connection):
+    """posted_at과 같은 정책(C-2류) — 최초 발견 경로는 재수집으로도 안 바뀐다."""
+    sink = RawDealSink(connection)
+    sink.upsert_all([_record(origin="BACKFILL")])
+
+    sink.upsert_all([_record(origin="LIVE")])  # 같은 (site, post_id)를 나중에 실시간 폴링이 다시 봐도
+
+    (origin,), = _rows(connection, "origin")
+    assert origin == "BACKFILL"
+
+
 def test_raw_payload_round_trips_as_jsonb(connection):
     sink = RawDealSink(connection)
 

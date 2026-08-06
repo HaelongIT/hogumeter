@@ -49,10 +49,13 @@
 1. **텔레그램 봇 토큰 미발급**(Q-20) → **어댑터는 아웃바운드·인바운드 모두 완성**(2026-07-21). 아웃바운드: `TelegramAlertSender`(딜 알림)·`TelegramAdminNotifier`(관리)·`TelegramReviewNotifier`(미상 큐 버튼). 인바운드: `TelegramInboundPoller`+`ReviewCallbackRouter`(버튼 콜백→승격·기각, SEC-03 화이트리스트). **M1 완료 기준의 "버튼으로 미상 분류"까지 코드로 산다** — 사용자가 `.env`에 `TELEGRAM_ENABLED=true`+토큰+chat_id를 채우면 알림 수신·버튼 분류가 동작한다(실 응답은 수동 스파이크 1회). 기본(스텁)은 실 네트워크 없음.
 2. **네이버 API 키 미발급**(Q-3) → 현재가(BM-06 `currentPrice`)·갭 계산·REG-01 후보 검색 불가.
 3. **실 폴링 미가동** → `COLLECTOR_ALLOW_NETWORK=1`은 운영자 승인 사항. 실 데이터가 없으면 "기준가가 운영자 체감과 부합"을 대조할 수 없다. 켜기 전에 **사람이** `ALLOW_REAL_ROBOTS=1 bash scripts/check-robots.sh`를 한 번 돌린다(`pre-deploy §F`).
-4. **백필(REG-04) 미구현** → `raw_deal_post`에 `origin` 컬럼이 없다(있는 건 `deal_event.origin`). 계약 변경이 선행.
-5. **`decisions-needed` D-3 미결** → 차단당한 사이트 재개 경로가 없어 폴링 커서를 영속화할 수 없다(REL-03, Q-59).
+4. **백필(REG-04) 미구현** → **2026-08-06 배선은 뚫었다**(`raw_deal_post.origin` V23 신설 + `candidateFrom`
+   하드코딩 제거). 남은 건 소급 수집기 자체(사이트 검색결과 페이지 fixture 필요, 실 네트워크라 사람
+   몫) — `docs/91` **Q-87**.
+5. ~~**`decisions-needed` D-3 미결**~~ → **해소됨(2026-07-24, D-3) + 배선 완료(2026-07-24, Q-59)**.
+   폴링 커서 영속화(`site_poll_state`)까지 이미 산다. 이 항목은 낡은 채로 남아 있었다(2026-08-06 정정).
 
-> 1·2·3은 사람이 발급·승인해야 열린다. 4·5는 core 스키마·정책 결정이 선행한다.
+> 1·2·3은 사람이 발급·승인해야 열린다. 4는 사람의 fixture 캡처가 선행(코드는 준비됨). 5는 해소됨.
 > **⚠️ 보드가 "막혔다"고 적어 두면 다음 세션은 그 주장을 검증하지 않는다** — Q-50·Q-48은 둘 다 "core 기존 파일이라 조율"로 봉인돼 있었으나 실제로는 신규 파일만으로 끝났다. 재개 트리거는 "무엇이 참이 되어야 하는가"로 쓴다(CLAUDE.md 작업 방식).
 
 ## M2 — 중고 (USED 전체)
