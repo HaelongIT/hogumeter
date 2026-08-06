@@ -19,7 +19,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * SIG 신호등 조회(배선). 저장된 deal_event로 기준가를 재산출한 뒤 신호 색을 판정한다(compute-on-demand).
- * lastPoll(실 폴링 시각 미저장)·신선도 상수는 잠정 seam(docs/91 Q-24·Q-25·Q-26).
+ * lastPoll은 {@link ObservationClock}(마지막 성공 폴링, docs/91 Q-34 (b) 해소 2026-07-23)에서 읽는다.
+ * 신선도 상수는 여전히 잠정 seam(docs/91 Q-24·Q-25·Q-26).
  */
 @Service
 public class GetSignalUseCase {

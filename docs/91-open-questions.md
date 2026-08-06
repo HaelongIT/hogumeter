@@ -27,11 +27,13 @@ _(Q-2. 전역 API 컨벤션 — **해소됨 2026-07-08**: 배선 슬라이스 1�
 - **재개 트리거를 새로 정하지 않는다 — 사람이 정할 사안으로 승격**: 대안(스크래핑 vs 다른 공개 API vs 쿠팡 확장만으로 대체 vs 현재가 없이 운영)마다 절대 원칙 5(공식 API 우선·차단 우회 금지·차단 없는 공개 페이지는 저빈도 수용)의 해석이 갈린다 — `working-area/decisions-needed.md` D-7로 옮김.
 - **관련**: Q-79(CMP-01 네이버 leg), D-7(신규).
 
-## [열림] Q-4. used(중고) 스키마는 후속 마이그레이션으로 이월
-- **맥락**: M0-3 Flyway V1은 신품 코어 루프(M1=REG+BM+AL)만 담았다. 중고(기능5)의 UsedSearch/Listing/EAV 메모·축 테이블(`docs/02-domain-model.md`)은 M2 범위라 V1에서 제외.
-- **잠정값**: V1에 미포함. used 도메인 코드·테이블은 M2 착수 시 마이그레이션으로 추가.
-- **⚠️ 번호 정정(2026-07-11)**: 원래 `V2__used.sql`로 예약했으나, **V2 슬롯은 `V2__purchase.sql`(PUR)이 소진했다**(PUR이 M5→M1로 앞당겨지며 V2 번호를 가져감). used 스키마는 **V3+**로 작성한다. `docs/used/02-data-model.md`가 방향을 잡았고, 실제 마이그레이션은 core 단독 소유(Flyway)라 상대 개발자가 TDD로 확정한다.
-- **재개 트리거**: M2(중고) 착수 → used 모듈 문서 세트(`docs/used/`) 작성 ✅(2026-07-11 초안) → core V3 마이그레이션 TDD.
+_(Q-4. used(중고) 스키마는 후속 마이그레이션으로 이월 — **해소됨(M2 완료, 실측 확인 2026-08-06)**:
+재개 트리거 3단 전부 충족 — `docs/used/` 문서 세트 작성(2026-07-11) → `V3__used.sql`(+ `used_search_bonus_group`
+등 후속 테이블, core 소유) → core TDD(`UsedMatcherTest`·`UsedRiskSignalsTest`·`UsedAlertPolicyTest`·
+`RegisterUsedSearchUseCaseTest`·`FoldUsedListingsUseCaseTest`·`GetUsedSearchesUseCaseTest`·
+`UsedSearchControllerTest`·`UsedEvaluationControllerTest`·`UsedComparisonEndpointsTest` 등). 이 항목이
+`[열림]`으로 몇 주째 남아 loose-end 라우팅을 우회했다(2026-08-06 REG-04 재검증 스윕에서 함께 발견,
+`docs/99` 참조). 여기서 제거.)_
 
 _(Q-5. 뽐뿌 golden fixture 재채취 — **해소됨 2026-07-09**: 재채취 **불필요**. "baseList 계열 셀렉터 전무"라는 실측 기록이 오류였다(실제로 없는 건 `#revolution_main_table` **요소** 하나뿐). 같은 파일에서 딜 행 21건이 정상 파싱된다. UA 위장 금지(원칙5)라 운영에서도 이 응답을 받으므로 **이 fixture가 정본**이다. `list_ua_mismatch.html` → `list_normal.html` 개명, `parsers/ppomppu.py` GREEN. `docs/98` 2026-07-09 항목·decision-log 참조. 여기서 제거.)_
 
@@ -290,16 +292,27 @@ _(Q-36. collector DB 적재기 — **해소됨 2026-07-09**: `db/raw_deal_sink.p
 - **실제 상태**: 텔레그램 봇 토큰(Q-20) 없이도 스텁 발송으로 전 경로(창·조립·렌더링·분할·원자성 저장·스케줄·④ 핀 결말)가 완성됐다 — "재개 트리거"로 적어 둔 "텔레그램 토큰 발급"은 애초에 필수 전제가 아니었다(발송 포트가 스텁/텔레그램 둘 다 구현하므로).
 - **관련**: 상세는 `docs/91` Q-81(완전 해소) 참조 — 이 항목은 중복이라 여기서 닫는다.
 
-## [열림] Q-34. SIG·CAD 조회의 observedFrom·lastPoll = 잠정 대체값(미저장)
-- **맥락**: SIG·CAD REST 배선(`GetSignalUseCase`·`GetCadenceUseCase`, compute-on-demand)은 관측 좌표 2개가 필요하다 — CAD의 `observedFrom`(variant 관측 시작)과 SIG 신선도의 `lastPoll`(마지막 성공 폴링). 둘 다 아직 어디에도 저장하지 않는다(등록/수집 메타 미배선).
-- **잠정값**: `observedFrom` = 해당 variant 딜 중 **최초 firstSeen**(딜 0건이면 now) — 관측 개시를 최초 관측으로 근사. `lastPoll` = **`clock.instant()`(now)** — 항상 방금 폴링했다고 가정(신선도가 낙관적으로 편향). 가장 보수적이진 않으나 조회 read-model이라 되돌리기 쉬움. seam = 두 use-case의 해당 라인 1곳씩.
-- **재개 트리거**: (a) variant 등록/백필 도달 시각을 저장(REG 배선)하면 `observedFrom`을 그 값으로 교체 — 최초 딜보다 이른 관측 공백을 반영. (b) 수집 파이프라인이 `last_successful_poll`(사이트별/전역)을 기록하면 `lastPoll`을 실측으로 교체 — 수집 정지 시 신선도가 올바로 강등(Q-25). 연결: `Staleness`(3-2 관측 시계).
-- **진행(2026-07-09)**: collector 스케줄러가 `SiteState.last_successful_poll`을 **산출**하기 시작했다(사이트별). 다만 아직 **메모리 값**이라 core가 읽을 수 없다 — 영속화는 Q-36(DB 접점)에 종속. Q-36 해소 시 이 값을 테이블에 쓰면 (b)가 바로 열린다.
-- **✅ (b) 해소 2026-07-23**: `site_poll_state`(V12)에 collector가 **성공한 폴링만** 적고, core `ObservationClock`이 그중 **가장 이른** 값을 읽어 `SignalCalculator`에 넘긴다. 배선 뮤테이션으로 RED 증명 + 스모크 5-1 종단 단언(딱지 유무 양방향).
-  - **아래 2026-07-10 정정의 마지막 문장은 틀렸다.** `lastPoll = now`일 때 신선도가 "확신 한 칸"에 갇힌 게 아니라 **정반대**로 움직였다 — staleness가 벽시계를 따라 자라서 **수집이 멈춘 동안 딜이 늙은 것처럼 보이고** 신호등이 "딜 없음"으로 **거짓 강등**됐다. docs/03 3-2가 막으려던 "무지를 부재로 오독"이 그대로 일어나고 있었다. (막힘 사유 ①②는 둘 다 소유권 근거였고 2026-07-23 소유권 조항 폐기로 소멸.)
-  - **남은 한계**: `SignalCalculator`는 스칼라 하나만 받으므로 **딜별 소스 사이트의 폴링 시각**을 못 본다. `deal_event_source.site`가 있으니 정교화는 가능하다 — 사이트별 staleness가 필요해지면(예: 한 사이트만 오래 죽어 있고 그 사이트 딜만 오래됐을 때) 그때 signature를 넓힌다. 지금은 min이 보수적(딜을 덜 탈락시킨다)이라 족하다.
-  - **폴링 기록이 0행이면** 벽시계로 대신하고 "수집 기록 없음" 딱지를 단다(조용한 sentinel 금지).
-- **⚠️ 정정(2026-07-10)**: 위 문장은 이제 틀렸다. **Q-36은 해소됐지만 (b)는 열리지 않았다.** ① 값을 담을 테이블이 없고(마이그레이션 = core 소유) ② 그 값을 읽어 `SignalCalculator`에 넘기는 곳은 `GetSignalUseCase`(**상대 소유 기존 파일**)다. 그래서 지금도 `lastPoll = clock.instant()`이고, **SIG-02 신선도 3단은 "확신" 한 칸만 도달 가능하다** — 수집이 멈춰도 신호등이 강등되지 않는다. 재개 트리거는 "무엇이 참이 되어야 하는가"로 다시 쓴다: **`last_successful_poll`이 어딘가에 영속되고, `GetSignalUseCase`가 그것을 읽을 수 있어야 한다.** (2026-07-10 감사에서 `SIG-02`가 코드 참조 0으로 걸려 발견.)
+## [열림] Q-34. SIG CAD observedFrom = 잠정 대체값(미저장) — (b) lastPoll은 해소됨
+- **맥락**: SIG·CAD REST 배선(`GetSignalUseCase`·`GetCadenceUseCase`, compute-on-demand)은 관측 좌표 2개가
+  필요했다 — CAD의 `observedFrom`(variant 관측 시작)과 SIG 신선도의 `lastPoll`(마지막 성공 폴링).
+- **✅ (b) lastPoll 해소(2026-07-23, SIG-02 관측시계 배선)**: `site_poll_state`(V12)에 collector가
+  **성공한 폴링만** 적고, core `ObservationClock`이 그중 **가장 이른** 값을 읽어 `SignalCalculator`에
+  넘긴다(`GetSignalUseCase`가 이미 이 클래스를 쓴다). 폴링 기록이 0행이면 벽시계로 대신하고 "수집 기록
+  없음" 딱지를 단다(조용한 sentinel 금지). 테스트: `SignalCadenceEndpointTest
+  .collectionGapDoesNotAgeDealsPastTheQualifyLimit`(수집 공백에서 staleness 정지 — 벽시계였다면 거짓
+  강등됐을 것) · `.signalSaysSoWhenThereIsNoPollRecordToMeasureFreshnessAgainst`(무기록 딱지). **이 board
+  항목이 2026-08-06까지 `[열림]`으로 남아 있었다 — 코드·테스트는 2026-07-23에 이미 끝났는데 board가
+  안 따라왔다(loose-end 라우팅 우회 사례, REG-04/Q-87 재검증 스윕에서 함께 발견, `docs/99` 참조).**
+  옛 "상대 소유라 조율"이라던 막힘 사유는 2026-07-23 소유권 조항 폐기로 소멸했었다.
+  - **남은 한계**: `SignalCalculator`는 스칼라 하나만 받으므로 **딜별 소스 사이트의 폴링 시각**을 못
+    본다. `deal_event_source.site`가 있으니 정교화는 가능하다 — 사이트별 staleness가 필요해지면(예:
+    한 사이트만 오래 죽어 있고 그 사이트 딜만 오래됐을 때) 그때 signature를 넓힌다. 지금은 min이
+    보수적(딜을 덜 탈락시킨다)이라 족하다.
+- **(a) observedFrom — 여전히 열림**: `observedFrom` = 해당 variant 딜 중 **최초 firstSeen**(딜 0건이면
+  now)으로 근사 중 — variant 등록/백필 **도달 시각** 자체를 저장하지 않는다.
+- **재개 트리거**(a): variant 등록/백필 도달 시각을 저장(REG 배선)하면 `observedFrom`을 그 값으로
+  교체 — 최초 딜보다 이른 관측 공백을 반영. seam = `GetSignalUseCase`·`GetCadenceUseCase`의 해당
+  라인 1곳씩.
 
 ---
 
@@ -384,9 +397,10 @@ _(Q-47. web 등록 폼 가격축 조합 — **해소됨 2026-07-09**: `buildComm
   smoke가 종단으로 `matched[confirmed=1 …]`를 잠근다. 테스트: `PipelineTickReportTest`·`IngestDealsUseCaseTest.
   reportCountsMatchTiersAndFirstAlerts`·`PipelineSchedulerTest`.
 - **~~후속 알림 발송 수 미집계~~ 해소(2026-07-21)**: `sendFollowUps`가 int를 반환하는데 `PipelineScheduler`가 그걸 `BiConsumer`로 받아 **버리고 있었다**(값이 흐르다 버려지는 절반 카운터). `BiFunction`으로 바꿔 `runStepReturning`으로 붙잡고 `PipelineTickReport.followUpPriceChangedSent·followUpEndedSent`로 싣는다 — 첫 알림과 부류가 다르고 후속끼리도 PRICE_CHANGED·ENDED를 가른다(ENDED가 몰리면 딜 대거 종료, PRICE_CHANGED가 몰리면 가격 이동 — 뜻이 다르다). 로그: `followUpsSent[priceChanged=.. ended=..]`. 테스트: `PipelineSchedulerTest.followUpSendCountsFlowIntoReport`(값이 리포트로 흐름을 관통), `PipelineTickReportTest.reportsFollowUpSendCountsByKind`, 스모크가 종단으로 마커를 잠근다.
-- **남은 것**: ① OBS-01 구조화 로그(JSON) — 지금은 텍스트(로그 수집기 붙일 때, core 전체 형식 변경이라 조율). ④ **API 쿼터**는 네이버 키 대기(Q-3).
-- **잠정값**: 텍스트 로그 + 틱 단위 카운터. `docker logs`로 읽는다.
-- **재개 트리거**: ①은 로그 수집기(운영 배포)를 붙일 때 — core 전체 로그 형식을 바꾸는 일이라 상대와 조율. ②③은 use case 반환값 변경이 필요하니 **core 기존 파일 수정**이라 조율 대상. ④는 Q-3.
+- **남은 것은 ④ 하나뿐**: ①②③은 위에서 전부 해소됨(**2026-08-06 정정** — 이 줄이 391번째 줄의 ① 해소
+  기록과 모순된 채 몇 주째 남아 있었다, REG-04/Q-87 재검증 스윕에서 발견, `docs/99` 참조). **API 쿼터
+  사용량**만 네이버 키 자체가 없어(Q-3, API 서비스 종료) 측정 대상이 없다.
+- **재개 트리거**: ④는 D-7(네이버 대체 데이터소스 결정) 해소 후 실제 어댑터가 생기면.
 
 ## [해소] Q-56. 단계 실패 카운터 + 연속 실패 관리 알림(OBS-03) 완성
 - **맥락**: `PipelineScheduler.runStep`은 한 단계(ingest·reprocess)가 던져도 다른 단계와 다음 주기를 살리려고 예외를 잡는다. 잡은 뒤에는 `log.error`로 단계 이름과 함께 남기고 계속한다. **격리는 침묵이기도 하다** — DB 스키마 불일치·락 충돌 같은 지속 실패가 나면 파이프라인은 도는 척하며 아무것도 처리하지 않는데, `docker logs`의 `log.error` 한 줄을 grep하지 않으면 모른다.
