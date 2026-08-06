@@ -59,7 +59,10 @@ fi
 # 승격 경로가 3계층(CLAUDE.md 축적된 규칙 / .claude/rules / docs/21)이므로 셋을 합산한다 —
 # 하나만 세면 나머지 두 곳으로 흩어진 승격을 "누락"으로 오판한다.
 TDD="docs/21-tdd-guidelines.md"
-lessons="$(grep -c '^### 20' "$L" 2>/dev/null || true)"
+# 항목 헤더가 두 관행으로 갈려 있다(`### YYYY-MM-DD 제목`인 옛 형식과 `## YYYY-MM-DD — 제목`인
+# 2026-07-10 이후 형식, docs/99 자체의 "## 항목 양식"은 안 갱신됨) — 둘 다 세지 않으면 실제 126건 중
+# 43건만 잡혀 "승격이 밀린다"는 거짓 경보가 뜬다(2026-08-06 실측 발견).
+lessons="$(grep -cE '^#{2,3} [0-9]{4}-[0-9]{2}-[0-9]{2}' "$L" 2>/dev/null || true)"
 rules_claude="$(sed -n '/^## 축적된 규칙/,/^## /p' "$C" 2>/dev/null | grep -c '^- ' || true)"
 rules_scope="$(cat .claude/rules/*.md 2>/dev/null | grep -c '^- ' || true)"
 rules_tdd="$(sed -n '/^## 테스트 결함 패턴/,/^## /p' "$TDD" 2>/dev/null | grep -c '^- ' || true)"
@@ -68,7 +71,7 @@ echo "[기록 드리프트]"
 echo "  $L 교훈 ${lessons:-0}건  vs  승격 규칙 ${rules_total}건"
 echo "    (CLAUDE.md ${rules_claude:-0} / .claude/rules ${rules_scope:-0} / $TDD ${rules_tdd:-0})"
 echo "  최근 교훈 3건:"
-grep '^### 20' "$L" 2>/dev/null | tail -3 | sed 's/^### /    /' || true
+grep -E '^#{2,3} [0-9]{4}-[0-9]{2}-[0-9]{2}' "$L" 2>/dev/null | tail -3 | sed -E 's/^#{2,3} /    /' || true
 echo "  → 새 교훈은 3계층 중 하나로 승격할 것 — 언어 무관+매 세션 필요만 CLAUDE.md,"
 echo "     언어·디렉토리 한정은 .claude/rules/<scope>.md, 테스트 기법은 docs/21."
 echo
