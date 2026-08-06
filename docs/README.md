@@ -27,7 +27,7 @@
 | [`14-feature-used-market.md`](14-feature-used-market.md) | 중고 (USED) | 기능5 |
 | [`15-feature-purchase.md`](15-feature-purchase.md) | **(2차)** 구매 기록·관찰·성적표 (PUR) | M5 |
 | [`16-feature-signal-cadence.md`](16-feature-signal-cadence.md) | **(2차)** 신호등·딜 주기 (SIG·CAD) | M5 |
-| [`17-feature-watchlist.md`](17-feature-watchlist.md) | **(2차)** 딜 보관함 (WATCH) — 조건부 스텁 | M6 |
+| [`17-feature-watchlist.md`](17-feature-watchlist.md) | **(2차)** 딜 보관함 (WATCH) | M6 |
 | [`18-feature-digest.md`](18-feature-digest.md) | **(2차)** 주간 다이제스트 (DIGEST) | M5 |
 | [`19-feature-priority.md`](19-feature-priority.md) | **(2차)** 우선순위 (PRI) — ②축소 | M6 |
 

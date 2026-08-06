@@ -86,10 +86,10 @@ stdout은 **JSON Lines**다. `docker logs`가 유일한 관측 창구이므로 �
 
 ## 미구현 (정직하게)
 - **폴링 커서 영속화**(REL-03): 사이트별 상태(연속 실패·중지)가 메모리에만 있다. 재시작하면 초기화된다. 영속화하려면 **차단당한 사이트의 재개 경로**(`decisions-needed` D-3)가 먼저 정해져야 한다 — 안 그러면 영구 중지가 디스크에 남는다.
-- **robots 실 대조**: `RobotsGate`는 구현됐고(Q-38 해소) 실 소켓 경로도 리허설된다(`scripts/check-robots-drill.sh`, CI `robots` 잡). 그러나 **실 3사 robots.txt는 아직 안 봤다** — `ALLOW_REAL_ROBOTS=1 bash scripts/check-robots.sh`를 **사람이** 한 번 돌려야 하고(실 네트워크는 정지조건), 결과는 `docs/98`에 붙인다. `pre-deploy §F` 필수 항목.
+- ~~**robots 실 대조**~~ **완료(2026-07-23, 사용자가 직접 실행)**: `RobotsGate`는 구현됐고(Q-38 해소) 실 소켓 경로도 리허설된다(`scripts/check-robots-drill.sh`, CI `robots` 잡). 실 3사+번개 `robots.txt`도 대조 끝났다(`docs/98-field-notes.md`) — **뽐뿌 ALLOW · 루리웹 ALLOW(`view=` 있는 URL 등 일부 패턴만 제외) · 펨코 DISALLOW(전면 차단 → 자동 중지, 재시도 없음) · 번개 ALLOW(robots.txt 자체가 없음)**. 실 폴링을 켜도 펨코로는 요청이 한 번도 안 나간다.
 - ~~**core 재처리**~~ **해소(2026-07-10)**: `PipelineScheduler`가 60초마다 ingest → 가격 재처리 → 종료 판정을 돈다. 업서트한 상태·가격 변화가 이제 `deal_event`까지 간다(`docs/91` Q-27 ①⑤). 잔여: 최초 수집 시 이미 품절인 원문·애매글 재스캔(Q-27 ③④).
-- **번개장터는 폴링되지 않는다.** `parse_bunjang`과 그 golden·테스트는 있으나 `hotdeal_boards()`에 `SiteSpec`이 없어 **프로덕션 호출자가 0이다**(2026-07-10 실측). 중고(USED)는 M2 범위라 의도된 것이다 — 다만 `policy.py`의 마켓 레이트 하한(600s)·`SiteKind.MARKET`도 같이 잠들어 있다. M2 착수 시 `sites.py`에 등록하면 깨어난다. **테스트가 GREEN이라고 도는 것이 아니다.**
-- **품절 감지 실검증**: 4사 모두 `list_normal` golden만 있어 SOLD_OUT 경로는 fixture로 확인되지 않았다 — Q-19.
+- ~~**번개장터는 폴링되지 않는다**~~ **해소(M2 완료)**: `market.py`가 `_PLATFORM_PARSERS`로 `parse_bunjang`을 등록해 마켓 폴링 루프가 실제로 돈다. robots 확인도 완료(ALLOW·robots.txt 부재, 사람이 직접 실행). `used_listing_sink.py`가 `listing`/`used_listing_observation`에 적재하고 core `FoldUsedListingsUseCase`가 diff→생애주기 알림까지 잇는다. 남은 건 `COLLECTOR_ALLOW_NETWORK=1` 실 폴링 승인뿐.
+- **품절 감지 실검증**: 루리웹(3건)·펨코(2건)는 golden에 SOLD_OUT 사례가 있어 확인됐다. **뽐뿌 `.end2`만 golden 커버리지 0** — 합성 HTML 테스트로 잠가 뒀지만 셀렉터의 진위는 실 사이트로만 확인된다 — Q-19.
 - **번개 status 코드표**: `"0"=판매중`만 실측. 비-`"0"`을 전부 SOLD_OUT으로 보는 건 잠정 — Q-44.
 - **크기 상한**(SEC-05, 구현됨): title 300자 · url 2000자 · post_id 64자 · raw 256KiB. 넘으면 **자르지 않고 거절**하고 `oversized` 이벤트로 남긴다. 상한값은 golden 89건 실측 최대의 수 배이며 전수 대조로 오차단 0건 확인(Q-55 해소).
 - **드리프트 임계**(REL-06 구현됨): `window=10 / 성공률 0.6 / 조용한 0건 3연속`은 실 수집 없이 정한 잠정값 — Q-45.
@@ -106,5 +106,5 @@ stdout은 **JSON Lines**다. `docker logs`가 유일한 관측 창구이므로 �
 
 ## DB 계약 (core ↔ collector)
 - `raw_deal_post`: collector가 업서트(`db/raw_deal_sink.py`). core가 소비 후 매칭·병합. **Flyway는 core 단독 소유** — collector는 마이그레이션하지 않고, 통합 테스트는 core의 `db/migration/V*__*.sql`을 **버전 순서대로 전부** 적용해 계약을 검증한다(일부만 적용하면 그것도 미러다).
-- `used_listing_observation`: **아직 없는 테이블이다.** V1·V2 어디에도 없다 — M2(중고) 착수 시 core가 만든다. 그래서 `parse_bunjang`은 fixture 테스트만 있고 스케줄러·적재기 어디에도 배선돼 있지 않다.
+- `used_listing_observation`·`listing`: V3(core Flyway, M2)에 있다. `used_listing_sink.py`가 적재하고, core `FoldUsedListingsUseCase`가 diff→생애주기(신규/가격변동/판매완료 추정)로 접는다.
 - 스키마 진화는 **Flyway(core) 단독 소유** — collector는 마이그레이션 금지, 계약 테이블만 접근.

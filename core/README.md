@@ -18,22 +18,32 @@ hogumeter의 상시 가동 코어. **헥사고날** 구조로, 순수 `domain`�
 dev.hogumeter.core
 ├── domain/          # 순수 Java. Spring/JPA/IO 의존 금지. 단위 테스트로 완결
 │   ├── product/     # Product, Variant, 축 모델
-│   ├── deal/        # DealEvent, 병합 판정, 상태기계(전이 규칙)
-│   ├── benchmark/   # 기준가 엔진: 정규화·이상치 판정·median/P25·3단 표본
+│   ├── deal/        # DealEvent, 병합 판정, 상태기계(전이 규칙), 이상치 판정(Tukey + SPARSE 폴백)
+│   ├── dealset/     # pricingSet/occurrenceSet/signalSet 3분(docs/03)
+│   ├── benchmark/   # 기준가 엔진: 정규화·median/P25·3단 표본·콜드스타트 잭팟
 │   ├── matching/    # 문자열 정규화·별칭 사전 매칭·3단 판정
 │   ├── alert/       # 트리거 평가·최고강도 1발·방해금지 보류·후속
-│   └── review/      # 승격 큐(미상 분류·이상치 승격·키워드 제안)
+│   ├── review/      # 승격 큐(미상 분류·이상치 승격·키워드 제안)
+│   ├── purchase/    # 구매 기록·관찰 모드·성적표(PUR, 2차)
+│   ├── signal/      # 신호등 3단(SIG, 2차)
+│   ├── cadence/     # 딜 주기(CAD, 2차)
+│   ├── digest/      # 주간 다이제스트 창·규칙(DIGEST, 2차)
+│   ├── watch/       # 딜 보관함 핀 생명주기(WATCH, 2차)
+│   ├── priority/    # 우선순위 대기 판정(PRI, 2차)
+│   ├── used/        # 중고 3계층 매칭·위험 신호·평가기(USED, M2)
+│   ├── comparison/  # 레이트리밋 등 CMP 재료
+│   └── time/        # 시간 좌표계 공용 유틸(docs/03)
 ├── application/     # 유스케이스 오케스트레이션 + port 인터페이스
-│   └── port/ (in: usecase / out: repository·naverClient·telegramSender·clock)
+│   └── port/ (in: usecase / out: repository·naverClient·telegramSender·currentPriceProvider·clock)
 └── adapter/
     ├── persistence/ # JPA (@DataJpaTest + Testcontainers)
     ├── web/         # REST 컨트롤러 (@WebMvcTest)
-    ├── telegram/    # 봇 어댑터 (발송 + 인라인 버튼 콜백)
-    ├── naver/       # 네이버 쇼핑 API 클라이언트 (WireMock 테스트)
-    └── scheduler/   # 알림 평가·방해금지 플러시·캐시 만료
+    ├── telegram/    # 봇 어댑터 (딜/관리 알림 발송 + 인라인 버튼 콜백 + 다이제스트 렌더링)
+    ├── naver/       # 네이버 쇼핑 API 클라이언트 (스텁 — API 서비스 종료, Q-3)
+    └── scheduler/   # 파이프라인 틱·알림 평가·방해금지 플러시·다이제스트 스케줄
 ```
 
-> 2차 기획 도메인 모듈(`purchase`·`digest`·`watch`·`priority`)은 M5/M6 착수 시 추가 — [`../docs/01-architecture.md`](../docs/01-architecture.md), [`../docs/15-feature-purchase.md`](../docs/15-feature-purchase.md) 등.
+상세 경계·2차 기획 모듈 안내는 [`../docs/01-architecture.md`](../docs/01-architecture.md) — `docs/15~19`(PUR·SIG/CAD·WATCH·DIGEST·PRI)·`docs/14`(USED)가 각 기능 정본이다.
 
 ## 파이프라인 트리거 (`adapter/scheduler`)
 
