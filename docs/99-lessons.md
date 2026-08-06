@@ -1250,3 +1250,28 @@
 - **한 일**: 셋 다 board 텍스트만 정정(코드 변경 없음, 전부 이미 GREEN이었다). Q-4는 해소 스텁으로,
   Q-34는 헤더에서 "(b) 해소"를 명시하고 옛 정정문을 삭제, Q-57은 "남은 것" 줄을 ④ 하나로 좁혔다.
 - **관련**: `docs/91` Q-4·Q-34·Q-57, `working-area/progress-log.md` 2026-08-06.
+
+## 2026-08-06 — quiet hours가 9시간 어긋나 있었다 — 개발 기계가 우연히 KST라 안 보였다
+
+- **맥락**: OPS-03 NFR 전수 참조 카운트 감사(Q-57·Q-58·Q-61과 같은 방법을 재적용)에서 `docs/20`의
+  27개 NFR ID 중 **OPS-03**("저장 UTC, 표시 KST. quiet hours는 KST 기준")만 유일하게 참조 0이었다.
+- **증상**: `CoreApplication.clock()`이 `Clock.systemDefaultZone()`(JVM 기본 타임존)을 반환했다.
+  `AlertGate`(방해금지 판정)·`BenchmarkCalculator`·`CadenceCalculator`(월/일 경계)가 전부 이 Clock
+  하나를 공유한다.
+- **원인**: core `Dockerfile`(`eclipse-temurin:21-jre`)엔 `TZ` 지정이 없다 — `docker run --rm
+  eclipse-temurin:21-jre date`로 실측하니 컨테이너 기본 시각은 **UTC**였다. 즉 운영에서는 사용자가
+  KST 22~08시로 설정한 방해금지가 실제로는 UTC 22~08시(KST 07~17시)에 걸렸을 것이다 — 정확히
+  정반대 시간대에 침묵하는 결과.
+- **왜 전 테스트가 GREEN이었나**: 순수 도메인 테스트는 전부 `Clock.fixed(...)`를 직접 주입해 이
+  버그를 볼 수 없는 구조다(맞는 관행). 유일하게 이 버그를 잡을 수 있는 자리는 `CoreApplication`의
+  실제 `@Bean` 값 자체를 단언하는 테스트인데 그런 테스트가 없었다. **그리고 이 결함을 실측한 개발
+  기계 자체가 이미 KST라서**, 만약 그런 테스트를 "지금 시각이 맞나"식으로 짰어도(로컬 기준) **여전히
+  통과했을 것이다** — 값을 하드코딩(`Asia/Seoul`)이 아니라 "로컬과 같은가"로 검증하면 로컬이 우연히
+  옳은 환경일 때 결함이 두 번째로 숨는다.
+- **교훈(규칙화)**: **환경 의존 설정(타임존·로케일·인코딩)을 검증하는 테스트는 "지금 환경의 값과
+  같은가"가 아니라 "요구사항이 명시한 고정값과 같은가"로 단언한다.** 전자는 개발 기계가 우연히
+  운영과 같은 설정이면 결함을 통과시킨다 — 이번엔 한국인 개발자의 기본 로케일이 정확히 그 우연이었다.
+  기계화: `assertThat(clock().getZone()).isEqualTo(ZoneId.of("Asia/Seoul"))`처럼 **리터럴**을 우변에
+  둔다.
+- **관련**: `docs/91` Q-88, `CoreApplication.java`, `CoreApplicationTests
+  #clockUsesKoreaStandardTimeNotTheContainerDefault`.

@@ -818,6 +818,23 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   그때 정확한 의미를 결정(`decisions-needed`행, 표본 없이 임의로 안 정한다).
 - **관련**: `docs/30` M1 완료기준 ④, `Origin.java`, `DealMergePolicy.java:40-41`.
 
+## [해소 2026-08-06] Q-88. OPS-03(quiet hours는 KST 기준)이 코드로 지켜지지 않고 있었다 — 참조 0
+- **맥락**: NFR 27개(SEC/PERF/REL/OBS/OPS) 전수 참조 카운트 감사(Q-57·Q-58·Q-61의 "어느 보드에도
+  없었다" 패턴을 되풀이해 돌림)에서 **OPS-03만 참조 0**으로 걸렸다. `docs/20`: "저장 UTC, 표시 KST.
+  quiet hours는 KST 기준."
+- **실측한 결함**: `CoreApplication.clock()`이 `Clock.systemDefaultZone()`을 썼다 — JVM 기본 타임존을
+  그대로 따른다. core `Dockerfile`(`eclipse-temurin:21-jre`)엔 `TZ` 지정이 없고, `docker run --rm
+  eclipse-temurin:21-jre date`로 직접 확인하니 컨테이너 기본 시각이 **UTC**였다. 이 Clock 하나를
+  `AlertGate`(quiet hours 판정)·`BenchmarkCalculator`·`CadenceCalculator`(월/일 경계 계산) 전부가
+  공유한다 — **사용자가 KST로 22~08시 방해금지를 설정해도, 실제로는 UTC 22~08시(KST 07~17시)에
+  침묵하는 정반대 결과**였을 것이다(텔레그램 토큰 미발급이라 실전송 전이라 사용자 피해는 아직 없음).
+  로컬 개발 기계가 이미 KST라 이 결함은 전 테스트가 GREEN인 채로 숨어 있었다(환경 의존 결함 —
+  2026-07-27 JDK 경로 문제와 같은 결).
+- **✅ 해소**: `Clock.system(ZoneId.of("Asia/Seoul"))`로 명시. 회귀 테스트
+  `CoreApplicationTests#clockUsesKoreaStandardTimeNotTheContainerDefault`(로컬 성공 여부가 아니라
+  값 자체를 단언 — 로컬이 KST여도 잡는다). core 832 tests GREEN.
+- **관련**: `CoreApplication.java`, `AlertGate.java`, `docs/20` OPS-03.
+
 ## [해소 2026-07-23] Q-72. M2 어댑터 미배선 — V3 스키마는 섰으나 생산자가 막혔다
 - **맥락**: V3 used 스키마 7테이블 중 `used_search`·`used_search_bonus_group`은 등록 REST(`RegisterUsedSearchUseCase`·`UsedSearchController`)가 배선했다. 나머지 5테이블은 어댑터 미배선 → `check-table-wiring`이 잡는다(allowlist에 이 Q로 선언).
 - **✅ 해소된 것(2026-07-22)** — 이 항목이 "막혔다"고 적어 둔 근거 중 **둘이 틀렸다**:

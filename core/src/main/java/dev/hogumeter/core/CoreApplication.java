@@ -8,6 +8,7 @@ import dev.hogumeter.core.domain.alert.AlertGate;
 import dev.hogumeter.core.domain.used.ListingExtractor;
 import dev.hogumeter.core.domain.used.RuleBasedListingExtractor;
 import java.time.Clock;
+import java.time.ZoneId;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -19,10 +20,15 @@ public class CoreApplication {
 		SpringApplication.run(CoreApplication.class, args);
 	}
 
-	/** 시각 주입 seam — 도메인은 이 Clock을 받아 윈도우·자동확장·firstSeen을 판정한다(Instant.now() 직접 호출 금지). */
+	/**
+	 * 시각 주입 seam — 도메인은 이 Clock을 받아 윈도우·자동확장·firstSeen·quiet hours를 판정한다
+	 * (Instant.now() 직접 호출 금지). **`systemDefaultZone()`이 아니라 명시적 Asia/Seoul**이어야
+	 * 한다(OPS-03) — core Dockerfile은 `TZ`를 지정하지 않아 컨테이너 기본 타임존은 UTC이고, JVM 기본
+	 * 존을 그대로 쓰면 quiet hours가 KST와 9시간 어긋난다(2026-08-06 발견, docs/91 신규 Q).
+	 */
 	@Bean
 	Clock clock() {
-		return Clock.systemDefaultZone();
+		return Clock.system(ZoneId.of("Asia/Seoul"));
 	}
 
 	/** 순수 도메인(evaluator/gate)은 Spring 비의존이라 여기서 조립. 발송은 주입된 out-port(스텁). */

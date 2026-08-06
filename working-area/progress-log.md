@@ -1,3 +1,25 @@
+## 2026-08-06 (3) — OPS-03 NFR 전수 감사 → quiet hours가 실제로 UTC 기준이었다 (Q-88, 진짜 결함)
+
+board 스윕 방법(NFR ID 전수 참조 카운트, Q-57·Q-58·Q-61이 쓴 방법)을 `docs/20`의 27개 ID 전체에
+재적용했다. **OPS-03만 참조 0** — 이번엔 문서 드리프트가 아니라 **실제 운영 결함**이었다.
+
+- **찾은 것**: `CoreApplication.clock()`이 `Clock.systemDefaultZone()`을 썼다. core Dockerfile
+  (`eclipse-temurin:21-jre`)엔 `TZ` 지정이 없어 `docker run --rm eclipse-temurin:21-jre date`로
+  직접 확인하니 컨테이너 기본 시각이 **UTC**였다 — `AlertGate`(quiet hours)·`BenchmarkCalculator`·
+  `CadenceCalculator`가 전부 이 Clock을 공유하므로, 사용자가 KST 22~08시로 방해금지를 설정해도
+  실제로는 UTC 22~08시(KST 07~17시)에 침묵하는 **정반대** 결과였을 것이다. 텔레그램 토큰 미발급이라
+  아직 실사용자 피해는 없었다.
+- **왜 숨어 있었나**: 이 결함을 실측·수정한 개발 기계 자체가 **이미 KST**라, "로컬 값과 같은가"식
+  테스트로는 못 잡았을 것이다 — 반드시 리터럴(`Asia/Seoul`)과 비교해야 잡힌다(`docs/99`·`docs/21`
+  교훈으로 승격, 새 CLAUDE.md 3계층 경로의 첫 실사용).
+- **한 일**: `Clock.system(ZoneId.of("Asia/Seoul"))`로 수정 + 회귀 테스트
+  `CoreApplicationTests#clockUsesKoreaStandardTimeNotTheContainerDefault`(리터럴 단언). core 832
+  tests GREEN. `docs/91` Q-88 등록(해소 상태로, 발견+수정 동시).
+- ⚠️ **당신이 볼 것**: 없음 — 되돌리기 쉬운 1줄 수정, 텔레그램 미가동이라 실사용자 영향 아직 0.
+  다만 실 발송(Q-20) 켜지기 **전에** 고쳐졌다는 점이 중요.
+- **다음**: NFR 전수 감사가 끝났으니(27개 전부 참조 확인) 이 방법으로 더 찾을 결함은 없다고 본다.
+  같은 방법을 다른 층(consumer-0 audit 등)에 적용할지는 다음 증분에서 판단.
+
 ## 2026-08-06 (2) — docs/91 열린 항목 51개 재검증 스윕 — Q-4·Q-34·Q-57 board 드리프트 정정
 
 사용자 지시("둘 다 순서대로") 후속 — REG-04 커밋 뒤 나머지 열린 항목을 훑었다. 51개 전수 정독 대신
