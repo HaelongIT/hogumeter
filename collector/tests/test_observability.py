@@ -256,7 +256,7 @@ def test_no_price_is_broken_down_by_site():
     """`pre-deploy`는 "no_price 비율(골든: 루리웹 36%)"을 보라고 한다 — **합산으로는 못 구한다.**
 
     사이트마다 다르다: 루리웹 10/28(36%) · 뽐뿌 0/21 · 펨코 0/20. 뽐뿌의 제목 셀렉터가 끊기면
-    뽐뿌만 치솟는데, 합산은 그 사실을 지운다(축적된 규칙: 합산은 차이를 지운다).
+    뽐뿌만 치솟는데, 합산은 그 사실을 지운다(collector-python.md 규율: 합산은 차이를 지운다).
     """
     result = _result(
         [SiteObservation("ruliweb", Outcome.OK, 2, 1), SiteObservation("ppomppu", Outcome.OK, 1, 1)],

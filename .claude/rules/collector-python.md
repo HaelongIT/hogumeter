@@ -21,6 +21,7 @@ paths:
 - 테스트: `uv run pytest`. **shebang/경로 문제로 죽으면** `uv run python -m pytest`로 우회하거나 `uv sync --reinstall`로 venv 재생성(콘솔 스크립트가 옛 경로로 baked됨). (99: 2026-07-04)
 - 신규 런타임 의존은 **승인 대상**이다. 현재 런타임 의존은 `beautifulsoup4`·`psycopg[binary]` 둘, 테스트 의존에 `testcontainers[postgres]`(2026-07-09 승인, decision-log).
 - **stdout은 JSON Lines다**(OBS-01, `observability.py`). 문장이 아니라 이벤트를 낸다 — 테스트·스모크는 문자열을 grep하지 말고 `json.loads`로 이벤트를 읽는다(문구는 바뀌어도 계약은 안 바뀐다). `ensure_ascii`가 한글을 이스케이프해 cp949 콘솔에서도 죽지 않는다. 그래도 출력 문구는 `text.encode("ascii")`로 단언한다. (99: 2026-07-09)
+- **합산은 차이를 지운다.** 사이트별 카운터를 전체로 합치면 한 사이트만 튀는 이상이 평균에 묻힌다(뽐뿌만 실패율이 치솟아도 합산 `by_site` 없이는 안 보인다). 소스별로 값이 크게 다를 수 있는 카운터는 `by_site`처럼 쪼개서 낸다.
 - **엔트리포인트는 테스트 GREEN이어도 한 번은 실제로 실행해본다.**
 
 ## 프로세스 수명 (compose가 이 계약을 읽는다)
@@ -46,6 +47,10 @@ paths:
 - 사이트 셀렉터·차단 징후·fixture 채취일의 실측은 `docs/98-field-notes.md`에 기록한다.
 - **배송비를 모르면 가격은 "하한"이다.** `유배`(뽐뿌)·`조건부무료배송:*`(펨코 — 멤버십·장바구니 임계)는 배송비 0을 더한 값이라 BM-02의 "실결제가 + 배송비"를 못 지킨다. 값을 지어내지 않고 안정된 표식 `SHIPPING_UNKNOWN`(`pipeline/price.py`)을 설명 태그 옆에 함께 단다. `카할`은 **여기 들지 않는다** — 확정본 AC-2가 허용한 as-posted 값이다. 카운터도 `conditional`과 `shipping_unknown`으로 나눈다(후자는 전자의 진부분집합). golden 실측 69딜 중 4건(5.8%). (99·98: 2026-07-10)
 - **SEC-07: `raw`(jsonb)에 담는 키는 허용집합 안에서만 늘린다.** 번개 응답에는 `uid`(판매자 식별자)·`location`(동 단위 주소)·`imp_id`(광고 추적자)가 온다 — `raw={**item}` 한 줄이면 전부 DB로 간다. `tests/test_privacy.py`가 golden 전수로 키와 **값**을 함께 잠근다(키 이름만 바꾼 우회도 잡는다). (99: 2026-07-10)
+
+## 테스트 자산
+
+- **golden fixture는 저장소가 바이트를 못박는다**(`.gitattributes`의 `-text`). 줄끝을 정하지 않으면 각자의 `core.autocrlf`가 정하고, "저장소가 진실"이라는 전제가 조용히 무너진다 — Windows와 CI가 같은 golden을 다른 바이트로 읽는다.
 
 ## 파일 패치
 

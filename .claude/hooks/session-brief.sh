@@ -56,14 +56,21 @@ if [ -n "$dupes" ]; then
 fi
 
 # ── 기록 드리프트: 관측된 실패(승격 누락)를 매 세션 눈에 보이게 ──────
+# 승격 경로가 3계층(CLAUDE.md 축적된 규칙 / .claude/rules / docs/21)이므로 셋을 합산한다 —
+# 하나만 세면 나머지 두 곳으로 흩어진 승격을 "누락"으로 오판한다.
+TDD="docs/21-tdd-guidelines.md"
 lessons="$(grep -c '^### 20' "$L" 2>/dev/null || true)"
-rules="$(sed -n '/^## 축적된 규칙/,/^## /p' "$C" 2>/dev/null | grep -c '^- ' || true)"
+rules_claude="$(sed -n '/^## 축적된 규칙/,/^## /p' "$C" 2>/dev/null | grep -c '^- ' || true)"
+rules_scope="$(cat .claude/rules/*.md 2>/dev/null | grep -c '^- ' || true)"
+rules_tdd="$(sed -n '/^## 테스트 결함 패턴/,/^## /p' "$TDD" 2>/dev/null | grep -c '^- ' || true)"
+rules_total="$((${rules_claude:-0} + ${rules_scope:-0} + ${rules_tdd:-0}))"
 echo "[기록 드리프트]"
-echo "  $L 교훈 ${lessons:-0}건  vs  $C 축적된 규칙 ${rules:-0}건"
+echo "  $L 교훈 ${lessons:-0}건  vs  승격 규칙 ${rules_total}건"
+echo "    (CLAUDE.md ${rules_claude:-0} / .claude/rules ${rules_scope:-0} / $TDD ${rules_tdd:-0})"
 echo "  최근 교훈 3건:"
 grep '^### 20' "$L" 2>/dev/null | tail -3 | sed 's/^### /    /' || true
-echo "  → 새 교훈이 보편 규칙이면 CLAUDE.md 축적된 규칙으로,"
-echo "     언어·디렉토리 한정이면 .claude/rules/<scope>.md 로 승격할 것."
+echo "  → 새 교훈은 3계층 중 하나로 승격할 것 — 언어 무관+매 세션 필요만 CLAUDE.md,"
+echo "     언어·디렉토리 한정은 .claude/rules/<scope>.md, 테스트 기법은 docs/21."
 echo
 
 # ── loose-end 라우팅: 성격별로 정확히 한 보드 ────────────────────────

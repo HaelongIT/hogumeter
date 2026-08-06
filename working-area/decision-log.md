@@ -226,3 +226,29 @@
 - **영향**: `AlertPolicyEntity`·`AlertPolicySettings`·`AlertPolicySettingsUseCase`·`AlertPolicyController`·
   `EvaluateAlertOnDealUseCase`(core), `AlertPolicyPanel`·`DecisionPage`·`buildPolicyCommand`(web),
   `docs/91` Q-48, `.claude/rules/web-react.md`, `scripts/dead-columns-allowlist.txt`(낡은 면제 제거).
+
+## 2026-08-06 — CLAUDE.md 교훈 승격 2계층 → 3계층 개편 (`## 축적된 규칙` 41개 → 17개)
+
+- **맥락**: 사용자가 "CLAUDE.md가 너무 길다"고 지적. 공식 Claude Code 가이드(code.claude.com/
+  best-practices, /memory) 확인 결과 실제 문제였다 — 권장 60~200줄·상한 ~300줄인데 실측 209줄·
+  41,649바이트(줄당 199바이트, 영문 표준의 2.5~3배 밀도). `## 축적된 규칙`(41개 불릿)이 전체
+  바이트의 47%(19,447바이트)를 차지 — 대부분이 "규칙(굵게) + 이유 + 실측 사례" 3~6문장 문단으로,
+  `docs/99-lessons.md`의 서사를 그대로 인라인 확장해 둔 것에 가까웠다.
+- **결정**: 2026-07-09 도입한 2계층 승격(CLAUDE.md 축적된 규칙 / `.claude/rules/<scope>.md`)을
+  **3계층**으로 개편 — ③ `docs/21-tdd-guidelines.md`(테스트 작성 기법·결함 패턴, 온디맨드)을
+  추가하고, CLAUDE.md는 "언어 무관 + 정말 매 세션 필요"만 남긴다. 41개 불릿을 감사해 17개만
+  CLAUDE.md에 압축 유지(1~2문장), 16개는 이미 있던 `.claude/rules/*.md` 4개 파일로(그중 7개는
+  이미 거의 같은 문구로 중복 존재해 이관 없이 CLAUDE.md 쪽만 삭제, 7개는 신규 작성), 8개는
+  `docs/21`의 새 절 "## 테스트 결함 패턴"으로, 1개(기계화 여부 질문)는 "## 교훈 축적 프로토콜"
+  절로, 1개(복구 절차 리허설)는 `## 빌드·테스트 명령`과 순수 중복이라 삭제만 했다.
+  **`session-brief.sh`의 드리프트 지표**도 3곳(CLAUDE.md·`.claude/rules/*`·`docs/21`) 합산으로
+  갱신 — 하나만 세면 나머지 두 곳으로 흩어진 승격을 "누락"으로 오판한다.
+  **CLAUDE.md 자체를 고칠 때 참고할 요약 가이드**(`.claude/rules/claude-md-editing.md`, `paths:
+  ["CLAUDE.md"]`)를 신설 — 공식 가이드 재조회 없이 매번 참고하도록.
+- **결과**: 183줄·27,354바이트(41,649→27,354, 34% 감소). AGENTS.md(Codex 미러, git 미추적)는
+  사용자 결정으로 이번 범위 제외.
+- **주체**: 사용자 요청(조사 후 확정) — plan mode로 계획 승인 후 실행.
+- **영향**: `CLAUDE.md`, `.claude/hooks/session-brief.sh`, `docs/21-tdd-guidelines.md`,
+  `.claude/rules/{core-java,collector-python,web-react,shell-scripts,claude-md-editing}.md`,
+  `collector/tests/{test_scheduler,test_observability}.py`(docstring 인용 갱신).
+

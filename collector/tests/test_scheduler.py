@@ -341,7 +341,7 @@ def test_run_cycle_counts_how_many_deals_actually_have_a_price():
     """REL-06: 제목 셀렉터만 끊기면 딜 수는 그대로인데 가격이 전부 사라진다.
 
     드리프트 단위 테스트는 `SiteObservation`을 직접 만들어 **배선을 보지 않는다** —
-    이 테스트가 `run_cycle`이 `priced_count`를 실제로 채우는지 본다(축적된 규칙: 포트의 주입을 시험하라).
+    이 테스트가 `run_cycle`이 `priced_count`를 실제로 채우는지 본다(docs/21 테스트 결함 패턴: 포트의 주입을 시험하라).
     """
     priced = ParsedDeal(site="ppomppu", post_id="1", title="t", url="u", headline_price=1000)
     priceless = ParsedDeal(site="ppomppu", post_id="2", title="t", url="u", headline_price=None)
