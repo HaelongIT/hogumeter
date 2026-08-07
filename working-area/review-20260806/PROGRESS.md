@@ -99,6 +99,16 @@
 ## 메인 세션 인용 대조
 > 검증자가 원문 재확인을 수행하므로 메인은 **CONFIRMED로 살아남은 항목**에 대해서만 최종 대조한다(통합 F 단계).
 
-| 항목ID | 인용 위치 | 대조 결과 |
+**✅ High 7건 전부 대조 완료 — 전부 원문과 일치.** 상세 표는 `00-summary.md`「메인 세션 인용 대조」.
+
+부수 확인 2건:
+- `UsedComparisonPage.tsx:141`에 `eslint-disable-next-line react-hooks/exhaustive-deps`가 있는데 **저장소에 eslint가 없다** — 억제 주석이 "검토했다"는 거짓 표식으로 남아 있다.
+- `DealEventEntity.applyMerge`는 `demandAxisValue`를 **받을 파라미터 자체가 없다** — 호출자가 실수로 빠뜨린 게 아니라 구조적으로 넘길 수 없다(BE-01 수리 시 시그니처 변경이 필요하다는 뜻).
+
+## loose-end 라우팅 (CLAUDE.md 프로토콜)
+| 성격 | 어디에 | 상태 |
 |---|---|---|
-| (배치 F에서 채움) | | |
+| 무중단 중 사용자가 알아야 할 것 | `working-area/progress-log.md` | ✅ 2026-08-07 (1) |
+| 재사용 교훈 | `docs/99-lessons.md` | ✅ 2026-08-07 (2건) — "정본 패턴을 나중 코드가 안 따른다" / "반박 검증은 기각 0이어도 실효한다" |
+| 사람이 정해야 할 것 | `working-area/decisions-needed.md` | — 없음. 발견 44건은 전부 되돌릴 수 있는 코드 수정이라 2차 자율 범위 |
+| 기술 보류 | `docs/91-open-questions.md` | — 등록 안 함. 발견은 이 리뷰 문서가 정본이고, 91에 사본을 만들면 드리프트한다(`docs/91` Q-65는 이미 있던 항목이라 강등 근거로 인용만 함) |

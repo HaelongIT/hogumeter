@@ -56,13 +56,17 @@ High(즉시) · Medium · Low · Info
 검증자가 **원 발견을 보강한 사례**도 셋 있다 — BE-03(더 직접적인 도달 경로 추가 확인), BE-02(원 발견이 놓친 더 급한 실패 경로 발견), FE-01(메커니즘 설명은 정정하되 결론 유지).
 
 ## 메인 세션 인용 대조
-반박 검증과 별개로, High 항목의 인용을 메인이 원문에서 직접 표본 확인했다.
+반박 검증과 별개로, **High 7건 전부**의 인용을 메인이 원문에서 직접 확인했다.
 
 | 항목 | 확인한 것 | 결과 |
 |---|---|---|
-| FE-02 | `web/src/purchase/PurchasePanel.tsx:74-78` | ✅ 일치 — `useEffect`에 cleanup 없음 |
+| BE-01 | `DealEventEntity.java:195-196` 시그니처 · `IngestDealsUseCase.java:155-156` 호출부 · `DealMergePolicy.java:69` | ✅ 일치 — `applyMerge(long, long, long, long, boolean, DealStatus, Instant, Instant)`에 **`demandAxisValue` 파라미터가 아예 없다.** 정책은 `mergeDemandAxisValue(...)`로 계산하는데 **넘기려야 넘길 수 없는** 구조 |
 | BE-02 | `collector/src/**`에서 `rollback`·`autocommit` 전수 Grep | ✅ 일치 — 둘 다 **0건**(`_ROLLBACK_THRESHOLD`는 무관한 시각 보정 상수) |
-| FE-01 | `web/src/decision/DecisionPage.tsx:112-129` | ✅ 일치 — 121행 조기 `return`이 124행 `setLoaded(null)`보다 앞. 게다가 115-117행 주석은 **축 값의 잔존은 의식해서 막았는데**(`setDemandAxisValue(null)`) 조회 결과의 잔존은 못 막았음을 보여준다 |
+| BE-03 | `AliasDictionary.java:14` · `CatalogProjection.java:66` | ✅ 일치 — `aliases = Map.copyOf(aliases)` ← `new HashMap<>()`. 순회 순서 비결정성 경로가 실재 |
+| FE-01 | `DecisionPage.tsx:112-129` | ✅ 일치 — 121행 조기 `return`이 124행 `setLoaded(null)`보다 앞. 게다가 115-117행 주석은 **축 값의 잔존은 의식해서 막았는데**(`setDemandAxisValue(null)`) 조회 결과의 잔존은 못 막았음을 보여준다 |
+| FE-02 | `PurchasePanel.tsx:74-78` | ✅ 일치 — `useEffect`에 cleanup 없음 |
+| FE-03 | `UsedComparisonPage.tsx:130-142` | ✅ 일치 — `reload()`·`useEffect` 모두 가드 없음. **141행에 `eslint-disable-next-line react-hooks/exhaustive-deps`가 붙어 있는데 이 저장소엔 eslint가 없다** — 억제 주석이 "검토했다"는 거짓 표식으로 남아 있다 |
+| X-01 | `check-network-optin.sh:41-44, 64` | ✅ 일치 — 주석 제거(`grep -vE '^[[:space:]]*#'`)를 **URL 탐지에만** 적용하고, opt-in 변수 검사 `grep -qE 'ALLOW_REAL_ROBOTS\|COLLECTOR_ALLOW_NETWORK' "$target"`(64행)은 파일 전체를 본다 |
 
 ## 이 리뷰가 스스로 정정한 것
 리뷰어들이 **계획 단계의 전제 두 개를 실측으로 뒤집었다** — 다음 리뷰가 같은 전제로 출발하지 않도록 기록한다.
