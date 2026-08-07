@@ -11,5 +11,5 @@ deal_ignore.ignored_at    INTENTIONAL  포렌식 타임스탬프(DB default now(
 
 # --- 잠정적으로 죽음 (열린 Q 인용 — 해소되면 면제 만료) ---
 deal_event.confidence                 Q-68  매칭이 연속 신뢰도 점수를 안 냄 — 채우는 코드 0·읽는 코드 0. 이 게이트가 잡아야 할 원형.
-price_history.fetched_at              Q-3   네이버 어댑터(키 미발급)가 쓸 죽은 테이블. 키 발급 시 배선.
+price_history.fetched_at              Q-3   네이버 쇼핑 API 2026-07-31 서비스 종료(대체 데이터 소스 미정) — "키 발급 시 배선"은 더 이상 유효한 재개 경로가 아니다. 재개는 D-7(대체 소스 결정) 확정 후.
 raw_deal_post.body_text               Q-18  잘린 제목 복구용 본문 자리 — collector가 목록만 폴링해 항상 null. 본문 fetch 배선 시 채워진다.
