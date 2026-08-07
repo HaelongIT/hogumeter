@@ -57,7 +57,7 @@ jobs:
         working-directory: collector
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
       # Q-90② (코드리뷰 20260806): web eslint 실측 적중 이후 collector 차례.
@@ -204,7 +204,7 @@ jobs:
         working-directory: .
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
       - name: robots 게이트 리허설 (로컬 서버, 실 사이트 미접촉)
