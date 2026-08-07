@@ -61,7 +61,9 @@ for target in "${targets[@]}"; do
 		continue
 	fi
 
-	if grep -qE 'ALLOW_REAL_ROBOTS|COLLECTOR_ALLOW_NETWORK' "$target"; then
+	# X-01(코드리뷰 20260806): 주석에만 있는 opt-in 변수명은 게이트가 아니다 — external_urls()와
+	# 같은 규율로 주석을 먼저 걷어낸 뒤에만 실제 게이트 여부를 판정한다.
+	if grep -vE '^[[:space:]]*#' "$target" | grep -qE 'ALLOW_REAL_ROBOTS|COLLECTOR_ALLOW_NETWORK'; then
 		guarded=$((guarded + 1))
 		continue
 	fi

@@ -67,6 +67,11 @@ check 1 "opt-in 없이 외부 API를 호출한다" "$(fake 'curl -X POST https:/
 check 1 "wget도 마찬가지다" "$(fake 'wget https://api.bunjang.co.kr/api/1/find_v2.json')"
 check 1 "aws가 실 엔드포인트를 친다" "$(fake 'aws s3 cp x.gz s3://b/ --endpoint-url https://s3.amazonaws.com')"
 check 1 "스크립트 디렉토리가 없다" "$work/does-not-exist"
+# X-01(코드리뷰 20260806): opt-in 변수명이 주석에만 있으면 실제 게이트가 아니다 — 64행이
+# external_urls()와 달리 주석 제거 없이 파일 전체를 grep해 이 케이스를 통과시키고 있었다.
+check 1 "opt-in 변수명이 주석에만 있고 실제 게이트가 없다" \
+	"$(fake '# TODO: ALLOW_REAL_ROBOTS 게이트를 아직 안 걸었다
+curl -fsS https://api.telegram.org/bot123/sendMessage')"
 
 echo "── 실제 저장소 (exit 0) ──"
 if bash "$CHECK" >"$work/real" 2>&1; then
