@@ -100,6 +100,13 @@ check 1 "만료된 면제: 인용한 Q가 보드에 열려 있지 않다" "$(fak
 	'Thing  Q-77  없는 Q를 인용했다')"
 check 1 "낡은 면제: 이제 소비되는데 목록에 남아 있다" \
 	"$(fake "$THING" 'class Consumer { Thing thing; }' 'Thing  Q-9  이미 소비된다')"
+
+# X-02(코드리뷰 20260806) — `open_question()`이 `## ` 헤더만 보고 `[해소 ...]`도 열린 것으로
+# 오판했다. 해소된 Q를 인용한 면제는 그 순간부터 만료돼야 한다.
+r=$(fake "$THING" 'class Consumer {}' 'Thing  Q-9  아직 배선 전')
+printf '## [해소 2026-07-25] Q-9. 아직 막혀 있는 무엇\n' >"$r/docs/91-open-questions.md"
+check 1 "만료된 면제: 인용한 Q가 이미 [해소]됐다" "$r"
+
 check 1 "도메인 디렉토리가 없다" "$work/does-not-exist"
 
 echo "── 실제 저장소 (exit 0) ──"

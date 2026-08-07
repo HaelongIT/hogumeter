@@ -132,6 +132,15 @@ printf 'create table deal_event (id bigserial);\ncreate table deal_event_source 
 printf 'class S { @Table(name = "deal_event_source") }\n' >"$r/core/src/main/java/S.java"
 check 1 "접두 충돌: deal_event_source는 deal_event를 배선하지 않는다" "$r"
 
+# X-02(코드리뷰 20260806) — `open_question()`이 `## ` 헤더만 보고 `[해소 ...]`도 열린 것으로
+# 오판했다. 해소된 Q를 인용한 면제는 그 순간부터 만료돼야 한다.
+r=$(new_case)
+fake_root "$r"
+printf 'create table price_history (id bigserial);\n' >"$r/core/src/main/resources/db/migration/V1__init.sql"
+printf 'price_history  Q-9  아직 막혔다\n' >"$r/scripts/table-wiring-allowlist.txt"
+printf '## [해소 2026-07-25] Q-9. 아직 막혀 있는 무엇\n' >"$r/docs/91-open-questions.md"
+check 1 "만료된 면제: 인용한 Q가 이미 [해소]됐다" "$r"
+
 r=$(new_case)
 check 1 "마이그레이션 디렉토리가 없다" "$r/does-not-exist"
 

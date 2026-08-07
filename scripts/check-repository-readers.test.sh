@@ -101,6 +101,12 @@ check 1 "낡은 면제: 이제 호출되는데 목록에 남아 있다" "$(fake 
 
 check 1 "리포지토리 디렉토리가 없다" "$work/does-not-exist"
 
+# X-02(코드리뷰 20260806) — `open_question()`이 `## ` 헤더만 보고 `[해소 ...]`도 열린 것으로
+# 오판했다. 해소된 Q를 인용한 면제는 그 순간부터 만료돼야 한다.
+r=$(fake "$REPO" 'class Consumer {}' 'ThingRepository.findByProductId  Q-9  아직 소비자가 없다')
+printf '## [해소 2026-07-25] Q-9. 아직 막혀 있는 무엇\n' >"$r/docs/91-open-questions.md"
+check 1 "만료된 면제: 인용한 Q가 이미 [해소]됐다" "$r"
+
 echo "── 실제 저장소 (exit 0) ──"
 if bash "$CHECK" >"$work/real" 2>&1; then
 	printf '  PASS  exit=0  %s\n' "$(cat "$work/real")"

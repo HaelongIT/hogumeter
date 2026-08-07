@@ -51,9 +51,10 @@ if [ -f "$allowlist" ]; then
 	done <"$allowlist"
 fi
 
-open_question() { # 인용한 Q가 docs/91에 **열려 있는가**
+open_question() { # 인용한 Q가 docs/91에 **열려 있는가**(X-02, 코드리뷰 20260806: [해소]도 `## `
+	# 헤더에 남으므로 헤더 존재만 보면 해소된 Q를 열림으로 오판한다 — 상태 표식을 함께 요구한다.
 	[ -f "$board" ] || return 1
-	grep -qE "^## .*${1}\." "$board"
+	grep -qE "^#+ \[(열림|부분해소)[^]]*\] ${1}\b" "$board"
 }
 
 # 주석은 소비가 아니다. 전체 줄이 주석인 것만 걷는다.
