@@ -10,8 +10,9 @@ import java.time.Instant;
 
 /**
  * raw_deal_post 계약 테이블(collector↔core)의 JPA 엔티티. UNIQUE(site, post_id) = 멱등 수집(REL-01).
- * nullable 컬럼(body_text·headline_price·posted_at·reaction_score·raw jsonb)은 이 슬라이스에서 미매핑
- * (ddl-auto=validate는 매핑 컬럼만 검증). Flyway가 스키마 소유.
+ * 미매핑: body_text·reaction_score·raw(jsonb) — headline_price·posted_at은 아래 필드로 매핑돼
+ * IngestDealsUseCase의 널 가드·firstSeen 계산에 실제로 쓰인다(X-07, 코드리뷰 20260806 — 예전 javadoc이
+ * 이 둘을 미매핑 목록에 잘못 끼워 넣고 있었다). ddl-auto=validate는 매핑 컬럼만 검증. Flyway가 스키마 소유.
  */
 @Entity
 @Table(name = "raw_deal_post")
