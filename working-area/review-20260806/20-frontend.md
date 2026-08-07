@@ -3,7 +3,7 @@
 > 리뷰어 C3의 발견을 통합. 원시 산출물은 `raw/C3-web.md`, 반박 검증은 `rebuttal/`.
 > **1차 = 정적 검증**이며 범위는 발견까지다 — 수정은 2차.
 
-### FE-01 — variant를 GROUPED→SPLIT(축 미선택)으로 바꾸면 이전 variant의 판단 요약이 안 지워진다 · High · decision · ❌미해결
+### FE-01 — variant를 GROUPED→SPLIT(축 미선택)으로 바꾸면 이전 variant의 판단 요약이 안 지워진다 · High · decision · ✅수정완료(e730fec)
 - **위치**: `web/src/decision/DecisionPage.tsx:115-142`
 - **근거**:
   ```tsx
@@ -25,7 +25,7 @@
 - **권고**: 두 `useEffect`를 하나로 합치거나, `demandAxisValue` 리셋 effect에서 `setLoaded(null)`·`setError(null)`도 함께 호출한다. 혹은 조회 effect의 조기 return 두 지점(`variantId === null`, `demandAxis !== null && demandAxisValue === null`) 모두에서 `setLoaded(null)`을 먼저 실행해 React state bail-out에 의존하지 않는 형태로 만든다.
 - **출처**: `raw/C3-web.md` C3-01 · 반박 검증 `rebuttal/C3-01.md` → **CONFIRMED**
 
-### FE-02 — PurchasePanel이 variant 전환 응답 레이스를 막지 않는다 · High · purchase · ❌미해결
+### FE-02 — PurchasePanel이 variant 전환 응답 레이스를 막지 않는다 · High · purchase · ✅수정완료(767c12d)
 - **위치**: `web/src/purchase/PurchasePanel.tsx:74-78`(effect), `68-72`(`reload`)
 - **근거**:
   ```tsx
@@ -40,7 +40,7 @@
 - **권고**: `AlertPolicyPanel`과 동일한 `let live = true` 가드를 추가하거나, `variantId`를 클로저로 캡처해 `setPurchases`/`setError` 직전에 최신 `variantId`와 비교한다.
 - **출처**: `raw/C3-web.md` C3-02 · 반박 검증 `rebuttal/C3-02.md` → **CONFIRMED**
 
-### FE-03 — UsedComparisonPage도 같은 패턴의 응답 레이스가 있다 · High · used · ❌미해결
+### FE-03 — UsedComparisonPage도 같은 패턴의 응답 레이스가 있다 · High · used · ✅수정완료(4c2d966)
 - **위치**: `web/src/used/UsedComparisonPage.tsx:130-142`
 - **근거**:
   ```tsx

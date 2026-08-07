@@ -3,7 +3,7 @@
 > 리뷰어 D1(모듈 간 계약 드리프트)·D2(스크립트·인프라·CI)의 발견을 통합. 원시 산출물은 `raw/D1-contract.md`·`raw/D2-infra.md`, 반박 검증은 `rebuttal/`.
 > **1차 = 정적 검증**이며 범위는 발견까지다 — 수정은 2차.
 
-### X-01 — `check-network-optin.sh`가 주석에만 있는 opt-in 변수 이름을 실제 게이트로 오인한다 · High · ❌미해결
+### X-01 — `check-network-optin.sh`가 주석에만 있는 opt-in 변수 이름을 실제 게이트로 오인한다 · High · ✅수정완료(0638e82)
 - **위치**: `scripts/check-network-optin.sh:40-46`(주석 제거 로직, 올바름) / `scripts/check-network-optin.sh:64`(주석 미제거, 결함) / `scripts/check-network-optin.test.sh`(반대 방향 케이스 부재) / `.claude/hooks/guard.sh`(이 시나리오에서 무력함이 설계상 문서화된 두 번째 방어선)
 - **근거**: 같은 파일 안에서 `external_urls()`(37-46행)는 `grep -vE '^[[:space:]]*#'`로 주석을 걷어낸 뒤 외부 URL을 찾지만, opt-in 게이트 여부를 판정하는 64행 `grep -qE 'ALLOW_REAL_ROBOTS|COLLECTOR_ALLOW_NETWORK' "$target"`은 주석 미제거 원본 파일 전체를 검사한다. 반박 검증(`rebuttal/D2-02.md`)이 임시 디렉토리에서 실제로 재현했다: `# TODO: ALLOW_REAL_ROBOTS 게이트를 아직 안 걸었다` 주석 다음 줄에 게이트 없이 `curl -fsS https://api.telegram.org/...`가 있는 샘플이 `NETWORK OPTIN OK`(exit 0)로 통과했다 — 실제로 게이트된 정상 샘플과 판정이 동일해진다. `guard.sh`는 `bash scripts/x.sh` 내부 호출은 못 본다는 것이 스스로 문서화된 한계(Q-60)이고, `echo '{"tool_input":{"command":"bash scripts/target.sh"}}' | bash .claude/hooks/guard.sh`가 exit 0으로 통과함을 반박 검증에서 실측 — 즉 이 시나리오에서는 방어선이 애초에 `check-network-optin.sh` 하나뿐이고, 그 하나가 뚫린다.
 - **영향**: 이 게이트는 저장소에서 "스크립트 내부의 실 네트워크 호출"을 잡는 유일한 방어선이다. 리팩터링 중 실제 opt-in 게이트 호출 줄을 지우면서 설명 주석(다른 스크립트를 언급하거나 TODO)만 남기는 비의도적 실수 시나리오에서 조용히 무력해진다 — 프로젝트 자신의 축적 규칙("정적 검사에서 '이름이 나타난다'와 '실행된다'를 구별하라... 양방향 시험")을 게이트 자신이 위반한다. `check-network-optin.test.sh`는 "주석 속 외부 URL은 실행이 아니다" 방향만 시험하고 "주석 속 opt-in 변수명은 게이트가 아니다" 반대 방향은 시험하지 않아 CI 통과가 반증이 되지 못한다.

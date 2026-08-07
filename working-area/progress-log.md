@@ -1,3 +1,36 @@
+## 2026-08-07 (2) — 2차 코드리뷰 수정: High 7건 전부 TDD(Red→Green)로 완료
+
+사용자 지시("이거 보고 코드 고칠것들 고치자")로 `review-20260806`의 **High 7건**(BE-01·BE-02·BE-03·
+FE-01·FE-02·FE-03·X-01)을 전부 수정했다. 매 항목 Red 확인(고치기 전 실패 재현) → 최소 수정 → Green
+→ 커밋 순서를 지켰다. 리뷰 문서(`00-summary.md`·`10-backend.md`·`20-frontend.md`·`30-cross-cutting.md`)의
+상태 마커를 `✅수정완료(커밋해시)`로 갱신했다.
+
+- **BE-01**(`0a9b9bb`) `DealEventEntity.applyMerge`에 `demandAxisValue` 파라미터 추가 — 병합 시
+  도메인이 계산한 미상(null) 되돌림이 엔티티에 반영되도록. `ReprocessDealPricesUseCase`(가격만
+  갱신)는 기존 값을 그대로 되돌려 넣게 호출부도 함께 수정.
+- **BE-03**(`9f5f951`) `AliasDictionary.match`가 서로 다른 productId를 가리키는 별칭이 다중 히트하면
+  `Optional.empty()`로 내려 CANDIDATE/UNKNOWN 경로로 보내게 함(`Map.copyOf` 순회 순서 비결정성 회피).
+- **BE-02**(`c67a579`) collector 세 sink(`raw_deal_sink`·`used_listing_sink`·`site_poll_state_sink`)
+  전부 쓰기 실패 시 `connection.rollback()` 후 재-raise — 공유 커넥션의 aborted 상태 영구 오염·연쇄
+  실패 차단. 각 sink에 "실패 직후 같은 커넥션으로 정상 쓰기" 회귀 테스트 추가.
+- **X-01**(`0638e82`) `check-network-optin.sh`의 opt-in 게이트 판정도 `external_urls()`와 같은 주석
+  제거 규율 적용 — 주석에만 있는 `ALLOW_REAL_ROBOTS` 등 변수명이 실제 게이트로 오인되던 결함 수정.
+- **FE-01**(`e730fec`) `DecisionPage`의 variantId 리셋 effect에서 `loaded`/`error`도 함께 초기화 —
+  SPLIT(축 미선택) 전환 시 조회 effect의 조기 return과 무관하게 이전 판단 요약이 사라지게.
+- **FE-02**(`767c12d`) `PurchasePanel`에 `let live` cleanup 가드 추가(형제 5개 패널과 동일 패턴).
+- **FE-03**(`4c2d966`) `UsedComparisonPage`에 `productIdRef` 기반 세대 가드 추가 — productId가
+  내부 state라 `key` 재마운트 방어가 안 되므로 응답 도착 시점에 "여전히 최신 요청인가"를 비교.
+
+**검증**: core `./gradlew test`(832+개) GREEN, collector `uv run pytest`(353개) GREEN, web
+`npx vitest run`(288개) GREEN. FE-03 테스트 작성 중 겪은 삽질(exact-string `getByText`가 `<br>`로
+쪼개진 `<td>`의 전체 textContent와 안 맞아 "Red"처럼 보였던 것 — 실제로는 정규식 매처를 썼어야 했다)은
+교훈으로 승격할 가치가 있어 `docs/99-lessons.md`에 별도 기록 예정.
+
+**남은 것**: Medium 22건·Low/Info 15건은 아직 `❌미해결`. 이번 배치는 사용자 요청 범위(리뷰 결과
+보고 고칠 것 고치기)의 1단계로 판단해 여기서 사용자에게 보고 — 계속 진행 여부는 다음 지시에 따른다.
+
+TURN-END: ① 정지조건 — 사용자에게 보고할 시점(High 전건 완료, 다음 배치 규모가 크다)
+
 ## 2026-08-07 (1) — 1차 코드리뷰(정적) 완료: 리뷰어 11 + 반박검증 10, High 7건 확정
 
 사용자 지시로 **1차 코드리뷰**를 돌렸다. 산출물은 `working-area/review-20260806/`

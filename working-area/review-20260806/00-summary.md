@@ -31,18 +31,18 @@ High(즉시) · Medium · Low · Info
 | **합계** | **44** | |
 
 ## 처리 현황
-**❌미해결 44건** — 1차는 발견까지가 범위다. 수정은 2차에서 TDD(Red→Green)로.
+**2차 진행 중 — High 7/7 ✅수정완료.** Medium 22건·Low/Info 15건은 아직 ❌미해결.
 
-## High 7건 (반박 검증 통과)
-| ID | 제목 | 소유 | 무엇이 깨지는가 |
-|---|---|---|---|
-| **BE-01** | 딜 병합 시 도메인이 계산한 수요축 값이 엔티티에 반영되지 않는다 | deal-merge | `DealMergePolicy.merge()`가 낸 `demandAxisValue`가 `applyMerge` 호출에서 버려진다. `sameTarget`이 축을 안 보고 variantId만 봐 **다른 사양의 딜이 병합**되고, SPLIT 제품의 표본 오염 방지가 병합 경로에서만 무력화된다 |
-| **BE-02** | collector DB 쓰기 실패 후 rollback 부재로 커넥션이 영구 오염 | collector-db | `connect_from_env()`가 autocommit 없이 열고 **다섯 싱크/소스가 커넥션 하나를 공유**하는데 저장소 전체에 `rollback()`이 0건. 단발 쓰기 오류가 이후 모든 저장을 연쇄 실패시키고 프로세스가 조기 종료된다 |
-| **BE-03** | 별칭 사전 substring 다중 히트 시 매칭이 JVM 실행마다 달라진다 | matching | `Map.copyOf`(JDK `MapN`, SALT32L)의 순회 순서가 재기동마다 바뀐다. DB 유니크는 `(product_id, alias)`만 막아 **다중 productId 히트**를 못 막고, 수동 별칭 입력이 substring 검증 없이 열려 있다. CANDIDATE 강등 없이 바로 확정된다 |
-| **FE-01** | GROUPED→SPLIT(축 미선택) 전환 시 이전 variant 판단 요약이 안 지워진다 | decision | 조회 `useEffect`가 121행 조기 `return`으로 124행 `setLoaded(null)`을 건너뛴다. 판단 요약 섹션에 **제품/variant 이름이 없어** 옛 신호등·기준가·갭이 새 variant 것처럼 읽힌다 |
-| **FE-02** | `PurchasePanel`이 variant 전환 응답 레이스를 막지 않는다 | purchase | `useEffect`에 **cleanup 자체가 없다**(형제 5개 파일은 `let live` 가드를 쓴다). 구매 목록에 variant 식별 정보가 없어 "이미 샀다/안 샀다"를 오인할 수 있다 |
-| **FE-03** | `UsedComparisonPage`도 같은 패턴의 응답 레이스 | used | 취소·세대 가드 전무. product 전환이 **컴포넌트 내부 `<select>` state**로 일어나 `key` 재마운트 방어가 성립조차 못 한다 |
-| **X-01** | `check-network-optin.sh`가 주석에만 있는 opt-in 변수명을 게이트로 오인 | — | 실 네트워크 호출을 막는 정적 게이트가 **주석 한 줄로 뚫린다**(재현 확인). `guard.sh`는 자기 헤더가 명시하듯 `bash scripts/x.sh` 내부 호출을 못 봐 두 번째 방어선이 되지 못한다 |
+## High 7건 (반박 검증 통과) — 전부 2차에서 TDD(Red→Green)로 수정 완료
+| ID | 제목 | 소유 | 무엇이 깨지는가 | 상태 |
+|---|---|---|---|---|
+| **BE-01** | 딜 병합 시 도메인이 계산한 수요축 값이 엔티티에 반영되지 않는다 | deal-merge | `DealMergePolicy.merge()`가 낸 `demandAxisValue`가 `applyMerge` 호출에서 버려진다. `sameTarget`이 축을 안 보고 variantId만 봐 **다른 사양의 딜이 병합**되고, SPLIT 제품의 표본 오염 방지가 병합 경로에서만 무력화된다 | ✅수정완료(0a9b9bb) |
+| **BE-02** | collector DB 쓰기 실패 후 rollback 부재로 커넥션이 영구 오염 | collector-db | `connect_from_env()`가 autocommit 없이 열고 **다섯 싱크/소스가 커넥션 하나를 공유**하는데 저장소 전체에 `rollback()`이 0건. 단발 쓰기 오류가 이후 모든 저장을 연쇄 실패시키고 프로세스가 조기 종료된다 | ✅수정완료(c67a579) |
+| **BE-03** | 별칭 사전 substring 다중 히트 시 매칭이 JVM 실행마다 달라진다 | matching | `Map.copyOf`(JDK `MapN`, SALT32L)의 순회 순서가 재기동마다 바뀐다. DB 유니크는 `(product_id, alias)`만 막아 **다중 productId 히트**를 못 막고, 수동 별칭 입력이 substring 검증 없이 열려 있다. CANDIDATE 강등 없이 바로 확정된다 | ✅수정완료(9f5f951) |
+| **FE-01** | GROUPED→SPLIT(축 미선택) 전환 시 이전 variant 판단 요약이 안 지워진다 | decision | 조회 `useEffect`가 121행 조기 `return`으로 124행 `setLoaded(null)`을 건너뛴다. 판단 요약 섹션에 **제품/variant 이름이 없어** 옛 신호등·기준가·갭이 새 variant 것처럼 읽힌다 | ✅수정완료(e730fec) |
+| **FE-02** | `PurchasePanel`이 variant 전환 응답 레이스를 막지 않는다 | purchase | `useEffect`에 **cleanup 자체가 없다**(형제 5개 파일은 `let live` 가드를 쓴다). 구매 목록에 variant 식별 정보가 없어 "이미 샀다/안 샀다"를 오인할 수 있다 | ✅수정완료(767c12d) |
+| **FE-03** | `UsedComparisonPage`도 같은 패턴의 응답 레이스 | used | 취소·세대 가드 전무. product 전환이 **컴포넌트 내부 `<select>` state**로 일어나 `key` 재마운트 방어가 성립조차 못 한다 | ✅수정완료(4c2d966) |
+| **X-01** | `check-network-optin.sh`가 주석에만 있는 opt-in 변수명을 게이트로 오인 | — | 실 네트워크 호출을 막는 정적 게이트가 **주석 한 줄로 뚫린다**(재현 확인). `guard.sh`는 자기 헤더가 명시하듯 `bash scripts/x.sh` 내부 호출을 못 봐 두 번째 방어선이 되지 못한다 | ✅수정완료(0638e82) |
 
 ## 반박 검증 결과
 | 판정 | 건수 | 항목 |

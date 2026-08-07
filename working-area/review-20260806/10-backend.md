@@ -5,7 +5,7 @@
 
 ## High
 
-### BE-01 — 딜 병합 시 도메인이 계산한 수요축 값이 엔티티에 반영되지 않는다 · High · deal-merge · ❌미해결
+### BE-01 — 딜 병합 시 도메인이 계산한 수요축 값이 엔티티에 반영되지 않는다 · High · deal-merge · ✅수정완료(0a9b9bb)
 - **위치**: `core/src/main/java/dev/hogumeter/core/application/IngestDealsUseCase.java:154-156`, `core/src/main/java/dev/hogumeter/core/domain/deal/DealMergePolicy.java:69,78-86`, `core/src/main/java/dev/hogumeter/core/adapter/persistence/DealEventEntity.java:195-208`
 - **근거**: `DealMergePolicy.merge()`는 두 딜의 수요축 값을 신중히 합성한다 — 한쪽만 알면 아는 값, 서로 다르면 의도적으로 `null`(미상)로 되돌린다. 그런데 `IngestDealsUseCase`의 병합 분기는
   ```java
@@ -18,7 +18,7 @@
 - **권고**: `DealEventEntity.applyMerge`에 `demandAxisValue` 파라미터를 추가하고 `IngestDealsUseCase.confirmDeal`에서 `merged.demandAxisValue()`를 넘긴다. 병합으로 값이 새로 `null`이 되는 경우 `enqueueIfDemandUnknown`과 동일하게 DEMAND_UNKNOWN 큐에 올릴지도 함께 검토.
 - **출처**: `raw/A2-usecase.md` A2-01 · 반박 검증 `rebuttal/A2-01.md` → **CONFIRMED**
 
-### BE-02 — collector DB 쓰기 실패 후 rollback 부재로 커넥션이 영구 오염, 연쇄적으로 모든 쓰기가 실패한다 · High · collector-db · ❌미해결
+### BE-02 — collector DB 쓰기 실패 후 rollback 부재로 커넥션이 영구 오염, 연쇄적으로 모든 쓰기가 실패한다 · High · collector-db · ✅수정완료(c67a579)
 - **위치**: `collector/src/collector/db/raw_deal_sink.py:54-61`(`upsert_all`, 동일 패턴이 `db/used_listing_sink.py:43-57`·`db/site_poll_state_sink.py:59-87`에도 있음), 트리거 지점 `collector/src/collector/__main__.py:150-159`
 - **근거**:
   ```python
@@ -35,7 +35,7 @@
 - **권고**: 각 sink의 쓰기 메서드에서 예외를 잡아 `self.connection.rollback()`을 호출한 뒤 재-raise하거나, `__main__.py`의 각 `except Exception` 블록에서 실패 즉시 커넥션을 rollback한다. "쓰기 실패 → 같은 커넥션으로 다음 쓰기가 성공해야 한다"를 통합 테스트로 추가해 회귀를 잠근다.
 - **출처**: `raw/C2-collector-runtime.md` C2-01 · 반박 검증 `rebuttal/C2-01.md` → **CONFIRMED**
 
-### BE-03 — 별칭 사전 substring 다중 히트 시 매칭 결과가 JVM 실행마다 달라질 수 있다 · High · matching · ❌미해결
+### BE-03 — 별칭 사전 substring 다중 히트 시 매칭 결과가 JVM 실행마다 달라질 수 있다 · High · matching · ✅수정완료(9f5f951)
 - **위치**: `core/src/main/java/dev/hogumeter/core/domain/matching/AliasDictionary.java:22-27`, `core/src/main/java/dev/hogumeter/core/adapter/persistence/CatalogProjection.java:65-73`, `core/src/main/java/dev/hogumeter/core/domain/matching/Matcher.java:20-24`
 - **근거**:
   ```java
