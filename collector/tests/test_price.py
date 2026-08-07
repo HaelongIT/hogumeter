@@ -400,6 +400,17 @@ def test_bare_fallback_still_loses_to_a_real_price():
     assert normalize_price("[다나와]MSI RTX 5070 (899,000원/무료)").headline_price == 899_000
 
 
+# BE-05(코드리뷰 20260806) — `\d{4,}`는 탐욕적이라 뒤쪽 부정형 전방탐색이 5자리+ 숫자에서 실패하면
+# 엔진이 자리수를 하나씩 줄여 백트래킹한다. 정확히 4자리면 가드가 통하지만 5자리 이상이면 4자리로
+# 줄인 부분 문자열 뒤가 우연히 숫자라서 가드를 통과해 앞 4자리만 거짓 가격이 된다.
+def test_five_digit_model_number_does_not_backtrack_into_a_false_price():
+    assert normalize_price("[다나와]i5-14600K CPU 특가") is None
+
+
+def test_five_digit_number_immediately_followed_by_a_unit_does_not_backtrack():
+    assert normalize_price("[옥션]보조배터리 20000mAh 대용량 충전기") is None
+
+
 # ── 제목이 잘렸으면 배송 표기도 잘렸을 수 있다 ────────────────────────────
 #
 # 루리웹 목록은 긴 제목을 ASCII `...`로 자른다. `(13,800원...`처럼 괄호 관례가 **중간에서 끊기면**
