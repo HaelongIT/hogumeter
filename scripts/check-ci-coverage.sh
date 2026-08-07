@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # "돌지 않는 드릴은 드릴이 아니다" — 드릴·계약 테스트가 **정말 CI에 걸려 있는가.**
 #
-#   bash scripts/check-ci-coverage.sh [ci.yml]
+#   bash scripts/check-ci-coverage.sh [ci.yml] [root]
 #
 # 왜 필요한가: `restore-drill.sh`(REL-04)는 CI에 없었다. CLAUDE.md는 "전부 CI가 돌린다"고 적어
 # 두고 있었다(2026-07-10 실측: 거짓). 손으로 한 번 대조해 고쳤지만, **다음 드릴을 만들 때
@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+root="${2:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 ci="${1:-$root/.github/workflows/ci.yml}"
 
 [ -f "$ci" ] || {
@@ -51,11 +51,13 @@ mapfile -t ci_scripts < <(
 )
 
 # `caller`가 ci에 걸려 있고 그 안에서 `name`을 부르는가.
+# X-04(코드리뷰 20260806): ci.yml 직접 호출 판정(`in_ci`)과 같은 규율 — 주석은 실행이 아니다.
+# 여기만 caller 원문을 그대로 grep해, 실행 줄을 지우고 이름만 주석으로 남겨도(1단 닫힘) 통과했다.
 called_by_ci_script() {
 	local name="$1" caller
 	for caller in "${ci_scripts[@]}"; do
 		[ -f "$root/$caller" ] || continue
-		grep -qF "$name" "$root/$caller" && return 0
+		grep -vE '^[[:space:]]*#' "$root/$caller" | grep -qF "$name" && return 0
 	done
 	return 1
 }

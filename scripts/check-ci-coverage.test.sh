@@ -56,6 +56,48 @@ else
 	fail=1
 fi
 
+# X-04(코드리뷰 20260806) — 직접 호출 판정(`in_ci`)은 ci.yml에서 주석을 걷어내지만, 1단 닫힘
+# 판정(`called_by_ci_script`)은 caller 스크립트 원문을 그대로 grep해 같은 규율이 없었다. 완전히
+# 격리된 가짜 저장소로 재현한다(실제 targets 목록을 오염시키지 않기 위해 — root를 통째로 바꾼다).
+echo "── 1단 닫힘도 주석은 실행이 아니다 (X-04) ──"
+
+fake_repo() { # <caller 본문> → 격리된 fake root 경로를 찍는다
+	local r
+	r=$(mktemp -d "$work/rootXXXXXX")
+	mkdir -p "$r/scripts" "$r/.github/workflows"
+	printf '#!/usr/bin/env bash\necho drill\n' >"$r/scripts/fake-target-drill.sh"
+	printf '%s\n' "$1" >"$r/scripts/fake-caller.sh"
+	cat >"$r/.github/workflows/ci.yml" <<'YML'
+jobs:
+  x:
+    steps:
+      - run: bash scripts/fake-caller.sh
+YML
+	printf '%s' "$r"
+}
+
+r=$(fake_repo 'bash scripts/fake-target-drill.sh')
+if bash "$CHECK" "$r/.github/workflows/ci.yml" "$r" >"$work/out-indirect-ok" 2>&1; then
+	printf '  PASS  exit=0  실제로 호출하면 1단 닫힘으로 통과\n'
+else
+	printf '  FAIL  실제 호출인데도 통과하지 못했다\n'
+	sed 's/^/        /' "$work/out-indirect-ok"
+	fail=1
+fi
+
+r=$(fake_repo '# fake-target-drill.sh 는 예전엔 여기서 불렸다')
+set +e
+bash "$CHECK" "$r/.github/workflows/ci.yml" "$r" >"$work/out-indirect-commented" 2>&1
+got=$?
+set -e
+if [ "$got" -eq 1 ]; then
+	printf '  PASS  exit=1  caller 안에서 호출 줄이 주석으로만 남아도 차단된다\n'
+else
+	printf '  FAIL  expected=1 got=%s  주석만 남은 1단 닫힘을 놓쳤다\n' "$got"
+	sed 's/^/        /' "$work/out-indirect-commented"
+	fail=1
+fi
+
 echo
 if [ "$fail" -eq 0 ]; then echo "ALL PASS"; else echo "SOME FAILED"; fi
 exit "$fail"
