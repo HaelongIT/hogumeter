@@ -7,6 +7,7 @@
  *  3. 주기는 발생·간격·경과일만 말한다. "다음 딜 예상"은 만들지 않는다.
  */
 import type { BenchmarkView, CadenceView, CoupangLatestPrice, SignalColor, SignalView } from '../api/types'
+import { kstDate } from '../shared/kst'
 
 /**
  * 현재가 미확립 판정. core가 네이버 키 미발급 시 `currentPrice: null`을 보낸다(docs/91 Q-53).
@@ -94,7 +95,9 @@ export function coupangPriceLine(price: CoupangLatestPrice): string {
   }
   const wow = price.wowPrice === null ? '' : ` · 와우가 ${won(price.wowPrice)}`
   const shipping = price.shippingFee === null ? '' : ` · 배송비 ${won(price.shippingFee)}`
-  const observed = price.observedAt === null ? '' : ` (관측 ${price.observedAt.slice(0, 10)})`
+  // FE-04(코드리뷰 20260806): slice(0,10)는 UTC 날짜를 그대로 자른다 — shared/kst.ts가 문서화한
+  // "KST 자정을 넘기면 하루 밀린다" 함정 그대로다. kstDate로 정본 변환을 쓴다.
+  const observed = price.observedAt === null ? '' : ` (관측 ${kstDate(price.observedAt)})`
   return `쿠팡 정가 ${won(price.regularPrice)}${wow}${shipping}${observed}`
 }
 

@@ -297,6 +297,23 @@ describe('coupangPriceLine — 크롬 확장 미연동이면 미확인, 관측�
     expect(line).not.toContain('배송비')
   })
 
+  /**
+   * FE-04(코드리뷰 20260806) — `observedAt.slice(0, 10)`은 UTC 날짜를 그대로 자른다. `shared/kst.ts`가
+   * 문서화한 전제와 정면으로 어긋난다: UTC 15:00~23:59(KST 자정을 넘겨 다음날)에 관측되면 화면
+   * 날짜가 실제 KST 관측일보다 하루 이르게 표시된다.
+   */
+  it('KST 자정을 넘긴 관측은 UTC 날짜가 아니라 KST 날짜로 보인다', () => {
+    // 2026-07-20T20:00:00Z = KST 2026-07-21 05:00 — UTC로 자르면 하루 전(20일)으로 잘못 보인다.
+    const line = coupangPriceLine({
+      ...noObservation,
+      regularPrice: 899_000,
+      observedAt: '2026-07-20T20:00:00Z',
+    })
+
+    expect(line).toContain('2026-07-21') // KST 관측일
+    expect(line).not.toContain('2026-07-20')
+  })
+
   it('와우가·배송비가 있으면 함께 병기한다', () => {
     const line = coupangPriceLine({
       ...noObservation,
