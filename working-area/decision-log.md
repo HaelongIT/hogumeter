@@ -252,3 +252,48 @@
   `.claude/rules/{core-java,collector-python,web-react,shell-scripts,claude-md-editing}.md`,
   `collector/tests/{test_scheduler,test_observability}.py`(docstring 인용 갱신).
 
+
+## 2026-08-07 — D-8 PUR 자동 아카이브: 지금은 안 만든다
+
+- **맥락**: `docs/15` PUR-06이 전제하는 "다른 활성 관찰 없으면 자동 CLOSED→ARCHIVED"가 미구현
+  (Q-62 잔여). 수동 아카이브(Q-86, `POST /purchases/{id}/archive`)는 이미 배선돼 있어 사람이
+  원할 때 언제든 접을 수 있다 — 자동화는 순수 편의 기능이라 급하지 않았다.
+- **결정**: 사용자가 `AskUserQuestion`으로 "지금은 안 만든다"를 선택(권장안 채택). 스코프(variant
+  전체 vs demandAxisValue 단위)·트리거 시점(즉시 vs 배치)·Q-30(삭제 매트릭스)과의 정합 문제는
+  전부 미착수 상태로 유지.
+- **주체**: 사용자 결정(D-8 확정).
+- **영향**: `docs/91` Q-62(잔여 그대로 유지, 재개 트리거 불변), `working-area/decisions-needed.md`
+  에서 D-8 제거.
+
+## 2026-08-07 — D-9 CMP-02 반자동 웹 폼: 폴백 자체를 만들지 않는다
+
+- **맥락**: `docs/13` CMP-02가 명시하는 "확장 부재/고장 시 반자동 붙여넣기 웹 폼"이 2026-08-05
+  재검증에서 아예 없다는 게 드러났다(Q-79). 막힌 지점은 인증 경계 — `X-Extension-Token`을
+  웹 클라이언트에 심으면 시크릿 노출(정지조건)이라 세 선택지(별도 엔드포인트+nginx Basic Auth
+  경계 / 배포 시점 토큰 주입 / 폴백 자체를 안 만듦) 중 하나를 사람이 확정해야 했다.
+- **결정**: 사용자가 `AskUserQuestion`으로 "폴백 자체를 안 만든다"(권장안)를 선택. 크롬 확장
+  본체도 여전히 fixture 대기 중(Q-79)이라 이 폴백이 없어도 `DecisionPage`의 "쿠팡 관측
+  미확인" 정직한 표시로 정상 동작 — 인증 경계 설계에 드는 비용 대비 이득이 낮다고 판단.
+- **주체**: 사용자 결정(D-9 확정).
+- **영향**: `docs/91` Q-79(재개 트리거 ③ "D-9 결정 시 웹 폼 착수" 항목을 "D-9 확정: 폴백 자체를
+  만들지 않기로 함 — 크롬 확장만 유효 경로"로 갱신), `working-area/decisions-needed.md`에서
+  D-9 제거.
+
+## 2026-08-07 — D-10 reaction_score: 이 범위에서 포기한다
+
+- **맥락**: 확정본(`docs/90:58,187`)이 요구하는 반응 신호(reaction_score) 노출을 core가 한
+  번도 구현하지 않았다(코드리뷰 20260806 X-03, `docs/91` Q-89). 노출하려면 사이트 간 정규화
+  방식(뽐뿌·루리웹·펨코 추천수 체계가 다름, `docs/90:232`가 이미 미확정으로 적어 둠)부터 정해야
+  구현이 시작되는데, 그 전 단계인 "노출 자체를 할지"가 먼저 막혀 있었다.
+- **결정**: 사용자가 `AskUserQuestion`으로 "이 범위에서 포기한다"를 선택. 데이터는 collector가
+  이미 정직하게 수집·적재 중이라(`raw_deal_post.reaction_score`) 유실은 없다 — 노출만 범위에서
+  뺀다. 확정본 문구는 이 결정을 반영해 델타로 정정(아래 참조).
+- **주체**: 사용자 결정(D-10 확정).
+- **영향**: `docs/90-planning-final.md:58,187`에 v1.3 이후 델타 각주 추가(요구 철회, 문구 자체는
+  기록 보존을 위해 남기고 각주로 정정 — 절 전체를 지우면 "왜 컬럼이 미배선인가"의 근거가 사라진다),
+  `docs/91` Q-89를 [해소]로 전환(reaction_score는 계속 수집만 되고 영구히 노출 안 함),
+  `working-area/decisions-needed.md`에서 D-10 제거. (`scripts/dead-columns-allowlist.txt`는 손댈
+  것 없음 — `reaction_score`는 애초에 그 파일에 등록된 적이 없다. Q-89가 지적한 게이트 사각지대
+  때문에 `check-dead-columns.sh`가 collector 쓰기 코드만 보고 "배선됨"으로 오판해 애초에
+  DEAD로 안 잡혔고, 그래서 예외 등록 자체가 필요 없었다 — 이 사각지대는 D-10과 별개로 여전히
+  남아 있다, 다른 컬럼이 같은 함정에 빠질 수 있다는 뜻.)

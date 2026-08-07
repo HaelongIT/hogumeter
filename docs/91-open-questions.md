@@ -613,13 +613,14 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **남은 것(둘 다 진짜 코드 밖)**:
   1. **네이버 판매처 leg** — `CurrentPriceProvider`가 여전히 스텁(Q-3, 키 미발급)이라 "다른 몰 최저가"를 별도로 보여줄 재료가 없다. 이미 `BenchmarkView.currentPrice`/`gapLine`이 그 자리를 대신 채우고 있어(같은 포트), 실은 CMP-01의 "네이버" 열은 판단 화면의 갭 표시와 **개념이 겹친다** — Q-3 해소 시 별도 열로 분리할지, 지금처럼 겹쳐 둘지는 그때 재확인.
   2. **쿠팡 크롬 확장 자체(코드)** — ingest 수신부는 끝났지만 송신부(manifest·content script·DOM 파서)가 없다. **지금 만들면 위험하다**: 실 쿠팡 상품 페이지의 DOM 셀렉터를 확인할 방법이 fixture 없이는 없고, 손으로 지어낸 셀렉터는 "우연히 옳은 코드"(docs/99 — 다음 쿠팡 개편에 조용히 틀려진다)가 되기 쉽다. 실 쿠팡 페이지 캡처는 사람이 브라우저로 방문해야 하는 일이라 자동화 정지조건과 같은 성격이다.
-  3. **🔍 발견(2026-08-05) — CMP-02 폴백(반자동 붙여넣기 웹 폼) 자체가 없다**: `docs/13`이 "확장 부재/고장
-     시 반자동 붙여넣기 입력(웹 폼)"을 명시하는데, `web/src` 전수 확인 결과 그런 폼이 없다(읽기 `coupangPriceLine`
-     만 있다). 이전 이 항목이 "남은 것 둘"로만 적어 이 폴백의 부재 자체를 놓치고 있었다. 막힌 이유는 구현
-     난이도가 아니라 **인증 경계**(`X-Extension-Token`을 웹 클라이언트에 심을지) — `working-area/decisions-needed.md`
-     D-9로 등록(정지조건 "시크릿 노출" 소지가 있어 임의로 못 정함).
-- **재개 트리거**(무엇이 참이 되어야 하는가): ① 네이버 키 발급(Q-3) — 그 순간 겹침 여부를 판단해 반영. ② 사용자가 실 쿠팡 상품 페이지 HTML(또는 스크린샷 기반 DOM 구조)을 fixture로 제공 — 그러면 파싱 로직을 TDD로(fixture golden) 만들고, manifest/content script는 그 위에 얹는다. ③ D-9 결정 시 웹 폼 착수.
-- **관련**: Q-3(네이버 키), Q-78(레이트리밋 잠정치), D-9(신규, 폴백 인증 경계).
+  3. **✅ D-9 확정(2026-08-07) — CMP-02 폴백(반자동 붙여넣기 웹 폼)은 만들지 않는다**: `docs/13`이
+     "확장 부재/고장 시 반자동 붙여넣기 입력(웹 폼)"을 명시했지만, 인증 경계(`X-Extension-Token`을
+     웹 클라이언트에 심으면 시크릿 노출) 문제로 `decisions-needed.md` D-9에 등록했던 것을 사용자가
+     `AskUserQuestion`으로 "폴백 자체를 안 만든다"로 확정(decision-log 2026-08-07). 크롬 확장
+     본체가 나올 때까지(아래 재개 트리거 ②) CMP-02는 코드 밖에 그대로 둔다 — `docs/13`의 "반자동
+     붙여넣기" 요구는 이 범위에서 축소 해석.
+- **재개 트리거**(무엇이 참이 되어야 하는가): ① 네이버 키 발급(Q-3) — 그 순간 겹침 여부를 판단해 반영. ② 사용자가 실 쿠팡 상품 페이지 HTML(또는 스크린샷 기반 DOM 구조)을 fixture로 제공 — 그러면 파싱 로직을 TDD로(fixture golden) 만들고, manifest/content script는 그 위에 얹는다. (③ 폴백 웹 폼은 D-9 확정으로 닫힘 — 더 이상 재개 트리거가 아니다.)
+- **관련**: Q-3(네이버 키), Q-78(레이트리밋 잠정치), D-9(해소, decision-log 2026-08-07).
 
 ## [해소 2026-07-27] Q-84. DealEvent 상태 전이 안전망 — DB 갱신 메서드가 우연히만 옳았다
 - **맥락**: Q-10 정리 뒤 이어서 "호출자 0" 감사를 domain 계층 전체로 넓히다 발견. `DealEvent.activate()`·`.verify()`·`.end()`(그리고 그 안의 `DealStatus.transitionTo`)는 프로덕션 호출자가 0이었다 — 실제 상태 변경은 `IngestDealsUseCase`(신규 딜은 raw 생성자로 조립)·`DealMergePolicy.merge()`(병합 상태 계산, 검증 없이 직접 대입)·`DealEventEntity.applyStatusChange`(단순 필드 대입, 검증 없음) 세 경로가 대신하고 있었다. 즉 "허용 전이만 통과"라는 상태기계의 계약이 도메인 계층엔 있지만 DB에 실제로 쓰는 지점엔 강제되지 않았다.
@@ -870,14 +871,15 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   - **메시지 변경(가장 값진, 배선 필요)**: 처리 후 `editMessageReplyMarkup`으로 버튼 제거 + `editMessageText`로 "✅ 무시됨" 상태 표기. **선행**: `CallbackUpdate` record에 `messageId`(+원 메시지 chat_id) 추가 + `HttpTelegramApi.parseCallbacks`가 `callback_query.message.message_id`를 뽑아야 한다(현재 미추출). `TelegramInboundApi`/`HttpTelegramApi`에 editMessage 추가. 실 응답이라 수동 스파이크 검증.
 - **재개 트리거(이미 참)**: 실 사용에서 피드백 부족이 확인됐다(2026-07-22). 우선순위 낮음(처리는 정확) — 하지만 `show_alert=true` 한 줄은 저비용·고효과라 다음 텔레그램 증분에 먼저 넣는다. core 기존 파일(HttpTelegramApi·TelegramInboundApi·Poller)이라 세션 소유권 조율.
 
-## [열림] Q-89. `raw_deal_post.reaction_score`가 collector→DB로는 살아있지만 core 소비처가 0이다
+## [해소 2026-08-07] Q-89. `raw_deal_post.reaction_score`가 collector→DB로는 살아있지만 core 소비처가 0이다 — D-10 확정으로 영구 미노출
 - **맥락**(코드리뷰 20260806 X-03): 확정본(`docs/90-planning-final.md:58`)이 "반응 신호(reaction_score: 댓글수·추천수 등)를 가능한 만큼 수집"을 요구하고, `:187`은 `DealEvent`가 노출할 필드 목록에 `reaction_score`를 명시한다. collector는 매 폴링마다 `reaction_score`(추천수)를 `raw_deal_post`에 업서트한다(`raw_deal_sink.py`) — 데이터는 정직하게 쌓인다.
 - **🔴 실측**: core 쪽엔 이 컬럼을 읽는 코드가 전혀 없다(`grep -rni reaction core/src web/src`의 유일한 매치는 `RawDealPost.java`의 javadoc 주석뿐 — 그마저 X-07로 "미매핑"이라 정정 필요). `DealEventEntity`·`DealEvent`·`DealEventMapper` 어디에도 `reactionScore` 필드가 없어 collector→DB까지만 흐르고 core 이후(딜 생성·기준가·web 노출)로는 한 걸음도 못 간다.
 - **게이트 사각지대**: `scripts/check-dead-columns.sh`의 `reached()`는 "컬럼 이름이 core/collector/web 셋 중 아무 프로덕션 코드에 나타나는가"만 보므로, collector가 **쓰는** 코드(`raw_deal_sink.py`의 `reaction_score` 파라미터)만으로 "배선됨"으로 오판해 `DEAD COLUMNS OK`를 낸다(직접 실행 확인) — "생산자가 이름을 안다"와 "소비자가 읽는다"를 구별 못 한다.
-- **영향**: 데이터 유실은 아니다(DB엔 정직하게 남는다). 다만 확정본이 요구한 기능이 조용히 빠진 채로 아무 게이트도 이 사실을 추적하지 않고 있었다 — 이 항목이 그 추적이다.
-- **잠정값**: 아무것도 안 바꾼다 — `reaction_score`는 계속 수집만 되고 노출되지 않는다. 화면·알림 어디에도 "반응 신호"가 없다는 사실은 과대약속 금지(절대 원칙 6) 위반은 아니다(애초에 아무 데도 노출한다고 말한 적이 없다 — 그저 확정본 요구가 조용히 비어 있을 뿐이다).
-- **재개 트리거(무엇이 참이 되어야 하는가)**: 사람이 다음 중 하나를 정한다 — ① `reaction_score`를 실제로 노출(어느 화면에 어떤 형태로? 사이트 간 정규화 필요 — docs/90:232가 이미 미확정으로 적어 둠)하기로 결정하고 구현 착수, 또는 ② 확정본 요구를 이 범위에서 포기하기로 결정하고 `decision-log.md`+`docs/90` 델타로 기록. 되돌리기 쉬운 쪽(그대로 둠)으로 잠정 진행 중이라 사람이 정하기 전까지 코드 변경 없음.
-- **관련**: `working-area/review-20260806/30-cross-cutting.md` X-03·X-07, `docs/90-planning-final.md:58,187,232`.
+- **✅ D-10 확정(2026-08-07)**: 사용자가 `AskUserQuestion`으로 "이 범위에서 포기한다"를 선택
+  (decision-log 2026-08-07). `reaction_score`는 앞으로도 계속 수집·적재만 되고 core·web은 영구히
+  읽지 않는다 — 데이터 유실은 아니다(DB엔 정직하게 남는다, 나중에 정책이 다시 바뀌면 과거분도
+  쓸 수 있다). 확정본 문구는 `docs/90-planning-final.md:58,187`에 델타 각주로 정정.
+- **관련**: `working-area/review-20260806/30-cross-cutting.md` X-03·X-07, `docs/90-planning-final.md:58,187,232`, D-10(decision-log 2026-08-07).
 
 ## [해소 2026-08-07] Q-91. "제품 노화·만료 처리"(확정본 §10) — 지금까지 구현·추적 둘 다 안 돼 있었다
 - **맥락**: `docs/90-planning-final.md` §10("상세설계 이월 — 숫자·규칙 박기")이 v1 범위로 명시한 10개

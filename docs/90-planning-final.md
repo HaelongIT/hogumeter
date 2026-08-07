@@ -55,7 +55,7 @@
 - 2개 이상 사이트 확인 딜 = full 신뢰, 단일 사이트 = 저신뢰 플래그.
 - **단일 사이트 딜의 취급 (포함+가중분리)**: 기준가 median 계산에는 **포함**(재현율·표본 확보). 단 **"역대/기간 최저가" 타이틀과 P25 굿딜라인은 교차검증 딜로만** 산출. 표본 수는 **"n건(교차검증 m건)" 이중 표기.**
 - **미상 버킷 글끼리는 "제품 후보군 + 가격±α + 48h"로 잠정 병합·잠정 검증 카운트** 허용. 사람이 분류하는 순간 확정 반영. 소급 알림은 하지 않는다.
-- 원문 링크(source_url)는 1급 데이터로 항상 보존·노출. 반응 신호(reaction_score: 댓글수·추천수 등)를 가능한 만큼 수집.
+- 원문 링크(source_url)는 1급 데이터로 항상 보존·노출. 반응 신호(reaction_score: 댓글수·추천수 등)를 가능한 만큼 수집. **[D-10, 2026-08-07]** "가능한 만큼 수집"(collector 적재)까지만 유효 — **노출(core 소비·화면 표시)은 이 범위에서 포기**로 확정(사이트 간 정규화 방식 미정, decision-log 2026-08-07). 데이터는 계속 `raw_deal_post.reaction_score`에 쌓이므로 나중에 재개해도 과거분을 못 쓰는 건 아니다(docs/91 Q-89).
 
 ### 가격 정규화
 - 단위: **실결제가 + 배송비** (무료배송은 배송비 0으로 표기, 무조건 합산 기준으로 통일).
@@ -186,6 +186,9 @@
 - **Variant** (가격결정 축 조합 단위 — 분포·기준가의 기본 단위)
 - **DealEvent** (병합된 핫딜 1건): normalized_product/variant, headline_price, base_price?, applied_conditions[], confidence, price_first/min/max/last, shipping, source_sites[], source_url, reaction_score, confirmed_count, first_seen/last_seen, status(신규→검증→변동→종료), 이상치 플래그(방향), 미상 여부
   - **`[v1.3]`** first_seen = **발생 시각**(postedAt 우선, 라이브는 M0 실측 후 확정) / last_evidence_at·captured_at 추가 / **종료(ENDED)는 잠정 — 동일 딜 가격 재관측 시 ACTIVE 복귀(재개=후속 "부활")** / 가격 역할 3분법(first=분포·last=지금·min=지나간 기회·max 참조금지). §13-C1·C2, `docs/02`·`docs/03`.
+  - **`[D-10, 2026-08-07]`** 위 필드 목록의 `reaction_score`는 노출 대상에서 제외 확정 — `DealEvent`
+    도메인·API 응답 어디에도 이 필드는 없다(§2 §58 각주와 같은 결정). 목록에는 기록 보존을 위해
+    그대로 남긴다.
 - **PriceHistory** (현재가 시계열 — 온디맨드 갱신)
 - **Alert** (제품별: 목표가?, 기간 P, K_display, 제외 키워드, 알림 설정)
 - **UsedSearch** (Product 종속: 3계층 키워드, 폴링 주기, 목표가)
