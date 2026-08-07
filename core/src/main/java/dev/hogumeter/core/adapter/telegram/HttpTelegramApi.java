@@ -11,6 +11,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -25,6 +27,8 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 
+	private static final Logger log = LoggerFactory.getLogger(HttpTelegramApi.class);
+
 	private final HttpClient client = HttpClient.newBuilder()
 			.connectTimeout(Duration.ofSeconds(5))
 			.build();
@@ -33,6 +37,11 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 
 	public HttpTelegramApi(String botToken) {
 		this.baseUrl = "https://api.telegram.org/bot" + botToken;
+	}
+
+	/** 테스트 seam — 로컬 HTTP 서버로 실 상태코드 처리를 검증한다(실 네트워크 호출 없음, 127.0.0.1만). */
+	HttpTelegramApi(String baseUrl, boolean rawBaseUrl) {
+		this.baseUrl = baseUrl;
 	}
 
 	@Override
@@ -77,6 +86,13 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 		return post(baseUrl + "/sendMessage", body);
 	}
 
+	/**
+	 * BE-04(코드리뷰 20260806): 예전엔 상태 코드를 안 보고 바로 본문을 파싱했다 — 토큰 무효화·차단(401/403)
+	 * 시 본문에 {@code result} 키가 없어 {@code parseCallbacks}가 조용히 빈 목록을 반환하고, 호출자
+	 * ({@code TelegramInboundPoller.poll()})의 {@code catch (RuntimeException)}은 예외 자체가 없어
+	 * 트리거되지 않았다 — 인바운드(승격/기각/무시 버튼) 채널이 흔적 없이 멈추는 경로였다. 2xx가 아니면
+	 * 예외를 던져 그 catch가 로그를 남기게 한다.
+	 */
 	@Override
 	public List<CallbackUpdate> getUpdates(long offset) {
 		// timeout=0: 짧은 주기 폴링(롱폴링 블로킹 스레드를 피한다). 콜백만 받으면 되지만 필터는 파싱에서.
@@ -88,6 +104,10 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 				.build();
 		try {
 			HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			if (response.statusCode() / 100 != 2) {
+				// 메시지에 URL·토큰을 담지 않는다(SEC-01) — 상태 코드만.
+				throw new TelegramTransportException(response.statusCode());
+			}
 			return parseCallbacks(response.body());
 		}
 		catch (IOException e) {
@@ -105,7 +125,7 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 		if (showAlert) {
 			body += "&show_alert=true"; // 일시 토스트 대신 모달 — 눌러 닫아야 하니 놓치기 어렵다(Q-73)
 		}
-		post(baseUrl + "/answerCallbackQuery", body);
+		warnIfFailed("answerCallbackQuery", post(baseUrl + "/answerCallbackQuery", body));
 	}
 
 	@Override
@@ -113,7 +133,14 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 		// reply_markup을 빈 inline_keyboard로 보내 버튼을 제거한다(처리 후 다시 못 누르게 + "처리됨"을 남긴다, Q-73 ③).
 		String body = "chat_id=" + enc(chatId) + "&message_id=" + messageId
 				+ "&text=" + enc(text) + "&reply_markup=" + enc("{\"inline_keyboard\":[]}");
-		post(baseUrl + "/editMessageText", body);
+		warnIfFailed("editMessageText", post(baseUrl + "/editMessageText", body));
+	}
+
+	/** BE-04: 실패해도 폴러를 죽이지 않는 호출들(void 반환)은 최소한 로그로 남긴다 — 완전한 침묵을 없앤다. */
+	private void warnIfFailed(String operation, int statusCode) {
+		if (statusCode / 100 != 2) {
+			log.warn("텔레그램 {} 실패: status={}", operation, statusCode);
+		}
 	}
 
 	/**
@@ -156,6 +183,11 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 	static final class TelegramTransportException extends RuntimeException {
 		TelegramTransportException(Throwable cause) {
 			super("telegram transport failure: " + cause.getClass().getSimpleName());
+		}
+
+		/** BE-04: 2xx가 아닌 상태 코드도 전송 실패로 취급 — 메시지엔 상태 코드만(URL·토큰 없음, SEC-01). */
+		TelegramTransportException(int statusCode) {
+			super("telegram transport failure: status=" + statusCode);
 		}
 	}
 }
