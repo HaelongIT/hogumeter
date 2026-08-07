@@ -444,3 +444,35 @@ def _bunjang_payload(*, free_shipping: bool, price: str) -> str:
             "ad": False, "bizseller": False, "free_shipping": free_shipping,
         }]
     })
+
+
+# BE-19(코드리뷰 20260806) — `price`·`status`·`num_faved`·`name`은 `.get(...)`으로 방어하는데
+# `pid`·`update_time`만 직접 인덱싱해서, 목록 중 한 항목만 이 둘이 없어도 KeyError가 루프 전체를
+# 죽여 정상 항목까지 그 사이클에서 전부 유실됐다. 다른 3개 파서(뽐뿌·루리웹·펨코)는 못 찾은 행을
+# continue로 건너뛰어 정상 행을 살린다 — 같은 규율로 통일한다.
+def test_bunjang_item_missing_pid_is_skipped_not_fatal():
+    import json as _json
+
+    payload = _json.dumps({"list": [
+        {"name": "결측 pid", "price": "100000", "update_time": 1783167297, "status": "0"},  # pid 없음
+        {"pid": 2, "name": "정상 항목", "price": "800000", "update_time": 1783167297, "status": "0"},
+    ]})
+
+    deals = parse_bunjang(payload, NOW)
+
+    assert len(deals) == 1  # 결측 항목만 빠지고 정상 항목은 살아남는다
+    assert deals[0].post_id == "2"
+
+
+def test_bunjang_item_missing_update_time_is_skipped_not_fatal():
+    import json as _json
+
+    payload = _json.dumps({"list": [
+        {"pid": 1, "name": "결측 update_time", "price": "100000", "status": "0"},  # update_time 없음
+        {"pid": 2, "name": "정상 항목", "price": "800000", "update_time": 1783167297, "status": "0"},
+    ]})
+
+    deals = parse_bunjang(payload, NOW)
+
+    assert len(deals) == 1
+    assert deals[0].post_id == "2"

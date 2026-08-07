@@ -20,7 +20,14 @@ def parse_bunjang(payload: str, now: datetime | None = None) -> list[ParsedDeal]
     data = json.loads(payload)
     deals: list[ParsedDeal] = []
     for item in data.get("list", []):
-        pid = str(item["pid"])
+        # BE-19(코드리뷰 20260806): 다른 필드는 전부 .get()으로 방어하는데 pid·update_time만 직접
+        # 인덱싱해, 한 항목의 결측이 KeyError로 루프 전체(정상 항목까지)를 죽였다. 다른 3개 파서와
+        # 같은 규율 — 못 찾은 행은 건너뛰고 나머지는 살린다.
+        raw_pid = item.get("pid")
+        raw_update_time = item.get("update_time")
+        if raw_pid is None or raw_update_time is None:
+            continue
+        pid = str(raw_pid)
         price_raw = str(item.get("price", "")).strip()
         free_shipping = bool(item.get("free_shipping", False))
         deals.append(
@@ -31,7 +38,7 @@ def parse_bunjang(payload: str, now: datetime | None = None) -> list[ParsedDeal]
                 url=f"https://m.bunjang.co.kr/products/{pid}",
                 reaction_score=int(item.get("num_faved") or 0),
                 headline_price=int(price_raw) if price_raw.isdigit() else None,
-                posted_at=datetime.fromtimestamp(int(item["update_time"]), tz=timezone.utc),
+                posted_at=datetime.fromtimestamp(int(raw_update_time), tz=timezone.utc),
                 status="ACTIVE" if str(item.get("status")) == "0" else "SOLD_OUT",
                 # `free_shipping: false`는 "배송비 0"이 아니라 **금액 미상**이다 — 응답에 금액이 없다.
                 # 뽐뿌의 `유배`와 같은 부류다: 저장된 가격은 실결제가가 아니라 하한이다(BM-02).
