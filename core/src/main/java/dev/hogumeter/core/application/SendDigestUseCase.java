@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * DIGEST 발송(docs/18) — 렌더링된 본문을 {@link DigestSplitter}로 나눠(DIG-02 절단 금지·연번)
@@ -76,6 +77,16 @@ public class SendDigestUseCase {
 		this.maxLength = maxLength;
 	}
 
+	/**
+	 * BE-09(코드리뷰 20260806): {@code recordSent}(개별 {@code @Transactional} 없음, Spring Data JPA의
+	 * 기본 저장 메서드는 활성 트랜잭션이 없으면 호출마다 새 트랜잭션을 연다)를 variant마다 개별
+	 * 호출하던 루프가 "전 분할 성공 시에만 저장물을 갱신한다"(REL-03 원자성, 클래스 javadoc)는 계약을
+	 * DB 쓰기 자체의 원자성까지는 보장하지 못했다 — 발송이 전부 성공한 뒤 이 루프 도중 DB 예외가 나면
+	 * 일부 variant만 커밋되고 나머지는 반영되지 않는 상태가 가능했다. 메서드 전체를 하나의 트랜잭션으로
+	 * 묶는다(텔레그램 발송 자체는 DB 쓰기가 아니라 트랜잭션 범위에 넣어도 손해가 없고, 1인용·주 1회
+	 * 배치라 커넥션을 잠깐 더 쥐는 비용은 무시할 만하다).
+	 */
+	@Transactional
 	public DigestSendReport send() {
 		Digest digest = assembler.assemble();
 		List<String> parts = DigestSplitter.split(render.render(), maxLength);
