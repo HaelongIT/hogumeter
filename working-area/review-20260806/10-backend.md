@@ -78,11 +78,12 @@
 - **권고**: CI에 `--profile public` 경로를 격리 스택으로 리허설하는 잡을 추가하거나, `caddy` 서비스에 "auth on" 마커를 확인하는 게이트를 두거나, 최소한 `--profile public up -d` 앞에 `preflight.sh prod`를 강제하는 한 줄짜리 래퍼 스크립트를 만든다.
 - **출처**: `raw/B3-security.md` B3-01
 
-### BE-07 — 미상 큐 승격의 부수효과가 원자적 상태 가드보다 먼저 실행된다 · Medium · review-queue · ❌미해결
+### BE-07 — 미상 큐 승격의 부수효과가 원자적 상태 가드보다 먼저 실행된다 · Medium · review-queue · 📄문서화(검토 결과 실결함 아님)
 - **위치**: `core/src/main/java/dev/hogumeter/core/application/ResolveReviewItemUseCase.java:102-114, 199-207`
 - **근거**: `promote()`는 ① `readPending`(비원자적 SELECT) → ② `promoteUnclassified`(딜 생성 + 별칭 학습, 부수효과) → ③ `resolve()`의 `UPDATE ... WHERE status='PENDING'`(유일한 원자적 가드) 순으로 실행된다. 클래스 javadoc은 "PENDING 행에만 원자적으로 건다"고 명시하지만 실제 가드는 ③ 하나뿐이고, ①②는 그 이전에 실행된다.
 - **영향**: 같은 리뷰 아이템에 대해 텔레그램 인라인 버튼이 짧은 시간 내 두 번 눌리면(전송 지연·콜백 재전달) 두 요청이 거의 동시에 `readPending`을 통과해 둘 다 `promoteUnclassified`(`confirmDeal` 호출 + `learnAlias`)를 실행할 수 있다. `DealMergePolicy.canMerge` 판정 시점 차이로 중복 딜이 생성될 수 있고, `resolve()`는 한쪽만 성공해 이미 실행된 부수효과는 되돌려지지 않는다. 기존 테스트는 순차 이중 처리만 검증하고 동시성(레이스) 시나리오는 없다.
 - **권고**: `readPending`부터 `resolve`까지를 하나의 원자적 조건부 업데이트로 묶거나, `promoteUnclassified` 진입 전에 낙관적 잠금/재확인을 추가한다.
+- **2차 검토(2026-08-07)**: `promote()`·`reject()` 전체가 **하나의 `@Transactional`**이라(자기호출 오버로드는 프록시를 안 타지만 최초 진입은 `ReviewQueueController`/`ReviewCallbackRouter`가 주입받은 빈을 통해 호출해 트랜잭션이 정상 시작된다), 두 요청이 거의 동시에 `readPending`을 통과해도 두 번째 요청의 `resolve()` UPDATE는 PostgreSQL 행 잠금으로 첫 번째 트랜잭션 커밋까지 블록되고, 커밋 후 재평가한 `WHERE status='PENDING'`이 거짓이 돼 0행 갱신 → `ReviewItemNotFoundException` → **Spring이 그 트랜잭션 전체(부수효과 포함)를 롤백**한다. "이미 실행된 부수효과는 되돌려지지 않는다"는 원 발견의 핵심 주장이 트랜잭션 경계를 놓친 것으로 보인다 — 최종 커밋되는 부수효과는 항상 승자 트랜잭션 하나뿐이다. 신뢰할 수 있는 실 동시성 재현(계측 지점 부재)까지는 못 갔지만, 결론과 근거를 클래스 javadoc에 남겨 다음 리뷰가 같은 조사를 반복하지 않게 했다. 코드 변경 없음.
 - **출처**: `raw/A2-usecase.md` A2-02
 
 ### BE-08 — 가격-드리프트(priceless) 알림이 재알림 억제 없이 매 사이클 반복된다 · Medium · collector-drift · ❌미해결

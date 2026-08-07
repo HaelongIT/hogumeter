@@ -48,6 +48,16 @@ import org.springframework.transaction.annotation.Transactional;
  * 이미 처리된(또는 없는) 항목은 {@link ReviewItemNotFoundException} — 처리는 PENDING 행에만
  * 원자적으로 건다({@code where status='PENDING'}). {@code status}·{@code resolved_at}·{@code channel}은
  * 엔티티가 매핑하지 않으므로 네이티브 SQL로 다룬다(GetReviewQueueUseCase와 같은 수법).
+ *
+ * <p><b>BE-07 검토(코드리뷰 20260806)</b>: {@code readPending}(SELECT) → 부수효과(딜 생성·별칭 학습)
+ * → {@code resolve}(원자적 UPDATE) 순서만 보면 "먼저 통과한 두 요청이 둘 다 부수효과를 실행할 수 있다"는
+ * 우려가 그럴듯해 보이지만, {@code promote}·{@code reject} 전체가 <b>하나의 {@code @Transactional}</b>
+ * 이라 실제로는 안전하다 — 두 번째 요청의 {@code resolve} UPDATE는 같은 행에 대한 PostgreSQL 행 잠금 때문에
+ * 첫 번째 트랜잭션이 커밋할 때까지 블록되고, 커밋 후 재평가한 {@code WHERE status='PENDING'}이 거짓이 돼
+ * 0행이 갱신된다 → {@link ReviewItemNotFoundException}이 던져지고 → Spring이 그 트랜잭션 전체(부수효과
+ * 포함)를 롤백한다. 즉 최종적으로 커밋되는 부수효과는 항상 하나뿐이다. 별도 스레드로 재현을 시도했으나
+ * (신뢰할 수 있는 동시성 테스트를 만들 계측 지점이 없어 결정적 재현은 어려웠다) 이 트랜잭션 경계 분석이
+ * 근거다 — 다음에 이 코드를 만지는 사람을 위해 결론만 남긴다: 실제 결함 아님.
  */
 @Service
 public class ResolveReviewItemUseCase {
