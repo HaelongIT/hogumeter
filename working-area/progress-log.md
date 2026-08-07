@@ -1,3 +1,36 @@
+## 2026-08-07 (6) — Q-91 신규 발견·해소: "제품 노화·만료 처리"(확정본 §10)가 구현·추적 둘 다 없었다
+
+**맥락**: 사용자가 "추가로 더 할만한거 없는지 문서나 뭐이거저거 뒤져보면서 알려줘봐" 재요청.
+`docs/90-planning-final.md` §10(상세설계 이월 — v1 확정 범위) 10개 항목을 현재 상태와 전수
+대조하다가 "제품 노화·만료 처리" 하나만 구현도 안 됐고 어느 Q/D 보드에도 오른 적이 없음을 발견
+(나머지 9개는 구현됐거나 최소 Q-87/Q-89로 추적 중). `product` 테이블은 V1~V23까지 lifecycle
+컬럼이 전혀 없었고 삭제·보관 엔드포인트 자체가 없었다 — 한 번 등록한 제품은 영원히 못 지운다.
+사용자에게 "기획에 명시 vs 회색지대"를 물어 §10 자체 정의("숫자·규칙만 박으면 되는 v1 확정
+항목")로 근거를 대며 "명시된 누락"이라고 답변, "오케이 진행하자" 승인 받음.
+
+**한 일**:
+- **core**: `product.archived boolean default false`(V24/R24, 롤백 드릴 PASS) +
+  `SetProductArchivedUseCase`(archive/unarchive) + 신규 `ProductController`(POST
+  `/api/v1/products/{id}/{un}archive`) + `GetProductsUseCase.listProducts(includeArchived)`
+  기본 제외 + `GetPrioritizedProductsUseCase`도 제외. **의도적으로 안 건드림**: 매칭 카탈로그
+  (`CatalogProjection`)는 그대로 — 보관은 표시 손잡이일 뿐, 매칭·수집·알림 로직 불변(절대
+  원칙 4). 자동 시간 기반 만료는 임계값이 정책 결정이라 이번엔 안 열었다(수동 보관만).
+  신규/보강 테스트 4개 파일. `./gradlew build`(checkstyle+spotbugs 포함) GREEN. 커밋 `4c57ed5`.
+- **web**: `ProductSummary.archived` + `api.archiveProduct`/`unarchiveProduct` +
+  `RegistrationPage`에 "보관된 제품도 보기" 토글 + 보관/복원 버튼 + `[보관됨]` 배지. 기존
+  `listProducts()` 호출부 5곳은 기본값(`includeArchived=false`)이 이전 동작과 같아 무변경.
+  292/292 테스트 GREEN(신규 3케이스 포함), lint·build GREEN. 커밋 `55eaff0`.
+- **문서**: `docs/91` 신규 Q-91(발견 경위·해소 내용·재개 트리거 기록) — 커밋에 동봉.
+
+**자율 결정**: 자동 만료 임계값(예: "N개월 무변동이면 자동 보관")은 정책 결정이라 안 열고 수동
+보관만 열었다 — 되돌리기 쉬운 쪽(가역, 화면 손잡이만) 그대로 선택, 사람 확인 없이 진행(Autonomous
+모드 원칙과 동일 근거, 이번엔 대화형이라 실제로는 "오케이 진행하자" 승인을 받고 시작함).
+
+**검증**: 4개 소비처0/생산자0 게이트 + `check-board-references.sh`(신규 Q-91 인용 등록 확인) +
+`check-ci-coverage.sh` 전부 GREEN. `scripts/rollback-drill.sh`(V24 전진→R24 후진→재전진) PASS.
+
+**다음**: 사용자 지시 대기. 커밋 2개(`4c57ed5`·`55eaff0`) 아직 푸시 안 함.
+
 ## 2026-08-07 (5) — 사용자가 "추가로 더 구현할 거 없는지 찾아와봐" 요청 → 전수 스윕 → Q-90 잔여(정적분석 도구 확대) 완료
 
 **한 일**: 코드리뷰 44건 커밋·푸시 완료 후 사용자가 "지금 추가적으로 더 구현할거 없는지 찾아와봐"를
