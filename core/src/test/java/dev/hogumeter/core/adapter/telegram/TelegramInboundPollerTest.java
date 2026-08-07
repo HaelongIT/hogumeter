@@ -116,4 +116,22 @@ class TelegramInboundPollerTest {
 
 		assertThatCode(poller::poll).doesNotThrowAnyException();
 	}
+
+	/**
+	 * BE-22(코드리뷰 20260806) — 콜백이 아닌 업데이트(data=null, 일반 텍스트·/start 등)도 offset을
+	 * 전진시켜야 한다. 안 그러면 같은 update_id가 매 폴마다 계속 재조회된다.
+	 */
+	@Test
+	void advancesOffsetPastNonCallbackUpdatesWithoutRoutingThem() {
+		api.next = List.of(new CallbackUpdate(100, 555, null, null, 0L, 0L, null)); // 콜백 아님
+
+		poller.poll();
+
+		assertThat(resolve.calls).as("라우팅되지 않는다").isEmpty();
+		assertThat(api.answered).as("답도 하지 않는다(콜백 자체가 없다)").isEmpty();
+
+		api.next = List.of();
+		poller.poll();
+		assertThat(api.lastPolledOffset).as("101부터 다시 폴 — 100이 재조회되지 않는다").isEqualTo(101);
+	}
 }

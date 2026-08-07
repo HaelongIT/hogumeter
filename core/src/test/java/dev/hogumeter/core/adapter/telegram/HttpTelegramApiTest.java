@@ -60,6 +60,27 @@ class HttpTelegramApiTest {
 		assertThat(updates.get(0).data()).isEqualTo("promote:5");
 	}
 
+	/**
+	 * BE-22(코드리뷰 20260806) — 콜백이 아닌 업데이트(일반 텍스트·/start 등)는 예전엔 결과 목록에서
+	 * 완전히 빠졌다. 그러면 폴러가 그 update_id로 offset을 전진시킬 방법이 없어, 사용자가 봇에게
+	 * 일반 메시지를 보내면 그 update_id가 매 폴마다 계속 재조회된다(부작용은 없지만 낭비 트래픽).
+	 * 콜백이 아닌 항목도 결과에 실어(data=null) 폴러가 offset만 전진시킬 수 있게 한다.
+	 */
+	@Test
+	void getUpdatesIncludesNonCallbackUpdatesSoOffsetCanAdvance() throws IOException {
+		HttpTelegramApi api = apiPointingAt(200, """
+				{"result":[{"update_id":1,"message":{"text":"/start"}},
+				            {"update_id":2,"callback_query":{"id":"q1","from":{"id":42},"data":"promote:5"}}]}""");
+
+		var updates = api.getUpdates(0);
+
+		assertThat(updates).hasSize(2);
+		assertThat(updates.get(0).updateId()).isEqualTo(1);
+		assertThat(updates.get(0).data()).as("콜백이 아니면 data가 없다 — 폴러가 라우팅을 건너뛰는 신호").isNull();
+		assertThat(updates.get(1).updateId()).isEqualTo(2);
+		assertThat(updates.get(1).data()).isEqualTo("promote:5");
+	}
+
 	@Test
 	void getUpdatesThrowsOn401InsteadOfSilentlyReturningEmpty() throws IOException {
 		HttpTelegramApi api = apiPointingAt(401, "{\"ok\":false,\"description\":\"Unauthorized\"}");

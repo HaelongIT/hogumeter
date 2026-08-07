@@ -10,8 +10,10 @@ import java.util.List;
 public interface TelegramInboundApi {
 
 	/**
-	 * {@code offset} 이상의 콜백 업데이트를 가져온다(그 미만은 이미 처리·확인됨). 콜백이 아닌 업데이트는
-	 * 걸러 반환하지 않는다 — 이 봇은 인라인 버튼만 다룬다.
+	 * {@code offset} 이상의 업데이트를 가져온다(그 미만은 이미 처리·확인됨). 콜백이 아닌 업데이트(일반
+	 * 텍스트·{@code /start} 등 — 이 봇은 인라인 버튼만 다룬다)도 {@code data=null}로 함께 실어 온다
+	 * (BE-22, 코드리뷰 20260806) — 그래야 호출자가 그 {@code updateId}로 offset을 전진시킬 수 있다.
+	 * 걸러서 아예 안 돌려주면 같은 update_id가 매 폴마다 계속 재조회된다.
 	 */
 	List<CallbackUpdate> getUpdates(long offset);
 

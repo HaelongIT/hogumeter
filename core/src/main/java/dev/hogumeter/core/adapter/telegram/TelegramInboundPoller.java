@@ -51,6 +51,12 @@ public class TelegramInboundPoller {
 	public void poll() {
 		try {
 			for (CallbackUpdate update : api.getUpdates(offset)) {
+				// BE-22(코드리뷰 20260806): 콜백이 아닌 업데이트(data=null)는 라우팅하지 않지만
+				// offset은 전진시킨다 — 안 그러면 같은 update_id가 매 폴마다 계속 재조회된다.
+				if (update.data() == null) {
+					offset = Math.max(offset, update.updateId() + 1);
+					continue;
+				}
 				CallbackResult result = router.route(update.fromChatId(), update.data());
 				api.answerCallbackQuery(update.callbackQueryId(), result.reply(), true); // 모달로 — 결과를 놓치지 않게(Q-73 ①)
 				// 상태가 바뀌었으면 원 메시지를 편집해 버튼을 없애고 결과를 남긴다 — 나중에 봐도 처리됐음을 안다(Q-73 ③).

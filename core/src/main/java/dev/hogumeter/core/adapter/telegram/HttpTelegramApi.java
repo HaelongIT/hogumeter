@@ -155,8 +155,17 @@ public class HttpTelegramApi implements TelegramApi, TelegramInboundApi {
 			return out;
 		}
 		for (Object item : updates) {
-			if (!(item instanceof Map<?, ?> update) || !(update.get("callback_query") instanceof Map<?, ?> cq)) {
-				continue; // 콜백이 아닌 업데이트는 무시
+			if (!(item instanceof Map<?, ?> update)) {
+				continue; // 형태가 아예 안 맞는 항목만 무시
+			}
+			// BE-22(코드리뷰 20260806): 콜백이 아닌 업데이트(일반 텍스트·/start 등)도 결과에 싣는다
+			// (data=null) — 그래야 폴러가 그 update_id로 offset을 전진시킬 수 있다. 예전엔 여기서
+			// 완전히 걸러 offset이 정체돼, 사용자가 일반 메시지를 보내면 그 update_id가 매 폴(3초)마다
+			// 계속 재조회됐다(부작용 없는 낭비 트래픽).
+			if (!(update.get("callback_query") instanceof Map<?, ?> cq)) {
+				long bareUpdateId = update.get("update_id") instanceof Number n ? n.longValue() : 0L;
+				out.add(new CallbackUpdate(bareUpdateId, 0L, null, null, 0L, 0L, null));
+				continue;
 			}
 			long fromChatId = (cq.get("from") instanceof Map<?, ?> from && from.get("id") instanceof Number id)
 					? id.longValue() : 0L;
