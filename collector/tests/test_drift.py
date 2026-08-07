@@ -197,3 +197,31 @@ def test_zero_deals_is_still_the_old_signal():
 
 def _obs(site: str, *, deals: int, priced: int) -> SiteObservation:
     return SiteObservation(site=site, outcome=Outcome.OK, deal_count=deals, priced_count=priced)
+
+
+# BE-08(코드리뷰 20260806) — `_healthy`가 `priced_count`를 안 봐서, priceless가 회복 없이 계속돼도
+# `deal_count > 0`만으로 매 사이클 무장이 풀리고 다시 걸린다. zero-yield 대조군은 정확히 억제되는데
+# priceless만 이 경로에서 빠졌다.
+def test_persistent_priceless_streak_does_not_realert_every_cycle():
+    policy = DriftPolicy(window=10, min_success_rate=0.6, zero_yield_streak=3)
+    history = DriftHistory()
+    all_alerts = []
+
+    for _ in range(10):
+        history, alerts = observe(history, _obs("ruliweb", deals=28, priced=0), policy, NOW)
+        all_alerts.extend(alerts)
+
+    assert len(all_alerts) == 1  # zero-yield와 동일하게 회복 전까지는 1회만
+
+
+def test_persistent_zero_yield_streak_is_the_control_group_and_already_suppresses():
+    """대조군 — 이 신호는 이미 정확히 억제된다(BE-08 발견 당시 실측)."""
+    policy = DriftPolicy(window=10, min_success_rate=0.6, zero_yield_streak=3)
+    history = DriftHistory()
+    all_alerts = []
+
+    for _ in range(10):
+        history, alerts = observe(history, _obs("ruliweb", deals=0, priced=0), policy, NOW)
+        all_alerts.extend(alerts)
+
+    assert len(all_alerts) == 1

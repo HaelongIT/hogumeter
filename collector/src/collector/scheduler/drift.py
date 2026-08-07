@@ -78,7 +78,11 @@ def observe(
 
 
 def _healthy(observation: SiteObservation) -> bool:
-    return observation.outcome is Outcome.OK and observation.deal_count > 0
+    """BE-08(코드리뷰 20260806): `deal_count > 0`만 보면 priceless(딜은 나오는데 가격이 전부 없음)도
+    "건강"으로 오판해 무장이 매 사이클 풀렸다가 다시 걸린다 — zero-yield는 `deal_count`로 정확히
+    걸러지는데 priceless만 이 경로에서 빠져 있었다. `priced_count`도 함께 봐서 두 진단 사유가 각각
+    실제로 해소됐을 때만 재무장을 허용한다(회복 없이 지속되면 억제, 재현 검증: 10사이클 8회→1회)."""
+    return observation.outcome is Outcome.OK and observation.deal_count > 0 and observation.priced_count > 0
 
 
 def _diagnose(window: tuple[SiteObservation, ...], policy: DriftPolicy) -> str | None:
