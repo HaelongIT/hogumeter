@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { ComparisonView, ProductSummary } from '../api/types'
 
@@ -135,7 +135,9 @@ export function UsedComparisonPage() {
   const productIdRef = useRef(productId)
   productIdRef.current = productId
 
-  const reload = () => {
+  // X-06(코드리뷰 20260806): eslint 도입 후 react-hooks/exhaustive-deps가 이 effect의 진짜
+  // 누락 의존성을 잡았다 — useCallback으로 감싸 정직하게 의존성 배열에 넣는다(억제 주석 대신).
+  const reload = useCallback(() => {
     if (productId === null) return
     const requestedId = productId
     api
@@ -146,13 +148,12 @@ export function UsedComparisonPage() {
       .catch(() => {
         if (productIdRef.current === requestedId) setError('비교표를 불러오지 못했습니다.')
       })
-  }
+  }, [productId])
 
   useEffect(() => {
     setComparison(null)
     reload()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productId])
+  }, [productId, reload])
 
   async function addAxis(event: React.FormEvent) {
     event.preventDefault()

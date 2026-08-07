@@ -878,3 +878,24 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **잠정값**: 아무것도 안 바꾼다 — `reaction_score`는 계속 수집만 되고 노출되지 않는다. 화면·알림 어디에도 "반응 신호"가 없다는 사실은 과대약속 금지(절대 원칙 6) 위반은 아니다(애초에 아무 데도 노출한다고 말한 적이 없다 — 그저 확정본 요구가 조용히 비어 있을 뿐이다).
 - **재개 트리거(무엇이 참이 되어야 하는가)**: 사람이 다음 중 하나를 정한다 — ① `reaction_score`를 실제로 노출(어느 화면에 어떤 형태로? 사이트 간 정규화 필요 — docs/90:232가 이미 미확정으로 적어 둠)하기로 결정하고 구현 착수, 또는 ② 확정본 요구를 이 범위에서 포기하기로 결정하고 `decision-log.md`+`docs/90` 델타로 기록. 되돌리기 쉬운 쪽(그대로 둠)으로 잠정 진행 중이라 사람이 정하기 전까지 코드 변경 없음.
 - **관련**: `working-area/review-20260806/30-cross-cutting.md` X-03·X-07, `docs/90-planning-final.md:58,187,232`.
+
+## [부분해소 2026-08-07] Q-90. 정적분석 도구 — web은 도입 완료, collector·core는 아직
+- **맥락**(코드리뷰 20260806 X-06): 저장소 셋 다(core/collector/web) 정적분석 도구가 하나도 없었다.
+  리뷰가 이번에 찾은 발견 44건 중 도구가 잡았을 유형은 web의 훅 취소 가드 누락(FE-02·FE-03)
+  2건뿐이었고, 그건 정확히 `react-hooks/exhaustive-deps`가 겨냥하는 패턴이다(`UsedComparisonPage.tsx`
+  에 이미 그 규칙을 겨냥한 `eslint-disable` 주석이 있었다는 사실 자체가 "린트가 있었으면 최소 이
+  effect를 주목했을 것"이라는 정황). 권고 도입 순서: ① web eslint+react-hooks(실측 적중) →
+  ② collector ruff+mypy → ③ core checkstyle/spotbugs(+nullaway).
+- **✅ ①(web) 해소(2026-08-07)**: `eslint`+`typescript-eslint`+`eslint-plugin-react-hooks` 설치,
+  `web/eslint.config.js`(flat config) 추가, `npm run lint` 스크립트 + ci.yml `web` 잡에 배선.
+  즉시 실측 성과: 도입하자마자 `UsedComparisonPage.tsx`의 억제 주석 뒤에 숨어 있던 진짜
+  `react-hooks/exhaustive-deps` 위반(`reload` 누락)을 잡았다 — `useCallback`으로 감싸 정직하게
+  고쳤다(억제 주석 삭제). 나머지 규칙은 `@typescript-eslint/no-explicit-any`·`no-unused-vars`만
+  경고로 켜 점진 적용(엄격 모드로 시작하면 도입 비용이 커 오히려 안 켜질 위험).
+- **남은 것**: ② collector(ruff+mypy) · ③ core(checkstyle/spotbugs) — 이번 리뷰 범위에서 실측
+  적중 사례가 없어 우선순위가 낮다. `.claude/rules/collector-python.md`·`core-java.md`에 누적된
+  교훈(파서 침묵 실패·타입 함정 등)이 동적 타입/컴파일-런타임 갭 관련이라 장기적으로 유효할 수
+  있으나 지금 급하지 않다.
+- **재개 트리거**: 사람이 우선순위를 승인하거나, 다음 리뷰가 collector/core에서 도구가 잡았을
+  유형의 결함을 다시 찾으면 그때 순서를 앞당긴다.
+- **관련**: `working-area/review-20260806/30-cross-cutting.md` X-06, `web/eslint.config.js`.
