@@ -108,4 +108,24 @@ class UsedComparisonEndpointsTest {
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("COMPARISON_AXIS_NOT_FOUND"));
 	}
+
+	/** BE-13(코드리뷰 20260806) — {@code names} 누락은 NPE(500)가 아니라 빈 목록으로 정규화돼야 한다. */
+	@Test
+	void definingAxesWithoutNamesFieldDoesNotThrow() throws Exception {
+		mockMvc.perform(put("/api/v1/products/{id}/comparison-axes", productId)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$").isArray());
+	}
+
+	/** BE-14(코드리뷰 20260806) — 없는 productId는 FK 위반(500)이 아니라 404로 거절돼야 한다. */
+	@Test
+	void definingAxesForUnknownProductIs404() throws Exception {
+		mockMvc.perform(put("/api/v1/products/{id}/comparison-axes", 999_999)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"names\": [\"배터리%\"]}"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("PRI_PRODUCT_NOT_FOUND"));
+	}
 }

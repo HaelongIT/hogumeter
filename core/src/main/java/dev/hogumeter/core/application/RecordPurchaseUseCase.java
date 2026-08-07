@@ -56,6 +56,15 @@ public class RecordPurchaseUseCase {
 
 	@Transactional
 	public long record(RecordPurchaseCommand cmd) {
+		// BE-12: purchasedAt 누락은 NPE(500)가 아니라 400으로 — 이후 freezeSnapshot의 Clock.fixed가
+		// null을 받으면 터진다. BE-11·BE-20: paidPrice<=0은 저장을 막는다 — 0이면 나중에
+		// ObservationContextCalculator가 0으로 나누고, 음수는 성적표를 말이 안 되게 만든다.
+		if (cmd.purchasedAt() == null) {
+			throw new InvalidPurchaseCommandException("purchasedAt is required");
+		}
+		if (cmd.paidPrice() <= 0) {
+			throw new InvalidPurchaseCommandException("paidPrice must be positive: " + cmd.paidPrice());
+		}
 		if (!variants.existsById(cmd.variantId())) {
 			throw new VariantNotFoundException(cmd.variantId());
 		}

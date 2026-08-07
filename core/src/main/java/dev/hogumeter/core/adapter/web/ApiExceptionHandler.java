@@ -5,6 +5,7 @@ import dev.hogumeter.core.application.DealEventNotFoundException;
 import dev.hogumeter.core.application.DealNotPinnableException;
 import dev.hogumeter.core.application.DemandAxisValueRequiredException;
 import dev.hogumeter.core.application.DuplicatePriorityRankException;
+import dev.hogumeter.core.application.InvalidPurchaseCommandException;
 import dev.hogumeter.core.application.InvalidRegistrationException;
 import dev.hogumeter.core.application.ProductNotFoundException;
 import dev.hogumeter.core.application.PurchaseNotFoundException;
@@ -153,6 +154,12 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.NOT_FOUND)
 	public ApiError purchaseNotFound(PurchaseNotFoundException e) {
 		return new ApiError(PurchaseNotFoundException.CODE, e.getMessage());
+	}
+
+	@ExceptionHandler(InvalidPurchaseCommandException.class)
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	public ApiError invalidPurchaseCommand(InvalidPurchaseCommandException e) {
+		return new ApiError(InvalidPurchaseCommandException.CODE, e.getMessage());
 	}
 
 	@ExceptionHandler(IllegalPurchaseTransitionException.class)

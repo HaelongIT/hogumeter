@@ -25,12 +25,16 @@ public class ComparisonAxisController {
 
 	@PutMapping
 	public List<AxisView> define(@PathVariable long productId, @RequestBody AxesRequest req) {
-		return useCase.ensure(productId, req.names()).stream()
+		return useCase.ensure(productId, req.namesOrEmpty()).stream()
 				.map(a -> new AxisView(a.getId(), a.getName()))
 				.toList();
 	}
 
 	public record AxesRequest(List<String> names) {
+		/** BE-13(코드리뷰 20260806) — JSON에 {@code names}가 없으면 null. NPE 대신 빈 목록으로 정규화. */
+		public List<String> namesOrEmpty() {
+			return names != null ? names : List.of();
+		}
 	}
 
 	public record AxisView(long id, String name) {

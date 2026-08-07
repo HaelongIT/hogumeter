@@ -2,6 +2,7 @@ package dev.hogumeter.core.application;
 
 import dev.hogumeter.core.adapter.persistence.ComparisonAxisEntity;
 import dev.hogumeter.core.adapter.persistence.ComparisonAxisRepository;
+import dev.hogumeter.core.adapter.persistence.ProductRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -15,13 +16,23 @@ import org.springframework.stereotype.Service;
 public class DefineComparisonAxesUseCase {
 
 	private final ComparisonAxisRepository axes;
+	private final ProductRepository products;
 
-	public DefineComparisonAxesUseCase(ComparisonAxisRepository axes) {
+	public DefineComparisonAxesUseCase(ComparisonAxisRepository axes, ProductRepository products) {
 		this.axes = axes;
+		this.products = products;
 	}
 
-	/** 이름이 없는 축만 추가한다. 반환값은 이 호출 뒤 그 제품의 축 전체(멱등 조회 편의). */
+	/**
+	 * 이름이 없는 축만 추가한다. 반환값은 이 호출 뒤 그 제품의 축 전체(멱등 조회 편의).
+	 *
+	 * <p>BE-14(코드리뷰 20260806): 없는 productId는 FK 위반(500)이 아니라 404로 거절한다 — 다른
+	 * 유스케이스({@code RegisterProductUseCase} 등)가 쓰는 선검사와 같은 계약.
+	 */
 	public List<ComparisonAxisEntity> ensure(long productId, List<String> names) {
+		if (!products.existsById(productId)) {
+			throw new ProductNotFoundException(productId);
+		}
 		for (String name : names) {
 			if (axes.findByProductIdAndName(productId, name).isEmpty()) {
 				axes.save(new ComparisonAxisEntity(productId, name));

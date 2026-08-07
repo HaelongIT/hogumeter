@@ -84,4 +84,18 @@ class UsedSearchControllerTest {
 				.andExpect(jsonPath("$").isArray())
 				.andExpect(jsonPath("$").isEmpty());
 	}
+
+	/** BE-14(코드리뷰 20260806) — 없는 productId로 등록하면 FK 위반(500)이 아니라 404여야 한다. */
+	@Test
+	void postForUnknownProductIs404NotFkViolation() throws Exception {
+		String body = """
+				{"required": ["아이폰17"], "bonusGroups": [], "exclude": [], "targetPrice": 500000,
+				 "pollIntervalMin": 10}
+				""";
+
+		mockMvc.perform(post("/api/v1/products/{productId}/used-searches", 999_999)
+						.contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("PRI_PRODUCT_NOT_FOUND"));
+	}
 }

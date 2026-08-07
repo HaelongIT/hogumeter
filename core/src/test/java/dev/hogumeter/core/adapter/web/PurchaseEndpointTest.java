@@ -90,6 +90,39 @@ class PurchaseEndpointTest {
 				.formatted(variantId, paidPrice, purchasedAt);
 	}
 
+	/** BE-12(코드리뷰 20260806) — purchasedAt 누락은 NPE(500)가 아니라 400으로 거절돼야 한다. */
+	@Test
+	void missingPurchasedAtIs400NotNpe() throws Exception {
+		String noPurchasedAt = """
+				{"variantId":%d,"demandAxisValue":"256GB","paidPrice":940000}""".formatted(variantId);
+
+		mockMvc.perform(post("/api/v1/purchases").contentType(MediaType.APPLICATION_JSON).content(noPurchasedAt))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("PUR_INVALID_COMMAND"));
+
+		assertThat(purchases.findByVariantId(variantId)).isEmpty(); // 저장 전에 막혔다
+	}
+
+	/**
+	 * BE-11·BE-20(코드리뷰 20260806) — paidPrice가 0/음수면 저장을 막는다. 0이면 나중에 관찰 문맥
+	 * 계산(ObservationContextCalculator)이 0으로 나누기로 터지고, 음수는 성적표·상회분을 말이 안 되게
+	 * 만든다(구매 기록은 수정 API가 없어 되돌리기 어렵다).
+	 */
+	@Test
+	void nonPositivePaidPriceIs400() throws Exception {
+		mockMvc.perform(post("/api/v1/purchases").contentType(MediaType.APPLICATION_JSON)
+						.content(body(0L, "2026-02-01T00:00:00Z")))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("PUR_INVALID_COMMAND"));
+
+		mockMvc.perform(post("/api/v1/purchases").contentType(MediaType.APPLICATION_JSON)
+						.content(body(-1L, "2026-02-01T00:00:00Z")))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("PUR_INVALID_COMMAND"));
+
+		assertThat(purchases.findByVariantId(variantId)).isEmpty();
+	}
+
 	@Test
 	void recordsPurchaseWithFrozenAsOfSnapshot() throws Exception {
 		mockMvc.perform(post("/api/v1/purchases").contentType(MediaType.APPLICATION_JSON)

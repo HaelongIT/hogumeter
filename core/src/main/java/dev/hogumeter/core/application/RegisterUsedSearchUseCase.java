@@ -1,5 +1,6 @@
 package dev.hogumeter.core.application;
 
+import dev.hogumeter.core.adapter.persistence.ProductRepository;
 import dev.hogumeter.core.adapter.persistence.UsedSearchBonusGroupEntity;
 import dev.hogumeter.core.adapter.persistence.UsedSearchBonusGroupRepository;
 import dev.hogumeter.core.adapter.persistence.UsedSearchEntity;
@@ -19,14 +20,23 @@ public class RegisterUsedSearchUseCase {
 
 	private final UsedSearchRepository searches;
 	private final UsedSearchBonusGroupRepository bonusGroups;
+	private final ProductRepository products;
 
-	public RegisterUsedSearchUseCase(UsedSearchRepository searches, UsedSearchBonusGroupRepository bonusGroups) {
+	public RegisterUsedSearchUseCase(UsedSearchRepository searches, UsedSearchBonusGroupRepository bonusGroups,
+			ProductRepository products) {
 		this.searches = searches;
 		this.bonusGroups = bonusGroups;
+		this.products = products;
 	}
 
+	/**
+	 * BE-14(코드리뷰 20260806): 없는 productId는 FK 위반(500)이 아니라 404로 거절한다.
+	 */
 	@Transactional
 	public long register(RegisterUsedSearchCommand cmd) {
+		if (!products.existsById(cmd.productId())) {
+			throw new ProductNotFoundException(cmd.productId());
+		}
 		int poll = cmd.pollIntervalMin() == null
 				? POLL_INTERVAL_FLOOR_MIN
 				: Math.max(cmd.pollIntervalMin(), POLL_INTERVAL_FLOOR_MIN);
