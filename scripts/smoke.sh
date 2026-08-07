@@ -1194,6 +1194,11 @@ echo "--- 7) SEC-02 Basic Auth: 켜면 막고, 끄면 열린다 ---"
 image=$(compose config --images | grep -E 'web$' | head -1)
 htpasswd='smoke:$apr1$HvjdDxij$LfiNPd.VUQvfyKaOeKNib0'
 auth_cid=$(docker run -d -p "127.0.0.1:${AUTH_PORT:-54000}:80" -e WEB_BASIC_AUTH_HTPASSWD="$htpasswd" "$image")
+# X-09(코드리뷰 20260806): 이 컨테이너는 compose 프로젝트 밖(`docker run -d`)이라 위 `trap cleanup EXIT`
+# (compose down만 한다)가 안 건드린다. 아래 curl들 사이에서 조기 실패(set -e)하면 1211행의 명시적
+# `docker rm -f`에 도달하지 못해 고아 컨테이너가 AUTH_PORT를 계속 문 채 남는다 — 로컬 반복 실행에서
+# 다음 실행이 포트 바인딩 실패로 깨진다. 기존 트랩을 감싸 이 컨테이너도 함께 정리한다.
+trap '[ -n "${auth_cid:-}" ] && docker rm -f "$auth_cid" >/dev/null 2>&1; cleanup' EXIT
 sleep 2
 auth_url="http://127.0.0.1:${AUTH_PORT:-54000}/"
 code_no_creds=$(curl -s -o /dev/null -w '%{http_code}' "$auth_url")
