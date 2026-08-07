@@ -1,3 +1,36 @@
+## 2026-08-07 (8) — 리팩터 요청 → check-dead-columns.sh reached() 생산자/소비자 분리 + 부수 발견 Q-92
+
+**맥락**: 사용자가 "새 기능 말고 기존 코드 리팩터 후보 없나, 문서 훑어봐"를 요청. `docs/99-lessons.md`·
+`.claude/rules/*.md`·`decision-log.md`·`review-20260806/*.md`를 스캔해 "리팩터" 키워드 검색 —
+대부분 이미 해소된 과거 기록이었고, 딱 하나 진짜 스코프가 뚜렷한 후보를 찾았다: `check-dead-columns.sh`의
+`reached()`가 X-03(reaction_score)·X-10(used_listing_observation.raw)에서 두 번 부딪힌 "생산자
+(collector 씀)와 소비자(core 읽음)를 구별 못함" 문제 — 리뷰 자체가 "범위 넘는 리팩터"라며 제안만
+남기고 미뤄 둔 항목. 사용자 승인("진행 ㄱㄱㄱ") 받고 착수.
+
+**한 일**: `reached()`를 `reached_in(dirs...)`으로 일반화해 `consumer_sources`(core+web)·
+`producer_sources`(collector) 둘로 분리. 새 상태 "반쪽 배선"(생산만·소비 없음)을 완전히 죽은
+컬럼과 다른 카테고리로 — `Q-ID`(잠정) 또는 신설 `PRODUCER_ONLY`(영구, INTENTIONAL의 반쪽 배선
+버전) 면제 필요. `raw_deal_post.reaction_score`를 `PRODUCER_ONLY`로 정확하게 선언(D-10이 막 확정한
+덕에 가능해짐 — 예전엔 정책 미정이라 선언 자체가 불가능했다). TDD: 전체 컬럼을 producer-only
+분석 스크립트로 먼저 스캔해 영향범위 확인(reaction_score 딱 1건) → 신규 5테스트 작성 → 구 스크립트로
+RED 확인 → 구현 → GREEN. 커밋 `0b50bac`.
+
+**부수 발견(Q-92, 신규 등록)**: 리팩터 검증 중 `used_listing_observation.raw`에 `INTENTIONAL`을
+다시 시도했는데 리팩터 후에도 여전히 "낡은 면제"로 막혔다 — 원인을 팠더니 X-03과 **다른** 버그였다.
+`reached_in()`이 테이블 구분 없이 컬럼명만 매칭해서, `PreserveAppliedConditionsUseCase`의 정당한
+`raw_deal_post.raw` 네이티브 SQL 읽기가 이름이 같은(`raw`) 다른 테이블 컬럼까지 "소비됨"으로
+오판시키는 교차 테이블 충돌이었다. 지금은 결과적으로 안전한 방향(과소 검출, 실제로 INTENTIONAL이
+맞는 컬럼이라 우연히 옳음)이라 코드는 안 고치고 Q-92로 추적만 등록 — 테이블 인지형 매칭은 이번
+리팩터보다 훨씬 큰 파싱 작업.
+
+**검증**: `check-dead-columns.test.sh` 14케이스 ALL PASS(신규 5개), 실 저장소 `DEAD COLUMNS OK`
+(180컬럼·면제 7개), shellcheck 클린(`MSYS_NO_PATHCONV=1` + `pwd -W`로 Windows 경로 우회),
+`check-board-references`·`table-wiring`·`repository-readers`·`domain-consumers`·`ci-coverage`
+5개 게이트 전부 GREEN. `review-20260806/30-cross-cutting.md` X-03(✅완전해소)·X-10(3차 검토,
+Q-92로 재라우팅) 마커 갱신. 커밋 `1704608`.
+
+**다음**: 사용자 지시 대기(푸시 여부 포함). 커밋 3개(`0b50bac`·`1704608` + 이 로그) 아직 안 올림.
+
 ## 2026-08-07 (7) — D-8·D-9·D-10 확정 + 무중단 전환 후 전수 재스윕 → 일감 소진(②) 확인
 
 **한 일**: 사용자가 "사람 결정 대기인거 다 가져와 내가 결정 내려줌"을 요청 — `decisions-needed.md`
