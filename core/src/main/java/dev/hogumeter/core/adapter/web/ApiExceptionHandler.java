@@ -21,6 +21,7 @@ import dev.hogumeter.core.domain.benchmark.InvalidBenchmarkPeriodException;
 import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;
 import dev.hogumeter.core.domain.purchase.IllegalPurchaseTransitionException;
 import dev.hogumeter.core.domain.watch.IllegalPinTransitionException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -166,6 +167,21 @@ public class ApiExceptionHandler {
 	@ResponseStatus(HttpStatus.CONFLICT)
 	public ApiError illegalPurchaseTransition(IllegalPurchaseTransitionException e) {
 		return new ApiError(IllegalPurchaseTransitionException.CODE, e.getMessage());
+	}
+
+	/**
+	 * BE-15(코드리뷰 20260806) — 이 어드바이스가 안 다루는 예외(NullPointerException·
+	 * DataIntegrityViolationException 등)는 Spring 기본 오류 응답으로 떨어져 {@code {code,message}}
+	 * 계약이 케이스별로 깨진다. 근본 수정은 발생 지점에서 400/404로 막는 것이 우선이다(BE-11~14) —
+	 * 이건 그 방어선을 벗어난 나머지를 위한 최종 안전망이다.
+	 *
+	 * <p>예외 메시지는 그대로 노출하지 않는다(SEC-01) — DataIntegrityViolationException은 SQL·제약
+	 * 조건 이름을 담을 수 있다. HealthController와 같은 원칙: 타입 이름만 노출.
+	 */
+	@ExceptionHandler({ NullPointerException.class, DataIntegrityViolationException.class })
+	@ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+	public ApiError unmapped(Exception e) {
+		return new ApiError("INTERNAL_ERROR", e.getClass().getSimpleName());
 	}
 
 	public record ApiError(String code, String message) {
