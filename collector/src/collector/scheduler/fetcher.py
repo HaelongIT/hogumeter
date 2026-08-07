@@ -136,6 +136,18 @@ class _RobotsDoc:
     parser: RobotFileParser
 
 
+class _Unreachable:
+    """BE-10(코드리뷰 20260806): robots.txt가 5xx(서버 오류) — "없음"(404, 전체 허용)과 다르다.
+
+    RFC 9309 §2.3.1.3은 unreachable을 보수적으로 다루라고 권고한다. 전송 자체가 실패(연결 거부 등)
+    하는 것과도 다른 경로다 — 그건 표준 관행대로 제약 없음을 유지한다(사이트 자체 장애는
+    fetch에서 드러난다).
+    """
+
+
+_UNREACHABLE = _Unreachable()
+
+
 @dataclass
 class RobotsGate:
     """호스트별 robots.txt를 1회 조회해 캐시하고 판정한다.
@@ -146,21 +158,23 @@ class RobotsGate:
     """
 
     opener: Opener
-    _cache: dict[str, _RobotsDoc | None] = field(default_factory=dict)
+    _cache: dict[str, _RobotsDoc | _Unreachable | None] = field(default_factory=dict)
 
-    def _doc(self, url: str) -> _RobotsDoc | None:
+    def _doc(self, url: str) -> _RobotsDoc | _Unreachable | None:
         host = _origin(url)
         if host not in self._cache:
             self._cache[host] = self._load(host)
         return self._cache[host]
 
-    def _load(self, origin: str) -> _RobotsDoc | None:
+    def _load(self, origin: str) -> _RobotsDoc | _Unreachable | None:
         try:
             status, body = self.opener(f"{origin}/robots.txt")
         except Exception:
             return None  # 조회 실패 시 제약 없음(표준 관행). 사이트 자체 장애는 fetch에서 드러난다.
+        if status // 100 == 5:
+            return _UNREACHABLE  # BE-10: 판정 불가(서버 오류) → 이번 사이클은 보수적으로 disallow
         if status != 200:
-            return None  # 404 등 → robots 없음 = 전체 허용
+            return None  # 404 등(4xx) → robots 없음 = 전체 허용
         text = body.decode("utf-8", errors="replace")
         parser = RobotFileParser()
         parser.parse(text.splitlines())
@@ -168,11 +182,13 @@ class RobotsGate:
 
     def allows(self, url: str) -> bool:
         doc = self._doc(url)
+        if doc is _UNREACHABLE:
+            return False
         return True if doc is None else _path_allows(list(doc.rules), url)
 
     def crawl_delay(self, url: str) -> timedelta | None:
         doc = self._doc(url)
-        if doc is None:
+        if not isinstance(doc, _RobotsDoc):
             return None
         delay = doc.parser.crawl_delay(USER_AGENT)
         return timedelta(seconds=float(delay)) if delay is not None else None

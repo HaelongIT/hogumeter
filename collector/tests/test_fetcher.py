@@ -107,6 +107,30 @@ def test_robots_fetch_failure_does_not_block_collection():
     assert fetcher(_spec()).status_code == 200
 
 
+# BE-10(코드리뷰 20260806) — robots.txt가 5xx(서버 오류)를 내면 "판정 불가"이지 "robots 없음"이
+# 아니다. RFC 9309 §2.3.1.3은 unreachable(5xx)을 404와 다르게 보수적으로 다루라고 권고한다.
+# 전송 자체가 실패(연결 거부 등, except 분기)하는 것과는 다른 경로다 — 그건 표준 관행대로 전체
+# 허용을 유지한다(위 test_robots_fetch_failure_does_not_block_collection).
+def test_robots_5xx_is_treated_as_disallow_not_absent():
+    fetcher, opener = _fetcher(
+        {f"{SITE}/robots.txt": (503, b""), f"{SITE}/hotdeal": (200, b"<html/>")}
+    )
+
+    result = fetcher(_spec())
+
+    assert result.status_code == 403  # 4xx(404)와 달리 이번 사이클은 보수적으로 disallow
+    assert f"{SITE}/hotdeal" not in opener.calls
+
+
+def test_robots_404_still_means_allowed_unlike_5xx():
+    """4xx(부재)와 5xx(장애)는 다른 판정이다 — 회귀 확인."""
+    fetcher, opener = _fetcher(
+        {f"{SITE}/robots.txt": (404, b""), f"{SITE}/hotdeal": (200, b"<html/>")}
+    )
+
+    assert fetcher(_spec()).status_code == 200
+
+
 # ── Crawl-delay: 길면 따르고, 짧으면 우리 하한이 이긴다 (SEC-08) ────────
 
 
