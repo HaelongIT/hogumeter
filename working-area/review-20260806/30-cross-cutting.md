@@ -45,32 +45,33 @@
 - **권고**: 도입 우선순위는 (1) **web: eslint + eslint-plugin-react-hooks** — 이번 리뷰의 실측 유일한 적중 사례(2/13)가 여기 있고, "5개 파일은 패턴을 지키는데 2개는 빠뜨렸다"는 산발적 누락은 정확히 린트가 강제하는 일관성 문제다. (2) **collector: ruff + mypy** — `.claude/rules/collector-python.md`에 누적된 교훈(파서 침묵 실패, 상태값 허용집합, 라운드 코드 유형 등)이 이미 여럿 동적 타입 관련이라 향후 회귀 예방 기대값이 크지만, 이번 리뷰 범위(D1)에선 실측 사례가 없었다. (3) **core: checkstyle/spotbugs(+nullaway)** — Boot 4/Jackson 3 이관처럼 컴파일은 되지만 런타임에만 드러나는 함정이 `.claude/rules/core-java.md`에 누적돼 있어 장기적으로 유효할 수 있으나, 이번 리뷰에서 core 쪽 정적 결함 실측은 없어 우선순위는 가장 낮다.
 - **출처**: 통합 담당(F2) 직접 확인 — `core/build.gradle.kts`·`collector/pyproject.toml`·`web/package.json` 원문 대조, `raw/C3-web.md`·`raw/D1-contract.md`·`raw/D2-infra.md` 전수 재검토
 
-### X-07 — `RawDealPost.java` 클래스 javadoc이 실제로 매핑된 컬럼을 "미매핑"이라 오기 · Low · ❌미해결
+### X-07 — `RawDealPost.java` 클래스 javadoc이 실제로 매핑된 컬럼을 "미매핑"이라 오기 · Low · ✅수정완료(2232f2c)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/persistence/RawDealPost.java:13`(javadoc) / 같은 파일 36-40행(`headline_price`·`posted_at` 실제 매핑)
 - **근거**: javadoc은 `headline_price`·`posted_at`도 "이 슬라이스에서 미매핑"이라 적었지만, 바로 아래 필드 선언에서 둘 다 `@Column`으로 매핑돼 있고 `getHeadlinePrice()`·`getPostedAt()`가 실제 도메인 로직(`IngestDealsUseCase`의 널 가드·`firstSeen` 계산)에 쓰인다. 진짜 미매핑은 `body_text`·`reaction_score`·`raw` 셋뿐이다.
 - **영향**: 코드 동작엔 영향 없다(문서만 틀림). 다만 이 주석을 믿고 "headline_price/posted_at은 core가 못 읽으니 네이티브 SQL로 다뤄야 한다"고 오판하거나, 진짜 미매핑인 `reaction_score`(X-03)가 매핑된 두 컬럼과 한 목록에 섞여 있어 "이것도 곧 매핑되겠거니" 하고 실제 미배선 상태를 놓치기 쉽다.
 - **권고**: javadoc을 "미매핑: body_text·reaction_score·raw jsonb"로 정정.
 - **출처**: `raw/D1-contract.md` D1-03 (반박 검증 미실시, 원 심각도 유지)
 
-### X-08 — `repository-readers-allowlist.txt`의 안내 주석이 현재 파일 상태와 안 맞음 · Low · ❌미해결
+### X-08 — `repository-readers-allowlist.txt`의 안내 주석이 현재 파일 상태와 안 맞음 · Low · ✅수정완료(2232f2c)
 - **위치**: `scripts/repository-readers-allowlist.txt`(마지막 줄 "테스트는 호출자가 아니다. 두 메서드 다 테스트에서만 불린다.") / 파일 본문(실제 데이터 행 0개)
 - **근거**: 주석은 "두 메서드"가 면제 대상인 것처럼 말하지만 파일에 실제 `<Repository>.<method>` 행이 하나도 없다. `bash scripts/check-repository-readers.sh` 직접 실행 결과 `REPOSITORY READERS OK: 조회 메서드 36개 (호출됨 36 · 미사용 선언 0)` — 예전에 있었던 2개 항목이 이미 배선되며 지워졌는데 마지막 안내 문장만 안 지워진 것으로 보인다.
 - **영향**: 게이트 동작엔 영향 없음(주석 줄은 파싱에서 스킵된다). 사람이 파일을 훑을 때만 혼란(있지도 않은 "두 메서드"를 찾게 됨).
 - **권고**: 마지막 줄을 지우거나 "현재 미사용 선언 0건"으로 갱신.
 - **출처**: `raw/D1-contract.md` D1-05 (반박 검증 미실시, 원 심각도 유지)
 
-### X-09 — `smoke.sh`의 SEC-02 인증 검증용 임시 컨테이너가 compose 프로젝트 밖에 있어 조기 실패 시 정리되지 않을 수 있다 · Low · ❌미해결
+### X-09 — `smoke.sh`의 SEC-02 인증 검증용 임시 컨테이너가 compose 프로젝트 밖에 있어 조기 실패 시 정리되지 않을 수 있다 · Low · ✅수정완료(6e014a6)
 - **위치**: `scripts/smoke.sh:1196-1211`
 - **근거**: 전역 `trap cleanup EXIT`(37-41행)는 `compose -p "$PROJECT" down -v --remove-orphans`만 수행해, `docker run`으로 직접 띄운 `auth_cid` 컨테이너는 정리 대상이 아니다. `docker rm -f "$auth_cid"`가 1211행에 명시적으로 있지만, 그 사이(1196~1210행)에 `set -e`로 스크립트가 조기 종료되면(고정 `sleep 2` 안에 nginx가 안 뜬 상태에서 curl이 connection-refused를 내는 경우 등) 그 줄에 도달하지 못한다.
 - **영향**: CI 러너에서는 러너 자체가 매 잡마다 새로 프로비저닝되므로 실질 피해가 작지만, 로컬에서 `bash scripts/smoke.sh`를 반복 실행하는 개발 환경에서는 고아 컨테이너가 `AUTH_PORT`(기본 54000)를 계속 점유해 다음 실행이 포트 바인딩 실패로 깨질 수 있다.
 - **권고**: `auth_cid` 생성 직후 `trap '[ -n "${auth_cid:-}" ] && docker rm -f "$auth_cid" >/dev/null 2>&1; cleanup' EXIT` 형태로 기존 trap을 감싸거나, `sleep 2` 대신 `/healthz` 폴링 루프로 바꿔 실패를 `fail()`로 흡수한다.
 - **출처**: `raw/D2-infra.md` D2-04 (반박 검증 미실시, 원 심각도 유지)
 
-### X-10 — `used_listing_observation.raw`도 같은 게이트 사각지대를 통과(의도된 설계, allowlist 미선언) · Info · ❌미해결
+### X-10 — `used_listing_observation.raw`도 같은 게이트 사각지대를 통과(의도된 설계, allowlist 미선언) · Info · 📄문서화(검토 결과: 현재 게이트 로직으로는 선언 자체가 안 된다)
 - **위치**: `collector/src/collector/db/used_listing_sink.py:69` / `core/src/main/java/dev/hogumeter/core/adapter/persistence/UsedListingObservationEntity.java:16`("raw는 core가 안 읽는다"는 설계 의도 명시) / `scripts/dead-columns-allowlist.txt`(이 컬럼 미선언)
 - **근거**: 엔티티 자체가 "raw는 core가 안 읽는다"고 설계 의도로 명시해 X-03(reaction_score)과 달리 버그가 아니라 의도된 "크롤링 원본 보관 전용" 패턴이다. 다만 `dead-columns-allowlist.txt`에 이 컬럼이 선언돼 있지 않아, `check-dead-columns.sh`가 X-03과 동일한 메커니즘(collector가 쓰는 코드 안에 이름이 나타남)으로 우연히 "배선됨" 판정을 내려 통과시킨다(직접 실행 확인: `DEAD COLUMNS OK`).
 - **영향**: 지금 당장은 문제 없다. 다만 이 컬럼이 정말 죽었는지/설계인지 판단할 근거가 코드 주석 하나뿐이라, `dead-columns-allowlist.txt`의 INTENTIONAL 패턴(`deal_event.base_price` 등)처럼 명시적으로 선언해 두지 않으면 다음 감사가 "게이트가 통과시켰으니 배선됐다"고 잘못 믿을 위험이 있다.
 - **권고**: `used_listing_observation.raw INTENTIONAL 크롤링 원본 보관 전용, core는 읽기만 하는 테이블이라 설계상 미매핑`을 `dead-columns-allowlist.txt`에 추가해 "우연히 통과"를 "선언적으로 면제"로 바꾼다. 급하지 않음.
+- **2차 검토(2026-08-07) — 실제로 시도해 봄**: 권고대로 `dead-columns-allowlist.txt`에 `INTENTIONAL` 줄을 추가하고 `check-dead-columns.sh`를 돌려 보니 오히려 `FAIL: 낡은 면제: 'used_listing_observation.raw'은 이제 코드가 닿는다`로 게이트가 깨졌다 — `reached()`가 "collector가 쓴다"만 봐서 이미 `reached=true`인 컬럼을 면제 목록에 올리면 게이트의 "낡은 면제(이제 닿는데 아직 선언돼 있다)" 검사에 정면으로 걸린다. X-03과 같은 근본 원인(생산자-쓰기와 소비자-읽기를 구별 못함)이라 게이트 로직 자체를 바꾸지 않고는 이 항목을 "선언"할 방법이 없다 — 되돌리고 코드 변경 없이 문서로만 남긴다. 급하지 않고(지금 당장 문제 없음), 필요해지면 `reached()`를 "collector 쓰기"와 "core 읽기"로 분리하는 리팩터가 선행돼야 한다(X-03/Q-89와 같은 근본 수정 범위).
 - **출처**: `raw/D1-contract.md` D1-04 (반박 검증 미실시, 원 심각도 유지)
 
 ## 검토했으나 문제없음(통합)

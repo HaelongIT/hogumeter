@@ -232,49 +232,49 @@
 - **권고**: `RecordPurchaseUseCase.record()` 진입부에 `paidPrice <= 0` 거절 추가(BE-12와 함께 정리 가능).
 - **출처**: `raw/B1-web.md` B1-05
 
-### BE-21 — `DigestScheduler.tick()`에 예외 격리가 없다 · Low · scheduler · ❌미해결
+### BE-21 — `DigestScheduler.tick()`에 예외 격리가 없다 · Low · scheduler · ✅수정완료(98cffe7)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/scheduler/DigestScheduler.java:37-41`
 - **근거**: `PipelineScheduler`는 각 단계를 `runStep`으로 감싸 실패를 격리·집계하지만, `DigestScheduler`는 `sendDigest.send()`가 던지는 `RuntimeException`을 전혀 잡지 않는다. Spring 기본 `LoggingErrorHandler`만 로그를 남기고 이 클래스 자신의 로거·`AdminNotifier`에는 기록이 없다.
 - **영향**: 다이제스트 조립 중 DB 일시 장애가 나면 그 주 다이제스트가 조용히 안 나가고 다음 주까지 아무도 모른다.
 - **권고**: `try/catch`로 감싸 `AdminNotifier.notify(...)`를 호출해 `PipelineScheduler`와 같은 관측 수준을 맞춘다.
 - **출처**: `raw/B2-adapter.md` B2-03
 
-### BE-22 — `getUpdates`가 콜백이 아닌 업데이트를 로컬에서 완전히 건너뛰어 offset이 정체될 수 있다 · Low · telegram · ❌미해결
+### BE-22 — `getUpdates`가 콜백이 아닌 업데이트를 로컬에서 완전히 건너뛰어 offset이 정체될 수 있다 · Low · telegram · ✅수정완료(d851bff)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/telegram/HttpTelegramApi.java:130-133`
 - **근거**: 콜백이 아닌 업데이트(일반 텍스트·`/start` 등)는 목록에 실리지 않아 `TelegramInboundPoller.poll()`이 그 update_id로 offset을 전진시키지 않는다.
 - **영향**: 사용자가 봇에게 일반 메시지를 보내면 콜백이 올 때까지 매 3초 폴마다 텔레그램에서 그 update_id가 계속 재조회된다(부작용 없는 낭비 트래픽).
 - **권고**: 콜백 여부와 무관하게 응답의 모든 update의 최대 `update_id`로 offset을 전진시킨다.
 - **출처**: `raw/B2-adapter.md` B2-02
 
-### BE-23 — `CoupangObservationController`의 429 분기에 HTTP 레벨 테스트가 없다 · Low · rest · ❌미해결
+### BE-23 — `CoupangObservationController`의 429 분기에 HTTP 레벨 테스트가 없다 · Low · rest · ✅수정완료(b35e3a9)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/web/CoupangObservationController.java`
 - **근거**: GET/POST 인증 비대칭 자체는 이 프로젝트의 "GET은 앱 레벨 인증 없음, nginx가 경계" 설계와 일치해 실결함이 아니지만(B1 판정, 아래 "검토했으나 문제없음" 참고), 조사 과정에서 `RateLimitExceededException`(429) 분기는 `CoupangObservationControllerTest`의 5개 테스트 모두 요청 1회씩만 보내 레이트리밋 창을 채우지 않아 컨트롤러 배선(429 상태코드 + `RATE_LIMIT_EXCEEDED` 코드가 실제로 나가는지)이 미검증 상태로 남아 있음이 확인됐다.
 - **영향**: 순수 도메인(`FixedWindowRateLimiterTest`)은 잠겨 있으나 컨트롤러 레벨 배선 회귀는 못 잡는다.
 - **권고**: 레이트리밋 창을 채우는 MockMvc 테스트를 하나 추가해 429 응답 코드·바디를 관통 검증한다.
 - **출처**: `raw/B1-web.md` B1-06(부수 발견)
 
-### BE-24 — `GlobalSettingsController` REST 계약에 core 쪽 HTTP 레벨 테스트가 없다 · Low · rest · ❌미해결
+### BE-24 — `GlobalSettingsController` REST 계약에 core 쪽 HTTP 레벨 테스트가 없다 · Low · rest · ✅수정완료(b35e3a9)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/web/GlobalSettingsController.java`
 - **근거**: core 쪽엔 `GlobalSettingsController`에 대한 MockMvc/`@SpringBootTest` 테스트가 없다(서비스 계층 `GlobalExcludeKeywordsTest`만 존재). 리뷰 지시문이 전제한 "web 테스트 0건"은 실측 결과 틀렸다 — `SettingsPage.test.tsx`가 API 모듈을 모킹해 화면 동작은 검증하지만, `GET/PUT /api/v1/settings/exclude-keywords`의 경로·JSON 바인딩·상태코드를 관통하는 core 테스트는 0건이다.
 - **영향**: 컨트롤러 로직 자체는 단순해 지금 깨진 것은 없지만, 경로 오타·HTTP 메서드 실수·JSON 바인딩 회귀가 나면 core 테스트 스위트가 못 잡는다.
 - **권고**: `GlobalSettingsControllerTest`(`@SpringBootTest`+MockMvc) 하나 추가 — GET 기본값·PUT 정규화 왕복·빈 배열 저장 세 케이스.
 - **출처**: `raw/B1-web.md` B1-07
 
-### BE-25 — 목록류 GET 엔드포인트가 상한 없이 전체를 반환한다 · Low · rest · ❌미해결
+### BE-25 — 목록류 GET 엔드포인트가 상한 없이 전체를 반환한다 · Low · rest · ⏸보류(원 권고대로 — "지금 당장 조치 불필요")
 - **위치**: `ProductQueryController.java:20`, `PriorityController.java:33`, `ReviewQueueController.java:34`, `WatchController.java:36,42`
 - **근거**: 전부 `List<...>`를 페이지네이션 파라미터 없이 그대로 반환한다.
 - **영향**: 1인용·수십~수백 건 규모에서는 지금 당장 리스크가 낮으나, 미상 큐나 `resolved` 회고 탭이 시간이 지나며 무한정 쌓이는 종류라 향후 성능 이슈 후보다.
 - **권고**: 지금 당장 조치 불필요. 체감 지연이 생기면 그때 `LIMIT`/커서 페이지네이션 도입.
 - **출처**: `raw/B1-web.md` B1-08
 
-### BE-26 — core·collector 컨테이너가 root로 실행된다 · Low · security · ❌미해결
+### BE-26 — core·collector 컨테이너가 root로 실행된다 · Low · security · ✅수정완료(73d00d5)
 - **위치**: `core/Dockerfile:9-12`, `collector/Dockerfile:1-10`(둘 다 `USER` 지시 없음)
 - **근거**: 두 Dockerfile 모두 기본 이미지의 root로 프로세스가 돈다. `docker-compose.yml`에 `docker.sock` 마운트·`privileged`·`cap_add`·`network_mode: host`가 없어 컨테이너 탈출 경로는 열려 있지 않다.
 - **영향**: RCE급 취약점이 터지면 컨테이너 안에서 root 권한을 얻지만, 탈출 경로 부재로 피해 반경은 "그 컨테이너 안"으로 제한된다.
 - **권고**: 두 Dockerfile에 비루트 `USER` 추가(`RUN useradd -r appuser` + `USER appuser`).
 - **출처**: `raw/B3-security.md` B3-02
 
-### BE-27 — 모든 시크릿이 컨테이너 환경변수로만 전달된다(파일/Docker secret 미사용) · Low · security · ❌미해결
+### BE-27 — 모든 시크릿이 컨테이너 환경변수로만 전달된다(파일/Docker secret 미사용) · Low · security · ⏸보류(원 권고대로 — "지금 우선순위로 올릴 근거는 약함")
 - **위치**: `docker-compose.yml:11-13,33-50,85,124-130` — `DB_PASSWORD`·`TELEGRAM_BOT_TOKEN`·`NAVER_CLIENT_ID/SECRET`·`EXTENSION_INGEST_TOKEN`·`WEB_BASIC_AUTH_HTPASSWD` 전부 `environment:` 참조
 - **근거**: `docker inspect` 또는 `/proc/<pid>/environ`으로 평문이 그대로 보인다. Docker `secrets:`(파일 마운트) 방식과 달리 접근 통제가 "docker 데몬에 닿을 수 있는가"로 뭉뚱그려진다.
 - **영향**: EC2 호스트에 SSH 접근 권한을 가진 사람은 `docker inspect` 한 번으로 모든 시크릿을 평문 확인할 수 있다. 다만 그 사람은 이미 `.env` 파일 자체도 읽을 수 있으므로(같은 호스트, 같은 신뢰 경계) 이 항목이 추가로 여는 공격면은 사실상 없다.
@@ -283,21 +283,21 @@
 
 ## Info
 
-### BE-28 — SEC-03(텔레그램 인바운드 화이트리스트) 관련 문서 2곳이 실제 구현과 어긋난다 · Info · security · ❌미해결
+### BE-28 — SEC-03(텔레그램 인바운드 화이트리스트) 관련 문서 2곳이 실제 구현과 어긋난다 · Info · security · ✅수정완료(54ad1ec)
 - **위치**: `.env.example:39-41`, `working-area/pre-deploy-checklist.md:27` (둘 다 "아직 인바운드 핸들러가 없어 소비되지 않는다"고 서술)
 - **근거**: 실제로는 `TelegramInboundPoller`·`ReviewCallbackRouter`가 이미 구현돼 있고, `TELEGRAM_ALLOWED_CHAT_IDS`가 비면 `TELEGRAM_CHAT_ID`로 폴백하며 둘 다 비면 빈 허용집합(아무도 허용 안 함)으로 닫힌다 — 코드는 안전한 방향으로 이미 앞서 있고 문서만 뒤처졌다.
 - **영향**: 위험한 방향의 드리프트는 아니다(코드가 문서보다 안전). 다만 다음 세션이 문서를 믿고 설정 검토를 소홀히 하거나, 이미 끝난 구현을 다시 하려 시간을 쓸 여지가 있다.
 - **권고**: 두 파일의 해당 문장을 "구현됨, 닫힌 기본값"으로 갱신.
 - **출처**: `raw/B3-security.md` B3-03
 
-### BE-29 — `SchedulingConfig` 주석이 폐기된 모듈 소유권 구분을 인용한다 · Info · scheduler · ❌미해결
+### BE-29 — `SchedulingConfig` 주석이 폐기된 모듈 소유권 구분을 인용한다 · Info · scheduler · ✅수정완료(54ad1ec)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/scheduler/SchedulingConfig.java:9-10`
 - **근거**: `"core는 상대 개발자 영역이라 기존 파일 수정 없이 additive로만 들어간다"` — `CLAUDE.md` 모듈 소유권 절은 2026-07-23부로 이 구분을 폐기했다고 명시한다.
 - **영향**: 기능에는 영향 없는 주석 드리프트.
 - **권고**: 주석을 현재 모듈 소유권 절에 맞게 갱신하거나 삭제.
 - **출처**: `raw/B2-adapter.md` B2-04
 
-### BE-30 — `site_poll_state_sink.py`가 `datetime`을 임포트하지 않는다 · Info · collector-db · ❌미해결
+### BE-30 — `site_poll_state_sink.py`가 `datetime`을 임포트하지 않는다 · Info · collector-db · ✅수정완료(54ad1ec)
 - **위치**: `collector/src/collector/db/site_poll_state_sink.py:59`(`def persist_states(self, states: Mapping[str, SiteState], now: datetime) -> int:`)
 - **근거**: 파일 상단 임포트에 `datetime`이 없다. `from __future__ import annotations`로 어노테이션이 지연 평가(문자열)되므로 `typing.get_type_hints()`를 부르지 않는 한 런타임 오류는 없다(실측: 아무도 그걸 부르지 않는다).
 - **영향**: 실패 시나리오를 구성할 수 없다 — 정적 분석 도구·향후 리팩터를 위한 정직성 문제.
