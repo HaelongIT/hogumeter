@@ -301,6 +301,47 @@ describe('DecisionPage — 수요축 분리 제품', () => {
   })
 })
 
+/**
+ * FE-01(코드리뷰 20260806) — GROUPED variant에서 SPLIT variant(축 미선택)로 전환하면, 조회 effect가
+ * "색을 고르기 전엔 묻지 않는다"며 조기 return해 이전 variant의 판단 요약이 그대로 남는다. 새
+ * variant/제품 이름이 판단 요약 안 어디에도 없어 사용자는 옛 값을 새 값으로 오인할 수 있었다.
+ */
+describe('DecisionPage — variant 전환 시 이전 판단 요약 잔존(FE-01)', () => {
+  const galaxy = {
+    productId: 2,
+    name: '갤럭시 25',
+    category: 'phone',
+    demandAxisMode: 'SPLIT' as const,
+    axes: [
+      { axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB'] },
+      { axisType: 'DEMAND' as const, name: '색상', allowedValues: ['블랙', '화이트'] },
+    ],
+    variants: [{ variantId: 21, label: '256GB', priceAxisValues: { 용량: '256GB' } }],
+  }
+
+  beforeEach(() => {
+    vi.spyOn(api, 'listProducts').mockResolvedValue([iphone, galaxy])
+    vi.spyOn(api, 'getSignal').mockResolvedValue(signal)
+    vi.spyOn(api, 'getBenchmark').mockResolvedValue(benchmark)
+    vi.spyOn(api, 'getCadence').mockResolvedValue(cadence)
+    vi.spyOn(api, 'getCoupangLatestPrice').mockResolvedValue(coupangUnavailable)
+    vi.spyOn(api, 'listPurchases').mockResolvedValue([])
+    vi.spyOn(api, 'getAlertPolicy').mockResolvedValue({ configured: false, kDisplay: 5, excludeKeywords: [], demandAxisFilter: [] })
+    vi.spyOn(api, 'getAlertStatus').mockResolvedValue({ delivering: true })
+  })
+
+  it('GROUPED에서 SPLIT(축 미선택)으로 바꾸면 이전 판단 요약이 사라진다', async () => {
+    render(<DecisionPage />)
+    await screen.findByRole('option', { name: '아이폰 17 — 256GB' })
+    await pick()
+    await screen.findByLabelText('판단 요약') // 아이폰 판단 요약이 떴다
+
+    await userEvent.selectOptions(screen.getByLabelText('variant'), '21') // 갤럭시(SPLIT, 축 미선택)로 전환
+
+    expect(screen.queryByLabelText('판단 요약')).not.toBeInTheDocument()
+  })
+})
+
 describe('DecisionPage — 기간 손잡이 (원칙 4)', () => {
   beforeEach(() => {
     vi.spyOn(api, 'listProducts').mockResolvedValue([iphone])

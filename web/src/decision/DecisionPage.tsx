@@ -112,8 +112,14 @@ export function DecisionPage({
   }, [])
 
   // variant를 바꾸면 이전 제품의 색이 남아 있으면 안 된다 — 남으면 조용히 엉뚱한 값으로 조회한다.
+  // FE-01(코드리뷰 20260806): loaded/error도 여기서 함께 지운다 — 아래 조회 effect는 SPLIT인데
+  // 축값을 아직 안 골랐으면 조기 return하므로(묻지 않는다), 그 effect 안에서만 setLoaded(null)을
+  // 하면 이 경로를 못 탄다. 그러면 이전 variant의 판단 요약(신호등·기준가·갭·주기)이 그대로
+  // 화면에 남아 새 variant의 것처럼 보인다 — 정직성 원칙 위반.
   useEffect(() => {
     setDemandAxisValue(null)
+    setLoaded(null)
+    setError(null)
   }, [variantId])
 
   useEffect(() => {
