@@ -869,3 +869,12 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   - **폴링 지연**: `getUpdates`에 long-polling(`timeout=25`)을 주면 콜백을 훨씬 빨리 받아 stale 거절이 준다. `HttpTelegramApi.getUpdates`의 `timeout=0`을 바꾸고 HttpClient read timeout을 그 이상으로.
   - **메시지 변경(가장 값진, 배선 필요)**: 처리 후 `editMessageReplyMarkup`으로 버튼 제거 + `editMessageText`로 "✅ 무시됨" 상태 표기. **선행**: `CallbackUpdate` record에 `messageId`(+원 메시지 chat_id) 추가 + `HttpTelegramApi.parseCallbacks`가 `callback_query.message.message_id`를 뽑아야 한다(현재 미추출). `TelegramInboundApi`/`HttpTelegramApi`에 editMessage 추가. 실 응답이라 수동 스파이크 검증.
 - **재개 트리거(이미 참)**: 실 사용에서 피드백 부족이 확인됐다(2026-07-22). 우선순위 낮음(처리는 정확) — 하지만 `show_alert=true` 한 줄은 저비용·고효과라 다음 텔레그램 증분에 먼저 넣는다. core 기존 파일(HttpTelegramApi·TelegramInboundApi·Poller)이라 세션 소유권 조율.
+
+## [열림] Q-89. `raw_deal_post.reaction_score`가 collector→DB로는 살아있지만 core 소비처가 0이다
+- **맥락**(코드리뷰 20260806 X-03): 확정본(`docs/90-planning-final.md:58`)이 "반응 신호(reaction_score: 댓글수·추천수 등)를 가능한 만큼 수집"을 요구하고, `:187`은 `DealEvent`가 노출할 필드 목록에 `reaction_score`를 명시한다. collector는 매 폴링마다 `reaction_score`(추천수)를 `raw_deal_post`에 업서트한다(`raw_deal_sink.py`) — 데이터는 정직하게 쌓인다.
+- **🔴 실측**: core 쪽엔 이 컬럼을 읽는 코드가 전혀 없다(`grep -rni reaction core/src web/src`의 유일한 매치는 `RawDealPost.java`의 javadoc 주석뿐 — 그마저 X-07로 "미매핑"이라 정정 필요). `DealEventEntity`·`DealEvent`·`DealEventMapper` 어디에도 `reactionScore` 필드가 없어 collector→DB까지만 흐르고 core 이후(딜 생성·기준가·web 노출)로는 한 걸음도 못 간다.
+- **게이트 사각지대**: `scripts/check-dead-columns.sh`의 `reached()`는 "컬럼 이름이 core/collector/web 셋 중 아무 프로덕션 코드에 나타나는가"만 보므로, collector가 **쓰는** 코드(`raw_deal_sink.py`의 `reaction_score` 파라미터)만으로 "배선됨"으로 오판해 `DEAD COLUMNS OK`를 낸다(직접 실행 확인) — "생산자가 이름을 안다"와 "소비자가 읽는다"를 구별 못 한다.
+- **영향**: 데이터 유실은 아니다(DB엔 정직하게 남는다). 다만 확정본이 요구한 기능이 조용히 빠진 채로 아무 게이트도 이 사실을 추적하지 않고 있었다 — 이 항목이 그 추적이다.
+- **잠정값**: 아무것도 안 바꾼다 — `reaction_score`는 계속 수집만 되고 노출되지 않는다. 화면·알림 어디에도 "반응 신호"가 없다는 사실은 과대약속 금지(절대 원칙 6) 위반은 아니다(애초에 아무 데도 노출한다고 말한 적이 없다 — 그저 확정본 요구가 조용히 비어 있을 뿐이다).
+- **재개 트리거(무엇이 참이 되어야 하는가)**: 사람이 다음 중 하나를 정한다 — ① `reaction_score`를 실제로 노출(어느 화면에 어떤 형태로? 사이트 간 정규화 필요 — docs/90:232가 이미 미확정으로 적어 둠)하기로 결정하고 구현 착수, 또는 ② 확정본 요구를 이 범위에서 포기하기로 결정하고 `decision-log.md`+`docs/90` 델타로 기록. 되돌리기 쉬운 쪽(그대로 둠)으로 잠정 진행 중이라 사람이 정하기 전까지 코드 변경 없음.
+- **관련**: `working-area/review-20260806/30-cross-cutting.md` X-03·X-07, `docs/90-planning-final.md:58,187,232`.
