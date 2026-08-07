@@ -39,7 +39,7 @@
 - **[필수]** **HTTPS**(SEC-02 나머지, D-4 2026-07-24 확정: Caddy) — Basic Auth는 평문 HTTP에서 자격증명을 그대로 노출한다. Caddy 서비스·`Caddyfile`은 이미 있다 — **기본 `docker compose up -d`로는 안 뜬다**(`public` 프로파일로 격리, 실수로 열리지 않게). 사람이 준비할 것:
   1. `.env`에 **`DOMAIN`**(실 도메인, 예: `hogumeter.example.com`)을 채운다. 비우면 `localhost` 자체서명 인증서라 브라우저가 경고한다(로컬 리허설 전용).
   2. 서버 방화벽/보안그룹에서 **80·443 인바운드**를 연다(ACME는 80으로 소유권 검증 후 443으로 서빙).
-  3. `docker compose --profile public up -d` (일반 `up -d`는 caddy를 안 띄운다 — `--profile public`을 꼭 붙인다).
+  3. **`bash scripts/up-public.sh`**(BE-06, 코드리뷰 20260806)를 쓴다 — `preflight.sh prod`를 먼저 강제한 뒤에만 `docker compose --profile public up -d`를 실행하므로, 위 33번 항목을 깜빡해도 인증 없는 상태로 공개되지 않는다. 직접 `docker compose --profile public up -d`(일반 `up -d`는 caddy를 안 띄운다)를 치는 것도 여전히 가능하지만 그러면 preflight 강제를 우회한다 — 권장하지 않는다.
   - **켰는지 확인하는 법**: `curl -I https://<DOMAIN>/` → `200`(자체서명이면 `curl -k`). `docker compose logs caddy | grep -i "certificate obtained"` → Let's Encrypt 발급 성공 로그. `docker compose --profile public ps caddy`로 뜬 것 자체를 확인(기본 `ps`엔 안 보인다 — 프로파일 없이 조회하면 "떠 있다고 착각"하는 사고를 피한다).
   - `caddy_data` 볼륨에 인증서·ACME 계정이 있다 — 지우면 재발급(Let's Encrypt 쿼터 소모, 도메인당 주당 한도 있음).
 - **[필수]** core REST API 외부 노출 범위 확인 — 1인용이므로 기본 비공개(방화벽/보안그룹). compose는 `127.0.0.1:8080`으로만 개방한다.

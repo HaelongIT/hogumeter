@@ -176,6 +176,12 @@ jobs:
       - name: 스크립트 네트워크 opt-in 게이트 계약 테스트
         run: bash scripts/check-network-optin.test.sh
 
+      # BE-06(코드리뷰 20260806): `--profile public`(caddy, 인터넷 공개 노출)이 `preflight.sh prod`
+      # 통과에 프로그램적으로 묶여 있지 않아, 운영자가 preflight를 건너뛴 채 직접 올리면 인증 없는
+      # 상태가 그대로 인터넷에 뜰 수 있었다. `up-public.sh`가 preflight를 강제한다 — 그 강제를 시험한다.
+      - name: public 프로파일 preflight 강제 게이트 계약 테스트
+        run: bash scripts/up-public.test.sh
+
   # SEC-08: robots 게이트는 fake opener 테스트만 통과했다. 실제 소켓을 만지는 경로는
   # **실 수집을 켜기 직전에 처음 실행된다.** 로컬 서버에 대고 운영과 같은 코드 경로를 리허설한다.
   # (이 드릴이 `urllib_opener`가 403/429를 예외로 던져 차단 감지가 죽어 있던 것을 잡았다.)
