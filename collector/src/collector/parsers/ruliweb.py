@@ -26,11 +26,29 @@ from .models import ParsedDeal
 _SOLD_OUT_MARKERS = ("[품절]", "[종료]", "[매진]", "[마감]")
 
 
+def _attr_list(tag, key: str) -> list[str]:
+    """bs4 속성은 다중값(class 등) 가능성 때문에 str|list|None 유니온이다 — 실제 파서가
+    쓰는 값(class 목록 등)만 안전하게 list[str]로 좁힌다."""
+    value = tag.get(key)
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
+def _attr_str(tag, key: str, default: str = "") -> str:
+    """단일값 속성(href·value 등)을 안전하게 str로 좁힌다(다중값이면 공백으로 합침 — 실제로는
+    일어나지 않지만 조용히 크래시하는 것보단 낫다)."""
+    value = tag.get(key, default)
+    if isinstance(value, list):
+        return " ".join(value)
+    return value if value is not None else default
+
+
 def parse_ruliweb(html: str, now: datetime) -> list[ParsedDeal]:
     soup = BeautifulSoup(html, "html.parser")
     deals: list[ParsedDeal] = []
     for tr in soup.select("table.board_list_table tr.table_body.normal"):
-        classes = set(tr.get("class", []))
+        classes = set(_attr_list(tr, "class"))
         if classes & {"best", "notice"}:
             continue
         article_id = tr.select_one(".info_article_id")
@@ -39,7 +57,7 @@ def parse_ruliweb(html: str, now: datetime) -> list[ParsedDeal]:
 
         anchor = tr.select_one(".title_wrapper a")
         title = anchor.get_text(strip=True) if anchor else ""
-        url = anchor.get("href", "") if anchor else ""
+        url = _attr_str(anchor, "href") if anchor else ""
 
         recomd = tr.select_one(".recomd > strong")
         reaction = _to_int(recomd.get_text(strip=True)) if recomd else 0
@@ -50,7 +68,7 @@ def parse_ruliweb(html: str, now: datetime) -> list[ParsedDeal]:
         deals.append(
             ParsedDeal(
                 site="ruliweb",
-                post_id=article_id["value"],
+                post_id=_attr_str(article_id, "value"),
                 title=title,
                 url=url,
                 reaction_score=reaction,

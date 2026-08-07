@@ -3,7 +3,7 @@
 실 네트워크 없음: fetch는 주입 포트, 테스트는 fake fetcher. sleep·랜덤 없음(docs/21).
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -22,7 +22,7 @@ from collector.scheduler.policy import (
     is_due,
 )
 
-NOW = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 9, 12, 0, tzinfo=UTC)
 BACKOFF = BackoffPolicy(base=timedelta(seconds=60), factor=2, cap=timedelta(minutes=30))
 
 
@@ -317,7 +317,7 @@ def _spec_for_interval(seconds: int) -> SiteSpec:
 def test_run_cycle_uses_injected_interval_for_next_attempt():
     """주기 결정을 주입 가능한 포트로 뺀다 — robots를 참조하려면 네트워크가 필요하기 때문이다."""
     spec = _spec_for_interval(60)
-    now = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
 
     result = run_cycle(
         [spec], {}, now, lambda s: FetchResult(status_code=200, body=""), BACKOFF,
@@ -330,7 +330,7 @@ def test_run_cycle_uses_injected_interval_for_next_attempt():
 def test_run_cycle_defaults_to_the_rate_floor_when_no_port_is_given():
     """기존 호출자를 깨지 않는다. 기본은 사이트 종류의 하한(게시판 60초)."""
     spec = _spec_for_interval(1)  # 하한보다 짧게 설정해도 60초로 clamp된다
-    now = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
 
     result = run_cycle([spec], {}, now, lambda s: FetchResult(status_code=200, body=""), BACKOFF)
 

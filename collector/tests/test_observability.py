@@ -6,15 +6,15 @@ em dash 하나로 엔트리포인트가 죽은 적이 있다(docs/99).
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from collector.observability import counters, event
-from collector.pipeline.price import SHIPPING_UNKNOWN
 from collector.parsers.models import ParsedDeal
+from collector.pipeline.price import SHIPPING_UNKNOWN
 from collector.scheduler.loop import CycleResult, SiteObservation
 from collector.scheduler.policy import Alert, Outcome, SiteState
 
-NOW = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 9, 12, 0, tzinfo=UTC)
 
 
 # ── event(): JSON 한 줄 ────────────────────────────────────────────────

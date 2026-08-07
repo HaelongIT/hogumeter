@@ -7,18 +7,19 @@ collector의 부품(파서·스케줄러·ingest)은 각자 GREEN이었지만 **
 실 네트워크 0: opener를 fake로 주입한다(`docs/21` 실 사이트 호출 테스트 금지).
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+from boards import all_board_specs
 
 from collector.pipeline.ingest import to_raw_records
 from collector.scheduler.fetcher import HttpFetcher, RobotsGate
 from collector.scheduler.loop import run_cycle
 from collector.scheduler.policy import BackoffPolicy
-from boards import all_board_specs
 
 FIXTURES = Path(__file__).parent / "fixtures"
 # 2026-07-09 23:00 KST. fixture의 최신 글(21:10 KST)보다 뒤여야 postedAt이 과거로 해석된다.
-NOW = datetime(2026, 7, 9, 14, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 9, 14, 0, tzinfo=UTC)
 BACKOFF = BackoffPolicy(base=timedelta(seconds=60), factor=2, cap=timedelta(minutes=30))
 
 # 파서 골든이 단언한 건수. 종단에서도 같은 수가 나와야 한다.

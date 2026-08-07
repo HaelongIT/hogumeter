@@ -4,7 +4,7 @@
 `ALLOW_REAL_ROBOTS=1`일 때뿐이고, 그건 `scripts/check-robots-drill.sh`가 로컬 서버로 시험한다.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -13,7 +13,7 @@ from collector.scheduler.policy import SiteKind
 from collector.scheduler.sites import hotdeal_boards
 from collector.tools.robots_report import RobotsFinding, format_field_notes, report
 
-NOW = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
 
 
 def _spec(name: str, url: str) -> SiteSpec:

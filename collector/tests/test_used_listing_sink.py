@@ -6,8 +6,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
+import psycopg
 import pytest
 
 from collector.db.used_listing_sink import UsedListingSink
@@ -16,7 +17,7 @@ from collector.parsers.models import ParsedDeal
 
 pytestmark = pytest.mark.integration
 
-T1 = datetime(2026, 7, 1, tzinfo=timezone.utc)
+T1 = datetime(2026, 7, 1, tzinfo=UTC)
 T2 = T1 + timedelta(minutes=10)
 
 
@@ -106,7 +107,7 @@ def test_write_failure_rolls_back_so_the_shared_connection_stays_usable(connecti
     sink = UsedListingSink(connection)
     nonexistent_search_id = search_id + 999_999  # FK 위반
 
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):  # FK 위반 — blind Exception이면 무관한 결함도 통과한다
         sink.insert_batch(nonexistent_search_id, [_deal("b1", "아이폰 17 256", 900_000)], T1)
 
     # aborted 상태로 남았다면 정상 배치도 InFailedSqlTransaction으로 실패한다.

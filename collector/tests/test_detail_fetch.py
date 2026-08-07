@@ -3,12 +3,12 @@
 실제 상세 페이지 fetch·파싱은 아직 없다(fixture 부재, docs/91 Q-80) — 여기는 후보 선정만 검증한다.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from collector.parsers.models import ParsedDeal
 from collector.pipeline.detail_fetch import deals_needing_detail_fetch, needs_detail_fetch
 
-NOW = datetime(2026, 7, 24, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 24, 12, 0, tzinfo=UTC)
 ALIASES = ["스위치2", "아이폰17"]
 
 

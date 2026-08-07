@@ -145,9 +145,12 @@ def normalize_price(text: str) -> NormalizedPrice | None:
 
     paren = _PAREN_PRICE_SHIPPING.search(text)
     if paren:
-        main = _to_int(paren.group(1))
+        # 별도 이름(paren_main) — 아래 main(int | None)과 같은 이름을 쓰면 mypy가 이 분기의
+        # int 단정과 아래 분기의 optional을 하나의 변수로 합쳐 타입을 좁혀버린다(실질 버그는 아니되
+        # 각 분기가 독립임을 타입으로도 드러낸다).
+        paren_main = _to_int(paren.group(1))
         shipping, shipping_conditions = classify_shipping(paren.group(2))
-        return NormalizedPrice(main + shipping, _dedupe(conditions + shipping_conditions))
+        return NormalizedPrice(paren_main + shipping, _dedupe(conditions + shipping_conditions))
 
     free_paren = _PAREN_FREE_PRICE.search(text)
     if free_paren:

@@ -11,6 +11,16 @@ from ..pipeline.timestamps import parse_board_time
 from .models import ParsedDeal
 
 
+def _attr_str(tag, key: str, default: str = "") -> str:
+    """단일값 속성(href 등)을 안전하게 str로 좁힌다(다중값이면 공백으로 합침 — 실제로는
+    일어나지 않지만 조용히 크래시하는 것보단 낫다). bs4 속성값은 str|list|None 유니온이라
+    (class 등 다중값 속성 대비) mypy가 str 단일값이라고 가정하지 못한다."""
+    value = tag.get(key, default)
+    if isinstance(value, list):
+        return " ".join(value)
+    return value if value is not None else default
+
+
 def parse_fmkorea(html: str, now: datetime) -> list[ParsedDeal]:
     soup = BeautifulSoup(html, "html.parser")
     deals: list[ParsedDeal] = []
@@ -18,7 +28,7 @@ def parse_fmkorea(html: str, now: datetime) -> list[ParsedDeal]:
         anchor = li.select_one(".title a")
         if not anchor:
             continue
-        href = anchor.get("href", "")
+        href = _attr_str(anchor, "href")
         post_id = href.strip("/").split("/")[-1]
         if not post_id:
             continue

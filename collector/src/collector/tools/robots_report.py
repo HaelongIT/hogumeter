@@ -10,9 +10,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
-from ..scheduler.fetcher import RobotsGate, Opener
+from ..scheduler.fetcher import Opener, RobotsGate
 from ..scheduler.loop import SiteSpec
 
 # 차단 신호(SEC-08). robots 조회에서 이게 나오면 수집 전에 사람이 먼저 봐야 한다.
@@ -100,7 +100,6 @@ def main(*, opener=None, clock=None) -> int:
     반환: DISALLOW가 하나라도 있으면 1. "확인 완료"가 아니라 "사람이 결정해야 함"이기 때문이다.
     """
     import os
-    from datetime import timezone
 
     if os.environ.get(ALLOW_REAL_ROBOTS_ENV) != "1":
         # 문구가 아니라 마커를 낸다 — 한글은 콘솔 인코딩에 따라 깨지고, 그걸 grep하면 도구가 굳는다.
@@ -112,7 +111,7 @@ def main(*, opener=None, clock=None) -> int:
     from ..scheduler.fetcher import urllib_opener
     from ..scheduler.sites import robots_check_targets
 
-    now = (clock or (lambda: datetime.now(timezone.utc)))()
+    now = (clock or (lambda: datetime.now(UTC)))()
     findings = report(robots_check_targets(), opener or urllib_opener)
 
     print(format_field_notes(findings, now))

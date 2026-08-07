@@ -12,6 +12,8 @@ dependencies = [
 dev = [
     "pytest>=8",
     "testcontainers[postgres]>=4",
+    "ruff>=0.6",
+    "mypy>=1.11",
 ]
 
 [build-system]
@@ -25,3 +27,23 @@ packages = ["src/collector"]
 testpaths = ["tests"]
 # Docker가 필요한 테스트. 빠른 루프는 `uv run pytest -m "not integration"`.
 markers = ["integration: Postgres 컨테이너가 필요한 테스트(Docker)"]
+
+# Q-90②: web eslint가 실측 적중(FE-02/03)한 뒤 collector 차례. 처음부터 엄격하게 켜면
+# 도입 비용이 커 오히려 안 켜질 위험 — 실질적 결함을 겨냥하는 규칙 위주로 점진 적용.
+[tool.ruff]
+target-version = "py312"
+# 100은 한글 주석·docstring 밀도(CLAUDE.md 실측: 영문 표준의 2.5~3배)에서 전부 노이즈였다
+# (174건 중 138건이 E501, 전부 한글 설명문) — 실결함 규칙을 노이즈에 묻히게 두지 않는다.
+line-length = 160
+
+[tool.ruff.lint]
+# E/F = pyflakes+pycodestyle 기본, B = bugbear(실결함 위주), UP = pyupgrade, I = import 정렬
+select = ["E", "F", "W", "B", "UP", "I"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+# 엄격 모드는 외부 라이브러리(bs4·psycopg) 스텁 부재로 초반부터 대량 오탐 — 점진 적용.
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true

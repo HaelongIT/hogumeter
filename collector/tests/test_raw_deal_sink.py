@@ -3,7 +3,7 @@
 멱등(REL-01)·상태변화 반영(BM-01 AC-2)·발생시각 불변(C-2)이 이 계약의 전부다.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -14,9 +14,9 @@ from collector.pipeline.ingest import RawDealRecord, to_raw_records
 
 pytestmark = pytest.mark.integration
 
-CAPTURED = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)
+CAPTURED = datetime(2026, 7, 9, 12, 0, tzinfo=UTC)
 LATER = CAPTURED + timedelta(hours=1)
-POSTED = datetime(2026, 7, 8, 21, 10, tzinfo=timezone.utc)
+POSTED = datetime(2026, 7, 8, 21, 10, tzinfo=UTC)
 
 
 def _record(**overrides) -> RawDealRecord:

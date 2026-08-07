@@ -3,9 +3,8 @@
 "미러를 만들지 않는다"는 규율은 V1만 적용하는 순간 반쯤 무너진다 — 그건 "V1까지만의 미러"다.
 """
 
-import pytest
-
 import conftest
+import pytest
 
 
 def test_migrations_are_ordered_by_version_number_not_alphabetically(tmp_path, monkeypatch):

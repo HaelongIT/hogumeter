@@ -4,7 +4,7 @@
 성공으로 보였고, 아무도 몰랐다. "성공했는데 조용히 0건"이 사이트 구조 변경의 전형적 징후다.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -12,7 +12,7 @@ from collector.scheduler.drift import DriftHistory, DriftPolicy, observe
 from collector.scheduler.loop import SiteObservation
 from collector.scheduler.policy import Outcome
 
-NOW = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 9, 12, 0, tzinfo=UTC)
 POLICY = DriftPolicy(window=5, min_success_rate=0.6, zero_yield_streak=3)
 
 

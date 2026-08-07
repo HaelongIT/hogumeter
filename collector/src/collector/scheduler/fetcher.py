@@ -182,7 +182,10 @@ class RobotsGate:
 
     def allows(self, url: str) -> bool:
         doc = self._doc(url)
-        if doc is _UNREACHABLE:
+        # isinstance로 좁힌다 — `is _UNREACHABLE`도 런타임엔 동일하지만(싱글턴) mypy는 리터럴이
+        # 아닌 객체의 `is` 비교로 유니온을 좁히지 못해 아래 `doc.rules`에서 _Unreachable도
+        # 여전히 가능하다고 본다(crawl_delay와 같은 패턴으로 통일).
+        if isinstance(doc, _Unreachable):
             return False
         return True if doc is None else _path_allows(list(doc.rules), url)
 

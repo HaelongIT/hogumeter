@@ -24,15 +24,33 @@ _BOARD = "ppomppu"
 _BASE_URL = "https://www.ppomppu.co.kr/zboard/view.php"
 
 
+def _attr_list(tag, key: str) -> list[str]:
+    """bs4 속성은 다중값(class 등) 가능성 때문에 str|list|None 유니온이다 — 실제 파서가
+    쓰는 값(class 목록 등)만 안전하게 list[str]로 좁힌다."""
+    value = tag.get(key)
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
+def _attr_str(tag, key: str, default: str = "") -> str:
+    """단일값 속성(href 등)을 안전하게 str로 좁힌다(다중값이면 공백으로 합침 — 실제로는
+    일어나지 않지만 조용히 크래시하는 것보단 낫다)."""
+    value = tag.get(key, default)
+    if isinstance(value, list):
+        return " ".join(value)
+    return value if value is not None else default
+
+
 def parse_ppomppu(html: str, now: datetime) -> list[ParsedDeal]:
     soup = BeautifulSoup(html, "html.parser")
     deals: list[ParsedDeal] = []
     for tr in soup.select("tr.baseList"):
-        if not any(c.startswith("bbs_new") for c in tr.get("class", [])):
+        if not any(c.startswith("bbs_new") for c in _attr_list(tr, "class")):
             continue  # 공지·광고 행
 
         anchor = tr.select_one("a.baseList-title")
-        if not anchor or f"id={_BOARD}" not in anchor.get("href", ""):
+        if not anchor or f"id={_BOARD}" not in _attr_str(anchor, "href"):
             continue  # 다른 게시판 위젯 행
 
         post_id = _text(tr.select_one(".baseList-numb"))

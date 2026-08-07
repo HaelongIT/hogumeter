@@ -5,8 +5,9 @@ core의 실 마이그레이션(V15까지)을 적용한 컨테이너에서 검증
 ③ 재개는 "DB 행 수동 UPDATE → 재시작(load_states)"으로 실제로 동작한다.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
+import psycopg
 import pytest
 
 from collector.db.site_poll_state_sink import SitePollStateSink
@@ -14,7 +15,7 @@ from collector.scheduler.policy import SiteState
 
 pytestmark = pytest.mark.integration
 
-T0 = datetime(2026, 7, 24, 12, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 7, 24, 12, 0, tzinfo=UTC)
 T1 = T0 + timedelta(minutes=1)
 
 
@@ -94,7 +95,7 @@ def test_write_failure_rolls_back_so_the_shared_connection_stays_usable(connecti
     invalid = SiteState(site="ppomppu", last_successful_poll=T0, consecutive_failures=None,
                          next_attempt_at=None, stopped=False)  # consecutive_failures not null 위반
 
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):  # NOT NULL 위반 — blind Exception이면 무관한 결함도 통과한다
         sink.persist_states({"ppomppu": invalid}, T0)
 
     valid = SiteState(site="ppomppu", last_successful_poll=T0, consecutive_failures=0,

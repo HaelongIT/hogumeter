@@ -24,9 +24,8 @@ import os
 import signal
 import threading
 import time
-from datetime import datetime, timedelta, timezone
-
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 from .db.alias_source import AliasSource
 from .db.raw_deal_sink import RawDealSink, connect_from_env
@@ -75,7 +74,7 @@ def main(
     opener=None,
     sink=None,
     sleep=time.sleep,
-    clock=lambda: datetime.now(timezone.utc),
+    clock=lambda: datetime.now(UTC),
     should_stop=_never,
     max_cycles: int | None = None,
     boards=None,

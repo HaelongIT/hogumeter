@@ -9,7 +9,7 @@ status 매핑 주의: 실측된 건 `"0" = 판매중`뿐이고 나머지 코드�
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..pipeline.price import PAID_SHIPPING_UNKNOWN, SHIPPING_UNKNOWN
 from .models import ParsedDeal
@@ -38,7 +38,7 @@ def parse_bunjang(payload: str, now: datetime | None = None) -> list[ParsedDeal]
                 url=f"https://m.bunjang.co.kr/products/{pid}",
                 reaction_score=int(item.get("num_faved") or 0),
                 headline_price=int(price_raw) if price_raw.isdigit() else None,
-                posted_at=datetime.fromtimestamp(int(raw_update_time), tz=timezone.utc),
+                posted_at=datetime.fromtimestamp(int(raw_update_time), tz=UTC),
                 status="ACTIVE" if str(item.get("status")) == "0" else "SOLD_OUT",
                 # `free_shipping: false`는 "배송비 0"이 아니라 **금액 미상**이다 — 응답에 금액이 없다.
                 # 뽐뿌의 `유배`와 같은 부류다: 저장된 가격은 실결제가가 아니라 하한이다(BM-02).

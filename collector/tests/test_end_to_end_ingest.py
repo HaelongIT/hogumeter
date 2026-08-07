@@ -12,19 +12,19 @@
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from boards import all_board_specs
 
 from collector.__main__ import ALLOW_NETWORK_ENV, main
 from collector.db.alias_source import AliasSource
 from collector.db.raw_deal_sink import RawDealSink
 from collector.db.site_poll_state_sink import SitePollStateSink
-from boards import all_board_specs
 
 FIXTURES = Path(__file__).parent / "fixtures"
-NOW = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 9, 12, 0, tzinfo=UTC)
 
 # 사이트별 golden. sites.py의 encoding으로 인코딩해 돌려준다(뽐뿌는 cp949).
 _GOLDEN = {

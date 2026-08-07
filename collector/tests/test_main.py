@@ -4,13 +4,14 @@
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
+from boards import all_board_specs
 
 from collector.__main__ import ALLOW_NETWORK_ENV, SINK_FAILURE_LIMIT, _interval_port, main
 from collector.scheduler.fetcher import RobotsGate
 from collector.scheduler.loop import SiteSpec
 from collector.scheduler.policy import SiteKind
-from boards import all_board_specs
 from collector.scheduler.sites import hotdeal_boards
 
 
@@ -18,7 +19,7 @@ def _events(out: str) -> list[dict]:
     """stdout은 JSON Lines다(OBS-01). 문자열을 grep하지 말고 이벤트를 읽는다."""
     return [json.loads(line) for line in out.strip().splitlines() if line]
 
-NOW = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 9, 12, 0, tzinfo=UTC)
 
 
 class RecordingOpener:

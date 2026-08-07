@@ -1,6 +1,6 @@
 """BM-01 AC-3 파서 golden — fixture HTML/JSON → ParsedDeal 스냅샷. 실 네트워크 호출 금지(문자열 입력)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -14,7 +14,7 @@ from collector.pipeline.timestamps import KST
 FIXTURES = Path(__file__).parent / "fixtures"
 
 # 목록 시각("당일 21:10")을 해석하려면 폴링 시각이 필요하다. 2026-07-09 23:00 KST.
-NOW = datetime(2026, 7, 9, 14, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 9, 14, 0, tzinfo=UTC)
 
 
 def _read(rel: str) -> str:
@@ -199,7 +199,7 @@ def test_ppomppu_adds_shipping_fee_from_title_convention():
 
 from collector.pipeline.price import FREE_PRICE, SHIPPING_UNKNOWN  # noqa: E402
 
-_FM_NOW = datetime(2026, 7, 10, 21, 30, tzinfo=timezone.utc)
+_FM_NOW = datetime(2026, 7, 10, 21, 30, tzinfo=UTC)
 
 
 def _fm_html(price_text: str, shipping_text: str) -> str:

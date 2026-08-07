@@ -6,14 +6,14 @@
   펨코   `20:59`
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from collector.pipeline.timestamps import KST, parse_board_time
 
 # 2026-07-09 12:00 UTC = 2026-07-09 21:00 KST
-NOW = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 9, 12, 0, tzinfo=UTC)
 
 
 def _kst(y, m, d, hh, mm, ss=0) -> datetime:
@@ -40,19 +40,19 @@ def test_result_is_timezone_aware_and_comparable_to_utc():
     parsed = parse_board_time("21:10:11", NOW)
 
     assert parsed.tzinfo is not None
-    assert parsed == datetime(2026, 7, 9, 12, 10, 11, tzinfo=timezone.utc)
+    assert parsed == datetime(2026, 7, 9, 12, 10, 11, tzinfo=UTC)
 
 
 def test_far_future_time_is_read_as_yesterday():
     """자정 직후 폴링이면 '23:50'은 어제 글이다(오늘로 읽으면 하루 가까이 미래)."""
-    just_after_midnight = datetime(2026, 7, 9, 15, 5, tzinfo=timezone.utc)  # 7/10 00:05 KST
+    just_after_midnight = datetime(2026, 7, 9, 15, 5, tzinfo=UTC)  # 7/10 00:05 KST
 
     assert parse_board_time("23:50", just_after_midnight) == _kst(2026, 7, 9, 23, 50)
 
 
 def test_slightly_future_time_stays_today():
     """우리 시계가 몇 분 뒤처진 것뿐이다. 하루를 되돌리면 24시간 오차가 된다."""
-    now = datetime(2026, 7, 9, 12, 0, tzinfo=timezone.utc)  # 21:00 KST
+    now = datetime(2026, 7, 9, 12, 0, tzinfo=UTC)  # 21:00 KST
 
     assert parse_board_time("21:10:11", now) == _kst(2026, 7, 9, 21, 10, 11)
 

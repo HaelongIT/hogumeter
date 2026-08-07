@@ -16,7 +16,7 @@ fixture는 파서 검증용만이 아니라 **하류 규칙의 시험대**다(do
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -28,7 +28,7 @@ from collector.parsers.ruliweb import parse_ruliweb
 from collector.pipeline.ingest import to_raw_records
 
 FIXTURES = Path(__file__).parent / "fixtures"
-NOW = datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
 
 # 사이트별로 `raw`에 담아도 되는 키. 늘리려면 SEC-07을 다시 읽고 늘린다.
 # `_derived`는 우리가 만든 파생 데이터다(조건 태그, Q-46) — 원본이 아니다.

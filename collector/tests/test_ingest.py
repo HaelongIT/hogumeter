@@ -1,7 +1,7 @@
 """적재 준비 — ParsedDeal → RawDealRecord 계약 매핑 + 배치 멱등(자연키 dedup). 네트워크·DB 없음."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -9,10 +9,18 @@ import pytest
 from collector.parsers.bunjang import parse_bunjang
 from collector.parsers.fmkorea import parse_fmkorea
 from collector.parsers.models import ParsedDeal
-from collector.pipeline.ingest import RawDealRecord, to_raw_records
+from collector.pipeline.ingest import (
+    MAX_POST_ID,
+    MAX_RAW_BYTES,
+    MAX_TITLE,
+    MAX_URL,
+    RawDealRecord,
+    oversized,
+    to_raw_records,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
-CAPTURED = datetime(2026, 7, 8, 12, 0, tzinfo=timezone.utc)
+CAPTURED = datetime(2026, 7, 8, 12, 0, tzinfo=UTC)
 
 
 def _read(rel: str) -> str:
@@ -114,8 +122,6 @@ def test_accepts_every_status_the_bunjang_parser_can_emit():
 # 크롤링 텍스트는 전부 비신뢰 입력이다(docs/20 SEC-05). 상한 없이 `text`·`jsonb`로 흘려보내면
 # 페이지 하나가 DB와 메모리를 삼킨다. **자르지 않는다** — 잘린 제목은 정상 제목의 얼굴을 한
 # 거짓말이고, 매칭(BM-03)을 조용히 망친다. 거절하고 그 사실을 남긴다.
-
-from collector.pipeline.ingest import MAX_POST_ID, MAX_RAW_BYTES, MAX_TITLE, MAX_URL, oversized
 
 
 def _deal(**over):
