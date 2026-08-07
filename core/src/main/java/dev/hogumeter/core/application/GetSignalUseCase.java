@@ -3,7 +3,6 @@ package dev.hogumeter.core.application;
 import dev.hogumeter.core.adapter.persistence.DealEventMapper;
 import dev.hogumeter.core.adapter.persistence.DealEventRepository;
 import dev.hogumeter.core.application.port.out.CurrentPriceProvider;
-import dev.hogumeter.core.domain.BenchmarkParams;
 import dev.hogumeter.core.domain.benchmark.BenchmarkCalculator;
 import dev.hogumeter.core.domain.benchmark.BenchmarkView;
 import dev.hogumeter.core.domain.benchmark.VariantNotFoundException;

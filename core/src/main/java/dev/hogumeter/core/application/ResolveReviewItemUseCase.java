@@ -14,7 +14,6 @@ import dev.hogumeter.core.domain.deal.DealEvent;
 import dev.hogumeter.core.domain.matching.AliasDictionary;
 import dev.hogumeter.core.domain.matching.Matcher;
 import dev.hogumeter.core.domain.matching.TitleNormalizer;
-import dev.hogumeter.core.domain.review.ReviewQueueType;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;

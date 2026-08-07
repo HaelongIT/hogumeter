@@ -36,7 +36,9 @@ public class GetPrioritizedProductsUseCase {
 		return products.findAll().stream()
 				.map(this::toItem)
 				.sorted(Comparator.comparing((PrioritizedProduct p) -> !p.waiting())
-						.thenComparing(p -> p.priorityRank() == null ? Integer.MAX_VALUE : p.priorityRank())
+						// thenComparingInt: (int, Integer) 혼합 삼항은 매번 unbox→rebox한다(SpotBugs Bx) —
+					// 원시 특화 오버로드를 쓰면 그 낭비가 없다.
+					.thenComparingInt(p -> p.priorityRank() == null ? Integer.MAX_VALUE : p.priorityRank())
 						.thenComparing(PrioritizedProduct::productId))
 				.toList();
 	}

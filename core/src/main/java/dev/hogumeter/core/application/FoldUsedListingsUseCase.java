@@ -6,7 +6,6 @@ import dev.hogumeter.core.adapter.persistence.ProductEntity;
 import dev.hogumeter.core.adapter.persistence.ProductRepository;
 import dev.hogumeter.core.adapter.persistence.UsedListingObservationEntity;
 import dev.hogumeter.core.adapter.persistence.UsedListingObservationRepository;
-import dev.hogumeter.core.adapter.persistence.UsedSearchBonusGroupEntity;
 import dev.hogumeter.core.adapter.persistence.UsedSearchBonusGroupRepository;
 import dev.hogumeter.core.adapter.persistence.UsedSearchEntity;
 import dev.hogumeter.core.adapter.persistence.UsedSearchRepository;

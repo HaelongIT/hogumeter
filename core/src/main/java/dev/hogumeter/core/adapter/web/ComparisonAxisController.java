@@ -1,6 +1,5 @@
 package dev.hogumeter.core.adapter.web;
 
-import dev.hogumeter.core.adapter.persistence.ComparisonAxisEntity;
 import dev.hogumeter.core.application.DefineComparisonAxesUseCase;
 import java.util.List;
 import org.springframework.web.bind.annotation.PathVariable;

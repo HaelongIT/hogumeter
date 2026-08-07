@@ -42,6 +42,11 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
+      # Q-90③ (코드리뷰 20260806): web eslint·collector ruff+mypy 다음 core 차례.
+      - name: Lint (checkstyle)
+        run: ./gradlew checkstyleMain checkstyleTest
+      - name: 정적분석 (spotbugs)
+        run: ./gradlew spotbugsMain
       - name: Test (Testcontainers 포함)
         run: ./gradlew test
 

@@ -46,9 +46,12 @@ public class ComputeDigestTransitionUseCase {
 	 * 만나면 "저장 색 없음"과 같이 취급한다 — 예외로 다이제스트 전체를 막느니 그 variant를 기준선으로 되돌린다.
 	 */
 	private static SignalColor parse(String stored) {
+		if (stored == null) {
+			return null; // NPE를 catch하지 않는다(DCN) — null은 미리 걸러 정상 분기로 다룬다
+		}
 		try {
 			return SignalColor.valueOf(stored);
-		} catch (IllegalArgumentException | NullPointerException e) {
+		} catch (IllegalArgumentException e) {
 			return null;
 		}
 	}

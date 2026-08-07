@@ -27,7 +27,9 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnProperty(name = "telegram.enabled", havingValue = "true")
-public class TelegramAlertSender implements AlertSender, UsedAlertSender, DigestSender {
+// final: 생성자가 예외를 던질 수 있는데(requireConfig) 상속 가능하면 finalizer attack에 노출된다
+// (SpotBugs CT) — 서브클래스가 finalize()를 오버라이드해 부분 초기화된 객체를 살려낼 수 있다.
+public final class TelegramAlertSender implements AlertSender, UsedAlertSender, DigestSender {
 
 	private static final Logger log = LoggerFactory.getLogger(TelegramAlertSender.class);
 
@@ -116,6 +118,7 @@ public class TelegramAlertSender implements AlertSender, UsedAlertSender, Digest
 					"SEC-08 텔레그램 거절 status={} — 재시도하지 않습니다(봇 차단·레이트리밋·잘못된 설정). .env·차단 확인 필요",
 					status);
 			case TRANSIENT -> log.warn("SEC-08 텔레그램 일시장애 status={} — 이 알림은 이번엔 못 갔습니다", status);
+			default -> throw new IllegalStateException("알 수 없는 Disposition: " + classify(status));
 		}
 		return classify(status) == Disposition.OK;
 	}

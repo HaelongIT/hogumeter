@@ -1,6 +1,5 @@
 package dev.hogumeter.core.application;
 
-import dev.hogumeter.core.adapter.persistence.ProductAxisEntity;
 import dev.hogumeter.core.adapter.persistence.ProductAxisRepository;
 import dev.hogumeter.core.adapter.persistence.ProductEntity;
 import dev.hogumeter.core.adapter.persistence.ProductRepository;

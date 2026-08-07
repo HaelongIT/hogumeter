@@ -75,6 +75,7 @@ public class AlertEvaluator {
 					satisfied.add(AlertIntensity.GOOD); // 기준 미확립 폴백
 				}
 			}
+			default -> throw new IllegalStateException("알 수 없는 표본 tier: " + view.tier());
 		}
 
 		if (paidPriceTriggerFires) {

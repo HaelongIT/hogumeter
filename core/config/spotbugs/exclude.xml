@@ -1,0 +1,15 @@
+<FindBugsFilter>
+    <!--
+      Q-90③(코드리뷰 20260806): EI_EXPOSE_REP/EI_EXPOSE_REP2("방어적 복사 없이 내부 표현 노출")는
+      이 저장소 전역 컨벤션과 충돌한다 — record를 DTO(커맨드·뷰·응답)로 쓰고 List/Map 필드를
+      방어적으로 복사하지 않는 것이 의도된 스타일이다(불변 취급, 외부에서 변형하지 않는다는 계약).
+      전체 소스에서 ~90건이 전부 이 패턴 하나였다 — web eslint·collector ruff와 같은 판단으로,
+      실결함 규칙(DCN·CT·Bx 등)이 이 노이즈에 묻히지 않게 제외한다.
+    -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>

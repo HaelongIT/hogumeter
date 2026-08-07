@@ -136,6 +136,7 @@ public class IngestDealsUseCase {
 				enqueueForReview(post, match);
 			}
 			case REJECTED -> tally.rejected++; // 무관 — 스킵
+			default -> throw new IllegalStateException("알 수 없는 MatchTier: " + match.tier());
 		}
 	}
 

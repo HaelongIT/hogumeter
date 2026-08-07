@@ -1,7 +1,9 @@
 plugins {
 	java
+	checkstyle
 	id("org.springframework.boot") version "4.1.0"
 	id("io.spring.dependency-management") version "1.1.7"
+	id("com.github.spotbugs") version "6.0.19"
 }
 
 group = "dev.hogumeter"
@@ -36,4 +38,22 @@ dependencies {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+// Q-90③(코드리뷰 20260806): web eslint·collector ruff와 같은 철학 — 실결함 규칙 위주로 점진 도입.
+checkstyle {
+	toolVersion = "10.18.2"
+	configFile = file("config/checkstyle/checkstyle.xml")
+	isIgnoreFailures = false
+	maxWarnings = 0
+}
+
+spotbugs {
+	effort.set(com.github.spotbugs.snom.Effort.DEFAULT)
+	reportLevel.set(com.github.spotbugs.snom.Confidence.MEDIUM)
+	excludeFilter.set(file("config/spotbugs/exclude.xml"))
+}
+
+tasks.named("spotbugsTest") {
+	enabled = false // 테스트 코드는 실결함 신호가 약해 우선 제외 — main만 본다
 }

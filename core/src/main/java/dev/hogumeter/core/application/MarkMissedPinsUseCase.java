@@ -6,7 +6,6 @@ import dev.hogumeter.core.adapter.persistence.WatchItemRepository;
 import dev.hogumeter.core.domain.deal.DealStatus;
 import dev.hogumeter.core.domain.watch.PinState;
 import java.time.Clock;
-import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

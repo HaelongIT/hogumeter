@@ -76,7 +76,11 @@ public class RuleBasedListingExtractor implements ListingExtractor {
 	}
 
 	private static Long max(Long current, long candidate) {
-		return (current == null || candidate > current) ? candidate : current;
+		// 삼항이면 (Long, long) 혼합이라 매번 unbox→rebox한다(SpotBugs Bx) — if/return이 더 명확하고 그 낭비가 없다.
+		if (current == null || candidate > current) {
+			return candidate;
+		}
+		return current;
 	}
 
 	private static long digits(String raw) {
