@@ -1414,3 +1414,38 @@
 - **관련**: `core/src/main/java/dev/hogumeter/core/adapter/persistence/DealEventSourceRepository.java`,
   `RawDealPostRepository.java`, `working-area/review-20260806/10-backend.md` BE-16·BE-18,
   `30-cross-cutting.md` X-02, `working-area/progress-log.md` 2026-08-07 (3).
+
+## 2026-08-07 (6) — 정적분석 도구를 켤 때 "이 저장소와 안 맞는 규칙"이 실결함 규칙을 매번 묻었다
+
+- **맥락**: Q-90(코드리뷰 20260806 X-06) — web eslint에 이어 collector(ruff+mypy)·core
+  (checkstyle+spotbugs) 도입. 세 언어 모두 기본 설정을 그대로 켜자 **압도적 다수가 노이즈**였다.
+  - **collector**: ruff `line-length=100`(대다수 린터의 관행값)으로 174건 중 **138건(79%)**이
+    `E501`(줄 길이) — 전부 한글 주석·docstring이었다(CLAUDE.md가 이미 실측해 둔 "한글 산문은 영문
+    표준의 2.5~3배 밀도"와 정확히 같은 원인). 160으로 올리자 36건(전부 실신호)까지 줄었다.
+  - **core**: spotbugs `EI_EXPOSE_REP`/`EI_EXPOSE_REP2`("방어적 복사 없이 내부 표현 노출")로 약
+    **95건 중 90건(95%)**이 걸렸다 — 이 저장소가 record를 커맨드/뷰/응답 DTO로 쓰며 `List`/`Map`
+    필드를 의도적으로 방어적 복사하지 않는 컨벤션 자체와 규칙이 충돌했다. exclude filter로
+    껐다(`core/config/spotbugs/exclude.xml`).
+  - **web**(선례, Q-90①): `@typescript-eslint/no-explicit-any`·`no-unused-vars`를 처음부터 error로
+    켰다면 기존 코드 전체가 한 번에 막혔을 것 — warning으로 시작해 점진 적용했다.
+- **패턴**: 세 언어 다 **같은 실패 모양**이었다 — 도구의 기본값(줄 길이·엄격도)이나 널리 쓰이는
+  기본 규칙 하나가 이 저장소의 특성(한글 밀도, record-as-DTO 컨벤션, 기존 코드량)과 충돌해 실결함
+  규칙을 노이즈에 파묻었다. 처음 그대로 켜서 "위반 174건" 같은 결과를 보면 실신호(11건: BE-02
+  테스트 2건, fetcher 유니온 좁히기, price.py 변수명 충돌, bs4 파서 3건, checkstyle 9건,
+  spotbugs 4건)가 노이즈 속에 묻혀 안 보인다 — **선별 없이 그대로 강제했다면 다음 세션이 "린트가
+  시끄러워서 안 본다"로 흘렀을 것**이다.
+- **교훈**: **정적분석 도구를 새로 켤 때는 먼저 전체 위반을 한 번 뽑아 "규칙별 건수"를 세고, 압도적
+  다수(추정 기준: 70%↑)를 차지하는 규칙이 있으면 그 규칙이 이 저장소 컨벤션과 충돌하는지부터
+  의심한다.** 충돌이면(스타일 관행 vs 이 저장소의 의도된 패턴) 완화·제외하고, 아니면(진짜 코드
+  품질 문제가 널려 있음) 그건 다른 종류의 발견이니 별도 보드 항목으로 다룬다. 세 언어 다 이 순서
+  (전체 실행 → 규칙별 통계 → 지배적 규칙 판별 → 완화/제외 → 남은 실신호 수정)를 따랐고, 결과적으로
+  4개 언어별 실결함 규칙(psycopg 예외 좁히기·mypy 유니온 좁히기·checkstyle switch-default·spotbugs
+  DCN/CT/Bx)이 전부 살아남으면서도 빌드가 실제로 켜질 수 있었다(ignoreFailures 없이 강제).
+- **기계화**: 부분적이다 — "규칙별 건수 통계"는 `--statistics`(ruff)·grep 집계(checkstyle/spotbugs
+  텍스트 출력)로 이미 기계적이지만, "70% 이상이면 의심"이라는 판단 자체는 사람이 저장소 컨벤션과
+  대조해야 한다(예: EI/EI2가 노이즈인지는 "이 코드베이스가 record를 방어적으로 안 쓰기로 했다"는
+  설계 지식이 있어야 안다 — 도구가 스스로 알 수 없다). 다음에 새 도구를 켤 때 이 순서를 다시
+  밟으라는 절차 교훈으로만 남긴다.
+- **관련**: `docs/91-open-questions.md` Q-90(collector/core 해소), `collector/pyproject.toml`,
+  `core/config/spotbugs/exclude.xml`, `core/config/checkstyle/checkstyle.xml`,
+  `working-area/review-20260806/30-cross-cutting.md` X-06.

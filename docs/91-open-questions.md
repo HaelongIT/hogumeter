@@ -879,7 +879,7 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **재개 트리거(무엇이 참이 되어야 하는가)**: 사람이 다음 중 하나를 정한다 — ① `reaction_score`를 실제로 노출(어느 화면에 어떤 형태로? 사이트 간 정규화 필요 — docs/90:232가 이미 미확정으로 적어 둠)하기로 결정하고 구현 착수, 또는 ② 확정본 요구를 이 범위에서 포기하기로 결정하고 `decision-log.md`+`docs/90` 델타로 기록. 되돌리기 쉬운 쪽(그대로 둠)으로 잠정 진행 중이라 사람이 정하기 전까지 코드 변경 없음.
 - **관련**: `working-area/review-20260806/30-cross-cutting.md` X-03·X-07, `docs/90-planning-final.md:58,187,232`.
 
-## [부분해소 2026-08-07] Q-90. 정적분석 도구 — web은 도입 완료, collector·core는 아직
+## [해소 2026-08-07] Q-90. 정적분석 도구 — core/collector/web 셋 다 도입 완료
 - **맥락**(코드리뷰 20260806 X-06): 저장소 셋 다(core/collector/web) 정적분석 도구가 하나도 없었다.
   리뷰가 이번에 찾은 발견 44건 중 도구가 잡았을 유형은 web의 훅 취소 가드 누락(FE-02·FE-03)
   2건뿐이었고, 그건 정확히 `react-hooks/exhaustive-deps`가 겨냥하는 패턴이다(`UsedComparisonPage.tsx`
@@ -892,10 +892,31 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   `react-hooks/exhaustive-deps` 위반(`reload` 누락)을 잡았다 — `useCallback`으로 감싸 정직하게
   고쳤다(억제 주석 삭제). 나머지 규칙은 `@typescript-eslint/no-explicit-any`·`no-unused-vars`만
   경고로 켜 점진 적용(엄격 모드로 시작하면 도입 비용이 커 오히려 안 켜질 위험).
-- **남은 것**: ② collector(ruff+mypy) · ③ core(checkstyle/spotbugs) — 이번 리뷰 범위에서 실측
-  적중 사례가 없어 우선순위가 낮다. `.claude/rules/collector-python.md`·`core-java.md`에 누적된
-  교훈(파서 침묵 실패·타입 함정 등)이 동적 타입/컴파일-런타임 갭 관련이라 장기적으로 유효할 수
-  있으나 지금 급하지 않다.
-- **재개 트리거**: 사람이 우선순위를 승인하거나, 다음 리뷰가 collector/core에서 도구가 잡았을
-  유형의 결함을 다시 찾으면 그때 순서를 앞당긴다.
-- **관련**: `working-area/review-20260806/30-cross-cutting.md` X-06, `web/eslint.config.js`.
+- **✅ ②(collector) 해소(2026-08-07)**: `ruff`(select E/F/W/B/UP/I) + `mypy`(점진 모드) dev 의존
+  추가. **line-length 100은 174건 중 138건이 순수 노이즈**였다(한글 주석·docstring 밀도가 영문
+  표준의 2.5~3배 — CLAUDE.md 실측과 같은 패턴) → 160으로 재조정해 36건(전부 실신호)까지 줄였다.
+  실결함 5건: BE-02 롤백 테스트 2건의 `pytest.raises(Exception)`을 `psycopg.Error`로 좁힘(무관한
+  결함도 통과시키던 blind assert) · `fetcher.py`의 `is _UNREACHABLE` 싱글턴 비교를 `isinstance`로
+  통일(유니온 타입이 실제로는 좁혀지지 않고 있었다) · `price.py`의 두 분기가 변수명(`main`)을
+  공유해 mypy가 타입을 하나로 합쳐 좁히던 것을 개명으로 분리 · ruliweb/ppomppu/fmkorea 파서 3건,
+  bs4 `Tag.get()`의 `str|AttributeValueList|None` 유니온을 단일값 속성(href·value)에 그대로 써서
+  방어 없이 크래시할 수 있던 지점을 `_attr_str`/`_attr_list` 헬퍼로 좁힘. ci.yml에 lint+typecheck
+  단계 배선. 314(fast)+361(전체, Testcontainers 포함) GREEN.
+- **✅ ③(core) 해소(2026-08-07)**: `checkstyle`(내장 플러그인, 실결함 규칙만 — UnusedImports·
+  MissingSwitchDefault·EqualsHashCode 등, 들여쓰기·네이밍 등 스타일은 안 건드림) +
+  `com.github.spotbugs` 6.0.19(effort=DEFAULT, reportLevel=MEDIUM) 추가. **EI/EI2("방어적 복사
+  없이 내부 표현 노출")는 전체 ~90건이 전부 이 저장소의 의도된 컨벤션(record를 DTO로 쓰고
+  List/Map을 방어적으로 복사하지 않음) 하나였다** — web line-length·collector line-length와 같은
+  "규칙 자체가 이 저장소와 안 맞아 노이즈"의 세 번째 사례. `config/spotbugs/exclude.xml`로 제외.
+  남은 실결함 4건: 스위치 3곳(`TelegramAlertSender.post`·`IngestDealsUseCase.ingestOne`·
+  `AlertEvaluator.evaluate`)이 열거형 값을 전부 다루면서도 `default`가 없어 미래에 값이 늘면
+  조용히 무시됐다 — 각각 `default -> throw new IllegalStateException(...)`로 방어 · unused import
+  7건(전부 진짜 죽은 import) · `ComputeDigestTransitionUseCase.parse`가 `NullPointerException`을
+  catch하고 있어(DCN, 무관한 NPE도 삼킬 수 있는 안티패턴) 명시적 null 체크로 교체 ·
+  `TelegramAlertSender`가 생성자에서 예외를 던질 수 있는데 상속 가능해 finalizer attack에
+  노출돼(CT) `final`로 봉인(서브클래스 0건 확인 후) · boxed/unboxed/reboxed 2건(`GetPrioritizedProductsUseCase`·
+  `RuleBasedListingExtractor.max`)을 `thenComparingInt`/if-return으로 정리. `ignoreFailures`
+  없음(기본 false) — 위반 시 빌드 실패, ci.yml에 checkstyle+spotbugs 단계 배선. core 전체 테스트
+  GREEN(`./gradlew build` 성공).
+- **관련**: `working-area/review-20260806/30-cross-cutting.md` X-06, `web/eslint.config.js`,
+  `collector/pyproject.toml`, `core/build.gradle.kts`, `core/config/{checkstyle,spotbugs}/`.
