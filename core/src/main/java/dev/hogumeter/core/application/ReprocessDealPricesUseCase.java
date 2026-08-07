@@ -106,11 +106,17 @@ public class ReprocessDealPricesUseCase {
 		return result.isPresent();
 	}
 
+	/**
+	 * BE-17(코드리뷰 20260806): 소스마다 {@code rawPosts.findById}를 개별 호출하던 N+1을 배치 조회로
+	 * 회피 — 형제 클래스 {@code ReprocessDealStatusUseCase.endIfAllSourcesEnded}가 이미 쓰는 패턴과
+	 * 통일한다. 순서는 {@link dev.hogumeter.core.domain.deal.PriceRefresh#from}이 min/max/comparator로
+	 * 집계할 뿐이라 무관하다.
+	 */
 	private List<PriceEvidence> evidenceFor(DealEventEntity deal) {
-		return sources.findByDealEventId(deal.getId()).stream()
+		List<Long> rawIds = sources.findByDealEventId(deal.getId()).stream()
 				.map(DealEventSourceEntity::getRawDealPostId)
-				.map(rawPosts::findById)
-				.flatMap(Optional::stream)
+				.toList();
+		return rawPosts.findAllById(rawIds).stream()
 				// 가격 없는 원문은 증거가 아니다(BM-02 AC-3). "0원"으로 읽으면 기준가가 무너진다.
 				.filter(post -> post.getHeadlinePrice() != null)
 				.map(ReprocessDealPricesUseCase::toEvidence)
