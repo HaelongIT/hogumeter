@@ -1389,3 +1389,28 @@
   조사를 반복하지 않게 하는 것으로 대체했다(정적 분석 한계를 문서로 메움).
 - **관련**: `core/src/main/java/dev/hogumeter/core/application/ResolveReviewItemUseCase.java`
   (BE-07 검토 문단), `working-area/review-20260806/10-backend.md` BE-07.
+
+## 2026-08-07 (5) — `./gradlew test`가 GREEN이어도 셸 게이트(`check-*.sh`)는 별개로 돌려야 한다
+
+- **맥락**: 코드리뷰 20260806 2차 수정 중 BE-16(`DealEventSourceRepository`에 정렬 파생 쿼리 추가)·
+  BE-18(`RawDealPostUpserter` 삭제)을 각각 `./gradlew test` GREEN만 확인하고 커밋했다. 몇 커밋
+  뒤 X-02(셸 게이트 정규식 수정) 작업 중 `check-repository-readers.sh`를 실행하다가 뒤늦게 발견했다:
+  ① BE-16이 새로 만든 파생 쿼리 메서드가 "외부 호출자 0"으로 잡힘(자기 인터페이스의 default 메서드
+  안에서만 호출 — 게이트는 리포지토리 자기 자신의 파일을 호출자 검색에서 명시적으로 제외한다) ②
+  BE-18에서 `RawDealPostUpserter`를 지우며 그 유일한 호출자였던
+  `RawDealPostRepository.findBySiteAndPostId`가 완전히 죽은 채 남음.
+- **원인**: `core/collector/web`의 단위·통합 테스트와 `scripts/check-*.sh` 셸 게이트는 **서로 다른
+  계약**을 본다 — 전자는 "동작이 옳은가", 후자는 "코드가 죽어 있지 않은가·배선이 끊기지 않았는가"
+  (호출자 수·테이블 배선·보드 인용 유효성 등). 한쪽이 GREEN이어도 다른 쪽이 깨질 수 있고, `./gradlew
+  test`만 반사적으로 도는 습관은 이 갭을 눈에 안 띄게 만든다.
+  - CLAUDE.md 축적 규칙 "모듈 테스트가 전부 GREEN이어도 스택은 안 뜬다"가 이미 이 원리(검증 계층이
+    다르면 서로를 대신하지 못한다)를 종단 스모크 대 단위 테스트로 말하고 있다 — 이번 건은 그 원리의
+    **셸 정적 게이트 버전**이다. 새 규칙이 아니라 같은 원리의 재발이라 CLAUDE.md엔 추가하지 않는다.
+- **교훈**: **core/collector/web 코드를 건드린 커밋마다, 그 변경이 닿을 수 있는 셸 게이트(특히
+  `check-repository-readers.sh`·`check-domain-consumers.sh`·`check-table-wiring.sh`·
+  `check-dead-columns.sh`처럼 "죽은 코드/배선"을 보는 것들)도 함께 돌린다.** 관련 게이트를 특정하기
+  귀찮으면 전부 도는 게 비용이 크지 않다(전부 합쳐 수 초). 이후 이 세션의 나머지 배치부터는 매 증분
+  끝에 관련 게이트를 실행해 검증했다.
+- **관련**: `core/src/main/java/dev/hogumeter/core/adapter/persistence/DealEventSourceRepository.java`,
+  `RawDealPostRepository.java`, `working-area/review-20260806/10-backend.md` BE-16·BE-18,
+  `30-cross-cutting.md` X-02, `working-area/progress-log.md` 2026-08-07 (3).

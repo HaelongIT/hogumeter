@@ -1,3 +1,48 @@
+## 2026-08-07 (3) — 2차 코드리뷰 수정 계속: Medium 22건 전부 완료 (High+Medium = 29/44 완료)
+
+사용자가 "Medium 22건 계속 진행"을 선택해 이어갔다. 커밋 16개, 전부 TDD(Red→Green, 코드 항목은
+고치기 전 실패 재현 확인) 또는 정직한 문서/보드 라우팅(정책 결정이 걸린 항목).
+
+**core**: BE-04(HttpTelegramApi 상태 미검사 — 로컬 루프백 서버로 재현) · BE-09(SendDigestUseCase
+트랜잭션 경계) · BE-11~14·20(REST 입력 검증, 4개 커밋 묶음) · BE-15(ApiExceptionHandler catch-all)
+· BE-16(DealEventMapper 정렬, `@Query`로 재작성해 X-02 게이트 회귀 회피) · BE-17(N+1 배치 조회) ·
+BE-18(RawDealPostUpserter 죽은 클래스 삭제).
+
+**collector**: BE-05(_BARE 정규식 백트래킹, 원자 그룹) · BE-08(priceless 드리프트 재알림 억제) ·
+BE-10(robots.txt 5xx 보수적 처리) · BE-19(parse_bunjang 결측 방어).
+
+**web**: FE-04(kst.ts 우회, UTC/KST 하루 밀림).
+
+**scripts/infra**: BE-06(`up-public.sh` — preflight prod 강제 래퍼 신설) · X-02(세 게이트의
+`open_question()` 정규식 통일, `check-dead-columns.sh`의 이미 옳은 패턴으로) · X-04(check-ci-coverage.sh
+1단 닫힘도 주석 제외) · X-05(price_history allowlist 죽은 트리거 문구 갱신) · X-06(web에 ESLint +
+eslint-plugin-react-hooks 도입 — 즉시 실측 성과: 도입하자마자 UsedComparisonPage의 억제 주석 뒤에
+숨은 진짜 exhaustive-deps 위반을 잡아 `useCallback`으로 정직하게 고침).
+
+**문서/보드로 처리**(코드 변경 없음, 정책 결정 필요): BE-07(재검토 결과 실결함 아님 — `@Transactional`
+경계가 이미 롤백으로 막는다는 걸 확인, 교훈으로 승격) · X-03(reaction_score 미노출 — `docs/91`
+Q-89 + `decisions-needed` D-10 등록, 구현 vs 포기는 사람 결정) · X-06의 collector·core 단계는
+Q-90으로 추적만.
+
+**⚠️ 자율 결정 — 이 배치 중 발견한 것**: BE-16(`DealEventSourceRepository`) 작업 직후 셸 게이트를
+안 돌려서(`./gradlew test`만 확인) 두 가지 회귀를 놓쳤다가, X-02 작업 중 `check-repository-readers.sh`
+를 실행하며 뒤늦게 발견 — ① 내가 새로 만든 파생 쿼리 메서드가 "외부 호출자 0"으로 잡힘(자기 인터페이스
+default 메서드에서만 호출), ② BE-18에서 `RawDealPostUpserter`를 지우며 그 유일한 호출자였던
+`RawDealPostRepository.findBySiteAndPostId`가 완전히 죽은 채 남음. 둘 다 즉시 고쳤다(BE-16은 이름을
+안 바꾸고 `@Query`+`ORDER BY`로 재작성, BE-18은 죽은 메서드 삭제) — X-02 커밋에 함께 묶임. **교훈**:
+`core/collector/web` 테스트가 GREEN이어도 셸 게이트(`check-*.sh`)는 별도로 돌려야 한다 — 다른 종류의
+계약을 본다. 이후 모든 배치에서 관련 셸 게이트를 함께 실행해 검증했다.
+
+**검증**: core `./gradlew test`(832+개) · collector `uv run pytest`(361개) · web `npx vitest
+run`(289개) + `npm run lint` + `npm run build` 전부 GREEN. 셸 계약 테스트 16개(`scripts/*.test.sh`
++ `.claude/hooks/guard.test.sh` + `.githooks/pre-commit.test.sh`) 전부 ALL PASS. 리뷰 문서
+(`00~30`) 상태 마커 전부 갱신.
+
+**아직 안 함**: Low/Info 15건(BE-21~30, X-07~10) — 사용자에게 계속 여부 확인 예정. 커밋들은 아직
+원격에 푸시되지 않음(사용자 지시 대기).
+
+TURN-END: ① 정지조건 — 사용자에게 보고할 시점(Medium 전건 완료, Low/Info 진행 여부·푸시 여부 확인 필요)
+
 ## 2026-08-07 (2) — 2차 코드리뷰 수정: High 7건 전부 TDD(Red→Green)로 완료
 
 사용자 지시("이거 보고 코드 고칠것들 고치자")로 `review-20260806`의 **High 7건**(BE-01·BE-02·BE-03·
