@@ -9,6 +9,7 @@ const iphone = {
   name: '아이폰 17',
   category: 'phone',
   demandAxisMode: 'GROUPED' as const,
+  archived: false,
   axes: [{ axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB', '512GB'] }],
   variants: [
     { variantId: 11, label: '256GB', priceAxisValues: { 용량: '256GB' } },
@@ -143,12 +144,55 @@ describe('RegistrationPage', () => {
   })
 })
 
+/** Q-91(docs/91) — 수동 보관 손잡이. 표시 전용(매칭·폴링은 안 바뀐다는 걸 화면도 강제하지 않는다). */
+describe('RegistrationPage — 제품 보관 (Q-91)', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'archiveProduct').mockResolvedValue(undefined)
+    vi.spyOn(api, 'unarchiveProduct').mockResolvedValue(undefined)
+  })
+
+  it('보관 버튼을 누르면 archiveProduct를 부르고 목록을 다시 불러온다', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(api, 'listProducts').mockResolvedValue([iphone])
+    render(<RegistrationPage />)
+    await screen.findByRole('list', { name: '등록된 제품' })
+
+    await user.click(screen.getByRole('button', { name: '보관' }))
+
+    expect(api.archiveProduct).toHaveBeenCalledWith(1)
+    await waitFor(() => expect(api.listProducts).toHaveBeenCalledTimes(2))
+  })
+
+  it('기본 목록은 보관된 제품을 요청하지 않는다 — includeArchived 체크 전엔 false', async () => {
+    const listProducts = vi.spyOn(api, 'listProducts').mockResolvedValue([])
+    render(<RegistrationPage />)
+
+    await waitFor(() => expect(listProducts).toHaveBeenCalledWith(false))
+  })
+
+  it('"보관된 제품도 보기"를 체크하면 includeArchived=true로 다시 불러오고, 보관된 항목은 복원 버튼을 보여준다', async () => {
+    const user = userEvent.setup()
+    const listProducts = vi.spyOn(api, 'listProducts').mockResolvedValue([])
+    render(<RegistrationPage />)
+    await screen.findByText('아직 등록된 제품이 없습니다. 위에서 첫 제품을 등록하면 여기 쌓입니다.')
+
+    listProducts.mockResolvedValue([{ ...iphone, archived: true }])
+    await user.click(screen.getByLabelText('보관된 제품도 보기'))
+
+    await waitFor(() => expect(listProducts).toHaveBeenCalledWith(true))
+    expect(await screen.findByText(/\[보관됨\]/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '복원' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '보관' })).not.toBeInTheDocument()
+  })
+})
+
 describe('RegistrationPage — 등록 다음에 무엇을 할지 알려준다', () => {
   const registered = {
     productId: 9,
     name: '아이폰 17',
     category: 'phone',
     demandAxisMode: 'GROUPED' as const,
+    archived: false,
     axes: [{ axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB', '512GB'] }],
     variants: [
       { variantId: 91, label: '256GB', priceAxisValues: { 용량: '256GB' } },

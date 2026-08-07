@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { AxisType, ProductSummary, VariantView } from '../api/types'
 import { InvalidForm, buildCommand, type AxisInput, type RegistrationForm } from './buildCommand'
@@ -22,16 +22,39 @@ export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variant
   const [registered, setRegistered] = useState<JustRegistered | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Q-91(docs/91) — 보관된 제품은 기본 숨김. 표시 손잡이일 뿐(매칭·폴링은 안 바뀜).
+  const [showArchived, setShowArchived] = useState(false)
 
-  const reload = () =>
-    api
-      .listProducts()
-      .then(setProducts)
-      .catch(() => setError('제품 목록을 불러오지 못했습니다. core가 떠 있는지 확인하세요.'))
+  const reload = useCallback(
+    () =>
+      api
+        .listProducts(showArchived)
+        .then(setProducts)
+        .catch(() => setError('제품 목록을 불러오지 못했습니다. core가 떠 있는지 확인하세요.')),
+    [showArchived],
+  )
 
   useEffect(() => {
     void reload()
-  }, [])
+  }, [reload])
+
+  async function archive(productId: number) {
+    try {
+      await api.archiveProduct(productId)
+      await reload()
+    } catch {
+      setError('보관에 실패했습니다.')
+    }
+  }
+
+  async function unarchive(productId: number) {
+    try {
+      await api.unarchiveProduct(productId)
+      await reload()
+    } catch {
+      setError('복원에 실패했습니다.')
+    }
+  }
 
   // 조합은 눈으로 확인해야 한다 — 축 2개면 variant가 곱셈으로 늘어난다(REG-02).
   const preview = useMemo(() => {
@@ -197,6 +220,14 @@ export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variant
       {error && <p role="alert">{error}</p>}
 
       <h2>등록된 제품</h2>
+      <label className="show-archived-toggle">
+        <input
+          type="checkbox"
+          checked={showArchived}
+          onChange={(event) => setShowArchived(event.target.checked)}
+        />
+        보관된 제품도 보기
+      </label>
       {products === null ? (
         <p className="loading">불러오는 중...</p>
       ) : products.length === 0 ? (
@@ -206,6 +237,8 @@ export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variant
           {products.map((product) => (
             <li key={product.productId} className="product-item">
               <strong>{product.name}</strong>
+              {/* Q-91: 보관은 표시 손잡이일 뿐 — 매칭·폴링은 안 바뀐다는 걸 문구로도 밝힌다. */}
+              {product.archived && <span className="product-archived-badge"> [보관됨]</span>}
               {/* 수요축은 variant를 나누지 않아 아래 목록에 흔적이 없다 — 여기서만 확인할 수 있다(Q-66 ②). */}
               {product.axes.length > 0 && (
                 <p className="product-axes">
@@ -222,6 +255,15 @@ export function RegistrationPage({ onOpenDecision }: { onOpenDecision?: (variant
                   </li>
                 ))}
               </ul>
+              {product.archived ? (
+                <button type="button" onClick={() => void unarchive(product.productId)}>
+                  복원
+                </button>
+              ) : (
+                <button type="button" onClick={() => void archive(product.productId)}>
+                  보관
+                </button>
+              )}
             </li>
           ))}
         </ul>

@@ -10,6 +10,7 @@ const iphone = {
   name: '아이폰 17',
   category: 'phone',
   demandAxisMode: 'GROUPED' as const,
+  archived: false,
   axes: [{ axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB', '512GB'] }],
   variants: [{ variantId: 11, label: '256GB', priceAxisValues: { 용량: '256GB' } }],
 }
@@ -262,6 +263,7 @@ describe('DecisionPage — 수요축 분리 제품', () => {
     name: '갤럭시 25',
     category: 'phone',
     demandAxisMode: 'SPLIT' as const,
+    archived: false,
     axes: [
       { axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB'] },
       { axisType: 'DEMAND' as const, name: '색상', allowedValues: ['블랙', '화이트'] },
@@ -312,6 +314,7 @@ describe('DecisionPage — variant 전환 시 이전 판단 요약 잔존(FE-01)
     name: '갤럭시 25',
     category: 'phone',
     demandAxisMode: 'SPLIT' as const,
+    archived: false,
     axes: [
       { axisType: 'PRICE' as const, name: '용량', allowedValues: ['256GB'] },
       { axisType: 'DEMAND' as const, name: '색상', allowedValues: ['블랙', '화이트'] },

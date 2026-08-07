@@ -22,6 +22,8 @@ export interface ProductSummary {
    */
   axes: Axis[]
   variants: VariantView[]
+  /** Q-91(docs/91) — 수동 보관 손잡이(표시 전용, 매칭·폴링은 안 바뀜). 기본 목록에선 항상 false. */
+  archived: boolean
 }
 
 /** GET /api/v1/products/{id}/variants */

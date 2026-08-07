@@ -82,7 +82,13 @@ function demandAxisParam(value?: string | null): string {
 }
 
 export const api = {
-  listProducts: () => request<ProductSummary[]>('/api/v1/products'),
+  /** @param includeArchived Q-91 — true면 보관된 제품도 함께 낸다(보관함 화면용). 기본은 숨김. */
+  listProducts: (includeArchived = false) =>
+    request<ProductSummary[]>(`/api/v1/products?includeArchived=${includeArchived}`),
+
+  archiveProduct: (productId: number) => command(`/api/v1/products/${productId}/archive`, { method: 'POST' }),
+
+  unarchiveProduct: (productId: number) => command(`/api/v1/products/${productId}/unarchive`, { method: 'POST' }),
 
   listVariants: (productId: number) => request<VariantView[]>(`/api/v1/products/${productId}/variants`),
 

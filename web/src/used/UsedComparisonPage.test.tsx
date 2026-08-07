@@ -9,6 +9,7 @@ const iphone = {
   name: '아이폰 17',
   category: '스마트폰',
   demandAxisMode: 'GROUPED' as const,
+  archived: false,
   axes: [],
   variants: [],
 }
@@ -46,6 +47,7 @@ describe('UsedComparisonPage', () => {
       name: '갤럭시 25',
       category: '스마트폰',
       demandAxisMode: 'GROUPED' as const,
+      archived: false,
       axes: [],
       variants: [],
     }
