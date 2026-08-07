@@ -59,7 +59,7 @@
 - **권고**: FE-02와 동일 — `let live = true` 또는 최신 `productId` 비교 가드.
 - **출처**: `raw/C3-web.md` C3-03 · 반박 검증 `rebuttal/C3-03.md` → **CONFIRMED**
 
-### FE-04 — 쿠팡 관측 시각이 `shared/kst.ts`를 우회해 UTC 날짜로 어긋난다 · Medium · decision · ❌미해결
+### FE-04 — 쿠팡 관측 시각이 `shared/kst.ts`를 우회해 UTC 날짜로 어긋난다 · Medium · decision · ✅수정완료(5bea686)
 - **위치**: `web/src/decision/present.ts:97`
 - **근거**:
   ```ts

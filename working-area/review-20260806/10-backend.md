@@ -53,14 +53,14 @@
 
 ## Medium
 
-### BE-04 — `HttpTelegramApi` 인바운드 경로가 HTTP 상태를 전혀 검사하지 않아 실패가 완전히 침묵한다 · Medium · telegram · ❌미해결
+### BE-04 — `HttpTelegramApi` 인바운드 경로가 HTTP 상태를 전혀 검사하지 않아 실패가 완전히 침묵한다 · Medium · telegram · ✅수정완료(89e14de)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/telegram/HttpTelegramApi.java:89-100`(`getUpdates`), `:102-109`(`answerCallbackQuery`), `:111-117`(`editMessageText`)
 - **근거**: `getUpdates`는 `response.statusCode()`를 읽지 않고 바로 `response.body()`를 파싱한다. 텔레그램이 401/403으로 응답해도 본문에 `result` 키가 없어 `parseCallbacks`가 조용히 빈 목록을 반환하고, `TelegramInboundPoller.poll()`의 `catch (RuntimeException)`은 예외 자체가 없어 트리거되지 않는다. `answerCallbackQuery`·`editMessageText`도 `post()`가 돌려주는 상태 코드를 버린다(인터페이스 시그니처 자체가 `void`). `HttpTelegramApi`는 테스트 전무, `TelegramInboundPollerTest`는 `FakeInbound`로 이 파싱 단계 자체를 우회한다.
 - **영향**: 봇 토큰 무효화·차단 시 텔레그램 인바운드(승격/기각/무시 버튼) 채널이 흔적 없이 멈추지만, 핵심 파이프라인(수집→기준가→알림 발송)에는 영향이 없고 `ReviewQueueController`의 REST 엔드포인트(`/promote`, `/reject`)가 대안 경로를 제공한다(단 🔕무시는 REST 대안이 없어 텔레그램 단독 의존). 가장 흔한 트리거인 토큰 무효화는 아웃바운드(`sendMessage`)도 함께 401을 받아 `TelegramAlertSender.classify()`가 REJECTED로 `log.error`를 남기므로 완전한 침묵은 아니다. `TelegramInboundPoller`는 `PipelineHealthMonitor`에도 배선돼 있지 않아 인바운드 단독 장애(예: 재배포 시 신·구 컨테이너 중복 기동으로 인한 409 Conflict)는 흔적 없이 지나갈 수 있다.
 - **권고**: `getUpdates`도 상태 코드를 먼저 확인해 2xx가 아니면 예외를 던지도록 한다(토큰은 메시지에 담지 않음, SEC-01 유지). `answerCallbackQuery`·`editMessageText`도 실패 시 `log.warn`으로 상태 코드를 남긴다. `TelegramInboundPoller` 쪽에서 연속 실패를 세어 `AdminNotifier`로 알린다.
 - **출처**: `raw/B2-adapter.md` B2-01 · 반박 검증 `rebuttal/B2-01.md` → **DOWNGRADED(High→Medium)**
 
-### BE-05 — `_BARE` 가격 폴백이 정규식 백트래킹으로 자기 가드를 우회해 5자리+ 스펙·모델번호를 거짓 가격으로 읽는다 · Medium · collector-price · ❌미해결
+### BE-05 — `_BARE` 가격 폴백이 정규식 백트래킹으로 자기 가드를 우회해 5자리+ 스펙·모델번호를 거짓 가격으로 읽는다 · Medium · collector-price · ✅수정완료(f60e2c8)
 - **위치**: `collector/src/collector/pipeline/price.py:55`
 - **근거**:
   ```python
@@ -71,7 +71,7 @@
 - **권고**: `\d{4,}`를 원자 그룹으로 감싸 백트래킹을 차단한다: `(?>(\d{4,}))`. 고친 뒤 `14600K`·`20000mAh`·`32768MB` 및 기존 golden 69건 전수(가격·태그 변화 0건)를 회귀 테스트로 추가.
 - **출처**: `raw/C1-parser.md` C1-01 · 반박 검증 `rebuttal/C1-01.md` → **DOWNGRADED(High→Medium)**
 
-### BE-06 — `--profile public` 공개 노출이 `preflight.sh prod` 통과에 강제로 묶여 있지 않다 · Medium · security · ❌미해결
+### BE-06 — `--profile public` 공개 노출이 `preflight.sh prod` 통과에 강제로 묶여 있지 않다 · Medium · security · ✅수정완료(9a60531)
 - **위치**: `docker-compose.yml:99-120`(`caddy`, `profiles: ["public"]`, 루프백 제한 없는 유일한 진입점), `web/docker-entrypoint.d/40-basic-auth.sh:30-33`, `scripts/preflight.sh:70-77`, `scripts/smoke.sh`(`--profile public`/`caddy` 매치 0건)
 - **근거**: `40-basic-auth.sh`는 `WEB_BASIC_AUTH_HTPASSWD`가 비어도 경고 로그만 남기고 web 컨테이너를 정상 기동시킨다(`auth_basic off;`). `caddy`는 web의 인증 상태를 전혀 모른 채 `reverse_proxy web:80`만 한다. `preflight.sh prod`는 이 조합을 FAIL시킬 수 있지만, 이 검사를 통과시키는 것과 실제 `docker compose --profile public up -d` 실행 사이에는 아무 기계적 연결이 없다 — 별도 명령 두 개를 사람이 순서대로 기억해야 한다. `--profile public` 경로는 CI 스모크가 한 번도 실행하지 않는다.
 - **영향**: 운영자가 `WEB_BASIC_AUTH_HTPASSWD`를 빠뜨린 채(또는 `preflight.sh prod`를 건너뛰고) `--profile public`을 올리면 인터넷 전체에서 제품 등록·구매기록·기준가 데이터를 인증 없이 읽고 쓸 수 있는 상태가 그대로 기동된다. 발견은 `docker compose logs web`을 사람이 직접 grep해야만 가능하다(`pre-deploy-checklist.md`가 절차는 문서화했으나 강제는 아니다).
@@ -86,7 +86,7 @@
 - **2차 검토(2026-08-07)**: `promote()`·`reject()` 전체가 **하나의 `@Transactional`**이라(자기호출 오버로드는 프록시를 안 타지만 최초 진입은 `ReviewQueueController`/`ReviewCallbackRouter`가 주입받은 빈을 통해 호출해 트랜잭션이 정상 시작된다), 두 요청이 거의 동시에 `readPending`을 통과해도 두 번째 요청의 `resolve()` UPDATE는 PostgreSQL 행 잠금으로 첫 번째 트랜잭션 커밋까지 블록되고, 커밋 후 재평가한 `WHERE status='PENDING'`이 거짓이 돼 0행 갱신 → `ReviewItemNotFoundException` → **Spring이 그 트랜잭션 전체(부수효과 포함)를 롤백**한다. "이미 실행된 부수효과는 되돌려지지 않는다"는 원 발견의 핵심 주장이 트랜잭션 경계를 놓친 것으로 보인다 — 최종 커밋되는 부수효과는 항상 승자 트랜잭션 하나뿐이다. 신뢰할 수 있는 실 동시성 재현(계측 지점 부재)까지는 못 갔지만, 결론과 근거를 클래스 javadoc에 남겨 다음 리뷰가 같은 조사를 반복하지 않게 했다. 코드 변경 없음.
 - **출처**: `raw/A2-usecase.md` A2-02
 
-### BE-08 — 가격-드리프트(priceless) 알림이 재알림 억제 없이 매 사이클 반복된다 · Medium · collector-drift · ❌미해결
+### BE-08 — 가격-드리프트(priceless) 알림이 재알림 억제 없이 매 사이클 반복된다 · Medium · collector-drift · ✅수정완료(cecccf1)
 - **위치**: `collector/src/collector/scheduler/drift.py:80-81`(`_healthy`), `:56-77`(`observe`)
 - **근거**:
   ```python
@@ -98,14 +98,14 @@
 - **권고**: `_healthy`를 진단 원인별로 분리한다 — `_diagnose`의 활성 사유(zero-yield vs priceless)에 맞춰 "그 사유를 실제로 해소했는가"만 무장 해제 조건으로 쓴다.
 - **출처**: `raw/C2-collector-runtime.md` C2-02
 
-### BE-09 — `SendDigestUseCase` 발송 후 저장물 갱신 루프에 트랜잭션 경계가 없다 · Medium · digest · ❌미해결
+### BE-09 — `SendDigestUseCase` 발송 후 저장물 갱신 루프에 트랜잭션 경계가 없다 · Medium · digest · ✅수정완료(cf9f290)
 - **위치**: `core/src/main/java/dev/hogumeter/core/application/SendDigestUseCase.java:79-97`
 - **근거**: `send()`는 `@Transactional`이 아니고, `RecordDigestSentUseCase.recordSent`도 `@Transactional`이 없어 `digestStates.save(...)`가 variant마다 개별 커밋된다. `IncrementDigestQueueAppearancesUseCase.increment`는 별개 트랜잭션이다 — N개 variant 갱신 + 큐 증분이 하나의 원자적 단위가 아니다.
 - **영향**: 텔레그램 발송이 전부 성공한 뒤 `recordSent` 루프 도중 DB 예외가 나면 일부 variant의 `digest_state`는 이미 커밋되고 나머지는 반영되지 않는다. 다음 주 다이제스트가 variant마다 다른 기준 시점으로 전환을 판정해 "실제로는 보낸 다이제스트인데 일부만 베이스라인 갱신"되는 불일치가 생긴다 — 클래스 javadoc이 명시한 "전 분할 성공 시에만 저장물을 갱신한다(REL-03 원자성)" 계약이 텔레그램 발송 성공 여부만 게이트할 뿐 DB 쓰기 자체의 원자성은 보장하지 않는다. 기존 테스트는 `allSucceeded=false` 시 전혀 갱신 안 됨만 검증하고 "발송 성공 후 DB 쓰기 도중 일부만 실패"는 다루지 않는다.
 - **권고**: `send()`(또는 `recordSent`+`incrementQueueAppearances` 호출부)를 `@Transactional`로 감싸 하나의 트랜잭션으로 묶는다.
 - **출처**: `raw/A2-usecase.md` A2-03
 
-### BE-10 — robots.txt가 5xx(서버 오류)를 404(부재)와 동일하게 "전체 허용"으로 처리한다 · Medium · collector-robots · ❌미해결
+### BE-10 — robots.txt가 5xx(서버 오류)를 404(부재)와 동일하게 "전체 허용"으로 처리한다 · Medium · collector-robots · ✅수정완료(7db1134)
 - **위치**: `collector/src/collector/scheduler/fetcher.py:157-167`(`RobotsGate._load`)
 - **근거**:
   ```python
@@ -117,7 +117,7 @@
 - **권고**: `_load`에서 5xx는 4xx와 분리해 "판정 불가 → 이번 사이클은 보수적으로 disallow(또는 건너뛰기)"로 처리한다.
 - **출처**: `raw/C2-collector-runtime.md` C2-03
 
-### BE-11 — `paidPrice=0`인 구매의 관찰 문맥 계산이 0으로 나누기로 예외를 던진다 · Medium · purchase · ❌미해결
+### BE-11 — `paidPrice=0`인 구매의 관찰 문맥 계산이 0으로 나누기로 예외를 던진다 · Medium · purchase · ✅수정완료(4cbc041)
 - **위치**: `core/src/main/java/dev/hogumeter/core/domain/purchase/ObservationContextCalculator.java:24-27`
 - **근거**:
   ```java
@@ -130,7 +130,7 @@
 - **권고**: `Purchase` 컴팩트 생성자(또는 `RecordPurchaseCommand`)에 `paidPrice >= 0` 검증을 추가하거나, `ObservationContextCalculator.compute`에서 `paidPrice == 0`일 때 퍼센트를 `null`로 두고 원화 상회분만 낸다.
 - **출처**: `raw/A1-domain.md` A1-02
 
-### BE-12 — `POST /purchases`에 `purchasedAt` 없이 보내면 NPE로 500 · Medium · rest · ❌미해결
+### BE-12 — `POST /purchases`에 `purchasedAt` 없이 보내면 NPE로 500 · Medium · rest · ✅수정완료(4cbc041)
 - **위치**: `core/src/main/java/dev/hogumeter/core/application/RecordPurchaseUseCase.java:84-88`
 - **근거**:
   ```java
@@ -143,7 +143,7 @@
 - **권고**: `RecordPurchaseCommand` 컴팩트 생성자 또는 `RecordPurchaseUseCase.record()` 진입부에서 `purchasedAt == null` 시 400 거절 예외를 던진다(BE-20의 `paidPrice` 검증과 함께 정리 가능).
 - **출처**: `raw/B1-web.md` B1-02
 
-### BE-13 — `PUT .../comparison-axes`에 `names` 없이 보내면 NPE로 500 · Medium · rest · ❌미해결
+### BE-13 — `PUT .../comparison-axes`에 `names` 없이 보내면 NPE로 500 · Medium · rest · ✅수정완료(4cbc041)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/web/ComparisonAxisController.java:27`, `core/src/main/java/dev/hogumeter/core/application/DefineComparisonAxesUseCase.java:25-27`
 - **근거**:
   ```java
@@ -157,21 +157,21 @@
 - **권고**: `AxesRequest` 컴팩트 생성자나 `ensure()` 시작부에서 `names == null`이면 빈 목록으로 정규화하거나 400 거절 — `UsedSearchController.orEmpty(...)`가 이미 같은 문제를 해결한 패턴.
 - **출처**: `raw/B1-web.md` B1-01
 
-### BE-14 — `productId` 미검증인 두 컨트롤러가 FK 위반을 그대로 500으로 흘린다 · Medium · rest · ❌미해결
+### BE-14 — `productId` 미검증인 두 컨트롤러가 FK 위반을 그대로 500으로 흘린다 · Medium · rest · ✅수정완료(4cbc041)
 - **위치**: `core/src/main/java/dev/hogumeter/core/application/RegisterUsedSearchUseCase.java:29-35`, `core/src/main/java/dev/hogumeter/core/application/DefineComparisonAxesUseCase.java:24-31`
 - **근거**: `used_search.product_id`·`comparison_axis.product_id` 둘 다 `references product (id)` FK가 걸려 있는데, 두 유스케이스 모두 다른 유스케이스(`RegisterProductUseCase.validate` 등)가 쓰는 `products.existsById(...)` 선검사가 없다.
 - **영향**: `POST /api/v1/products/999999/used-searches`(존재하지 않는 productId) → INSERT가 FK 위반 → `DataIntegrityViolationException` → 미매핑 → 500. `PUT .../comparison-axes`도 동일. 기존 테스트(`UsedSearchControllerTest` 등)는 GET에서만 미존재 productId를 시험하고 POST/PUT은 시험하지 않는다.
 - **권고**: 두 유스케이스 시작부에 `if (!products.existsById(productId)) throw new ProductNotFoundException(productId);` 추가(기존 예외 재사용, 404/`PRI_PRODUCT_NOT_FOUND`).
 - **출처**: `raw/B1-web.md` B1-03
 
-### BE-15 — `ApiExceptionHandler`에 미매핑 예외 catch-all이 없어 `{code,message}` 계약이 케이스별로 깨진다 · Medium · rest · ❌미해결
+### BE-15 — `ApiExceptionHandler`에 미매핑 예외 catch-all이 없어 `{code,message}` 계약이 케이스별로 깨진다 · Medium · rest · ✅수정완료(faa599a)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/web/ApiExceptionHandler.java`(166줄 전체 — `@ExceptionHandler(Exception.class)`류 없음)
 - **근거**: 이 프로젝트의 유일한 `@RestControllerAdvice`다. BE-12~14가 보여주듯 `NullPointerException`·`DataIntegrityViolationException`은 여기 안 걸리고 Spring Boot 기본 오류 응답으로 떨어진다(내부정보 유출은 없음 — 기본값이 안전하기 때문).
 - **영향**: 사용자는 "입력 누락"과 "DB 자체 오류"를 구분 못 하고 둘 다 `HTTP_500`으로만 본다 — 절대 원칙 6(과대약속 금지)과 반대로 "무엇이 왜 실패했는지"를 숨기는 쪽으로 작동한다. 이 핸들러에 대한 전용 테스트가 없어 미매핑 경로 전체가 검증되지 않는다.
 - **권고**: `@ExceptionHandler({DataIntegrityViolationException.class, NullPointerException.class})` 같은 최종 방어선을 추가하되, 근본 수정은 BE-12~14처럼 발생 지점에서 400으로 막는 것이 우선이다(이 항목은 회귀 안전망).
 - **출처**: `raw/B1-web.md` B1-04
 
-### BE-16 — `DealEventMapper`의 "대표 원문" 선택이 정렬 없이 이뤄져 재현 불가능 · Medium · persistence · ❌미해결
+### BE-16 — `DealEventMapper`의 "대표 원문" 선택이 정렬 없이 이뤄져 재현 불가능 · Medium · persistence · ✅수정완료(7a02623)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/persistence/DealEventMapper.java:33-38`, `core/src/main/java/dev/hogumeter/core/adapter/persistence/DealEventSourceRepository.java:6-9`
 - **근거**:
   ```java
@@ -187,7 +187,7 @@
 - **권고**: `DealEventSourceRepository.findByDealEventId`에 `OrderBy`를 추가한다(`findByDealEventIdOrderByIdAsc`가 간단). `DealMergePolicy`의 의도에 맞추려면 원문의 firstSeen으로 정렬. 정렬 기준을 정한 뒤 `site()`/`sourceUrl()`을 단언하는 회귀 테스트를 추가.
 - **출처**: `raw/A3-persistence.md` A3-01
 
-### BE-17 — `ReprocessDealPricesUseCase`가 원문 조회에서 N+1을 낸다(형제 클래스는 배치 조회를 쓴다) · Medium · pipeline-reprocess · ❌미해결
+### BE-17 — `ReprocessDealPricesUseCase`가 원문 조회에서 N+1을 낸다(형제 클래스는 배치 조회를 쓴다) · Medium · pipeline-reprocess · ✅수정완료(671b5c0)
 - **위치**: `core/src/main/java/dev/hogumeter/core/application/ReprocessDealPricesUseCase.java:108-117`
 - **근거**:
   ```java
@@ -203,14 +203,14 @@
 - **권고**: `evidenceFor`를 `sources.findByDealEventId` 결과에서 `rawDealPostId` 목록을 모은 뒤 `rawPosts.findAllById(ids)` 한 번으로 바꾼다.
 - **출처**: `raw/A2-usecase.md` A2-04
 
-### BE-18 — `RawDealPostUpserter`가 Spring 빈으로 배선되지 않아 프로덕션에서 전혀 실행되지 않는다 · Medium · persistence · ❌미해결
+### BE-18 — `RawDealPostUpserter`가 Spring 빈으로 배선되지 않아 프로덕션에서 전혀 실행되지 않는다 · Medium · persistence · ✅수정완료(671b5c0)
 - **위치**: `core/src/main/java/dev/hogumeter/core/adapter/persistence/RawDealPostUpserter.java:1-25`, `core/src/main/java/dev/hogumeter/core/adapter/persistence/RawDealPostRepository.java:10`
 - **근거**: 클래스 선언에 `@Component`/`@Service` 등이 없다. `grep -rn "\.upsert(" core/src/main/java/` 결과 호출부 0건 — `new`하는 곳은 테스트뿐이다. 그런데 클래스 javadoc은 "멱등 수집 업서트(BM-01 AC-1/AC-2)... UNIQUE 제약이 최종 방어선"이라고 적어 실제 수집 경로의 멱등성 보증 지점인 것처럼 서술한다. 실제 프로덕션 쓰기 경로는 collector(Python) `raw_deal_sink.py`가 담당하며 이 Java 클래스와는 완전히 별개 구현이다.
 - **영향**: 나중에 누군가 재수집 갱신 로직을 고치려 이 클래스가 "그 로직이다"라고 오인하고 수정한 뒤 `RawDealPostUpsertTest`가 GREEN인 것을 보고 배포해도, 프로덕션 동작에는 아무 영향이 없다 — 테스트는 초록인데 운영 동작은 그대로인 상태가 발견되지 않은 채 남는다. `check-table-wiring.sh`·`check-repository-readers.sh` 둘 다 "빈으로 실제 도달 가능한가"는 범위 밖이라 이 상태를 못 잡는다.
 - **권고**: 이 클래스가 정말 필요 없다면(collector가 유일한 쓰기 경로라는 현재 계약이 맞다면) 삭제하고 `RawDealPostUpsertTest`도 제거한다. 문서화용 참조 구현으로 남기려는 의도였다면 javadoc 첫 줄에 "프로덕션 미배선"이라고 명시한다.
 - **출처**: `raw/A3-persistence.md` A3-02
 
-### BE-19 — `parse_bunjang`이 일부 필드만 `.get()`으로 방어하고 `pid`·`update_time`은 직접 인덱싱해, 항목 하나의 결측이 그 사이클 전체를 삼킨다 · Medium · collector-parser · ❌미해결
+### BE-19 — `parse_bunjang`이 일부 필드만 `.get()`으로 방어하고 `pid`·`update_time`은 직접 인덱싱해, 항목 하나의 결측이 그 사이클 전체를 삼킨다 · Medium · collector-parser · ✅수정완료(09af01b)
 - **위치**: `collector/src/collector/parsers/bunjang.py:23,34`
 - **근거**:
   ```python
@@ -225,7 +225,7 @@
 
 ## Low
 
-### BE-20 — `RecordPurchaseCommand.paidPrice`가 음수/0이어도 그대로 저장된다 · Low · purchase · ❌미해결
+### BE-20 — `RecordPurchaseCommand.paidPrice`가 음수/0이어도 그대로 저장된다 · Low · purchase · ✅수정완료(4cbc041, BE-11과 함께 처리)
 - **위치**: `core/src/main/java/dev/hogumeter/core/application/RecordPurchaseUseCase.java:57-73`, `core/src/main/java/dev/hogumeter/core/application/RecordPurchaseCommand.java:16`
 - **근거**: `record()` 전체에 `cmd.paidPrice()` 범위 검증이 없다. `InvalidCoupangObservationException`·`AlertPolicySettings`가 이미 같은 종류의 검증을 이 코드베이스의 관례로 삼고 있는데 구매 기록만 빠졌다.
 - **영향**: `paidPrice: -1`(또는 `0`)이 정상 201로 저장되면, 성적표·`snapPaidGap` 등이 말이 안 되는 값을 영구적으로 담는다(구매 기록은 수정 API가 없어 되돌리기 어렵다).

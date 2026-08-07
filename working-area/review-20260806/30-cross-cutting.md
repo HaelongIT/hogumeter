@@ -10,28 +10,28 @@
 - **권고**: 64행의 검사 대상을 `grep -vE '^[[:space:]]*#' "$target" | grep -qE 'ALLOW_REAL_ROBOTS|COLLECTOR_ALLOW_NETWORK'`로 바꿔 `external_urls()`와 같은 규율을 적용한다. 계약 테스트에 "curl 호출은 있지만 opt-in 변수는 주석에만 있다 → 차단" 케이스를 추가한다.
 - **출처**: `raw/D2-infra.md` D2-02 · 반박 검증 `rebuttal/D2-02.md` → **CONFIRMED**
 
-### X-02 — `check-table-wiring`·`check-repository-readers`·`check-domain-consumers`의 `open_question()`이 `[해소]`된 Q를 열린 것으로 오판한다 · Medium · ❌미해결
+### X-02 — `check-table-wiring`·`check-repository-readers`·`check-domain-consumers`의 `open_question()`이 `[해소]`된 Q를 열린 것으로 오판한다 · Medium · ✅수정완료(84239a2)
 - **위치**: `scripts/check-table-wiring.sh:83-86`, `scripts/check-repository-readers.sh:47-50`, `scripts/check-domain-consumers.sh:54-57`(세 파일이 사실상 동일 함수를 복제) / `scripts/check-dead-columns.sh:92-99`(이미 정확히 고쳐진 자매 함수 `q_open()`) / `scripts/table-wiring-allowlist.txt`·`docs/91-open-questions.md`
 - **근거**: 세 게이트는 `grep -qE "^## .*${1}\." "$board"`로 "Q-ID가 `## ` 헤더에 있는가"만 보고 `[열림]`/`[해소 …]` 상태 표식을 구분하지 못한다. `docs/91-open-questions.md`에서 해소된 항목도 헤더가 지워지지 않고 `## [해소 2026-07-25] Q-10. …` 형태로 `## ` 헤더에 그대로 남는다는 것이 원 발견·반박 검증 둘 다에서 확인됐다. `check-dead-columns.sh`의 `q_open()`은 `grep -qE "^#+ \[(열림|부분해소)[^]]*\] ${qid}\b"`로 상태 표식을 정확히 요구해 같은 문제를 이미 정확히 고쳤다. 반박 검증(`rebuttal/D2-01.md`)이 임시 스크립트로 버그판(`open_question`)과 수정판(`q_open`)을 실제 `docs/91-open-questions.md`에 대고 실행해 재현했다: 버그판은 이미 해소된 Q-10·Q-22를 "열려 있다"고 오판하고, 수정판은 정확히 판정한다.
 - **영향**: **원 발견은 High로 판정했으나, 반박 검증에서 세 allowlist(`table-wiring-allowlist.txt`·`repository-readers-allowlist.txt`·`domain-consumers-allowlist.txt`) 전수를 대조한 결과 현재 살아 있는 위반 인스턴스는 0건이다** — 유일한 활성 항목(`price_history`/Q-3)는 여전히 `[열림]`인 정당한 면제이고, 나머지 두 allowlist는 활성 행 자체가 없다. `check-board-references.sh`도 "닫힌 Q를 여전히 인용" 케이스는 판정 대상이 아니라고 스스로 명시해 이 결함을 잡지 못한다는 것도 확인됐다. 정규식 결함과 테스트 공백은 실재하지만 **지금 이 순간 거짓 초록을 내는 살아있는 인스턴스가 없어** Medium으로 하향한다 — Q-3(또는 향후 추가되는 다른 Q)가 `[해소]`로 바뀐 뒤에도 allowlist 항목이 안 지워지고 게이트가 계속 GREEN을 내는 순간부터는 즉시 High로 재상향해야 한다.
 - **권고**: 세 게이트의 `open_question()`을 `check-dead-columns.sh`의 `q_open()`과 동일한 정규식으로 교체하고, 각 `.test.sh`에 "보드에 있지만 `[해소 …]`인 Q를 인용한 면제는 차단돼야 한다" 케이스를 추가한다. 네 게이트가 같은 함수를 복제해 쓰는 만큼 `scripts/lib/board.sh` 공용 함수로 뽑는 것도 검토(저장소가 이미 `lib/aws-cli.sh`로 같은 패턴을 씀).
 - **출처**: `raw/D2-infra.md` D2-01 · 반박 검증 `rebuttal/D2-01.md` → **DOWNGRADED (High→Medium)**
 
-### X-03 — `raw_deal_post.reaction_score`가 collector→DB로는 살아있지만 core 소비처 0, 게이트는 "배선됨"으로 오판 · Medium · ❌미해결
+### X-03 — `raw_deal_post.reaction_score`가 collector→DB로는 살아있지만 core 소비처 0, 게이트는 "배선됨"으로 오판 · Medium · 📄문서화(`docs/91` Q-89 + `decisions-needed.md` D-10 등록)
 - **위치**: `collector/src/collector/db/raw_deal_sink.py:29-44`(INSERT·UPSERT에 `reaction_score` 포함) / `core/src/main/java/dev/hogumeter/core/adapter/persistence/RawDealPost.java`(엔티티에 `reactionScore` 필드 없음) / `core/src/main/resources/db/migration/V1__init.sql:52`(`reaction_score numeric`) / `docs/90-planning-final.md:58,187`(확정본이 `reaction_score` 노출을 명시) / `scripts/check-dead-columns.sh`·`scripts/dead-columns-allowlist.txt`
 - **근거**: collector는 매 폴링마다 `reaction_score`(추천수)를 업서트한다. core 쪽엔 이 컬럼을 읽는 코드가 전혀 없다(`grep -rni reaction core/src web/src`의 유일한 매치는 javadoc 주석뿐). 그런데 확정본은 "반응 신호(reaction_score: 댓글수·추천수 등)를 가능한 만큼 수집"을 요구한다. `bash scripts/check-dead-columns.sh`를 직접 실행하면 `DEAD COLUMNS OK`가 나온다 — 게이트의 `reached()`가 "컬럼 이름이 core/collector/web 셋 중 아무 프로덕션 코드에 나타나는가"만 보기 때문에, collector가 이름을 **쓰는** 코드만으로 "배선됨"으로 오판한다.
 - **영향**: collector가 추천수를 계속 수집해 DB엔 정직하게 쌓이지만, core가 한 번도 읽지 않아 사용자는 화면에서 "반응 신호"를 영원히 볼 수 없다. 데이터 유실은 아니지만 확정본이 요구한 기능이 조용히 빠진 채로 아무 게이트도, `docs/91`의 어떤 열린 항목도 이 사실을 추적하지 않는다.
 - **권고**: (a) `docs/91`에 새 Q를 열어 "reaction_score 미노출"을 명시하거나, (b) 확정본 요구를 포기하기로 결정했다면 `decision-log.md`에 기록하고 `docs/90`에 델타를 남긴다. 게이트 쪽 근본 수정(collector 쓰기 vs core 읽기를 분리해 "절반만 배선"을 구별)은 이번 리뷰 범위를 넘는 리팩터라 별도 작업으로 제안만 남긴다.
 - **출처**: `raw/D1-contract.md` D1-01 (반박 검증 미실시, 원 심각도 유지)
 
-### X-04 — `check-ci-coverage.sh`의 1단 닫힘 판정이 호출자 스크립트 안의 주석을 실행으로 센다 · Medium · ❌미해결
+### X-04 — `check-ci-coverage.sh`의 1단 닫힘 판정이 호출자 스크립트 안의 주석을 실행으로 센다 · Medium · ✅수정완료(84851be)
 - **위치**: `scripts/check-ci-coverage.sh:40`(ci.yml 자체는 주석 제거) / `scripts/check-ci-coverage.sh:54-61`(`called_by_ci_script()`, 호출자 스크립트는 주석 미제거) / `scripts/check-ci-coverage.test.sh:41-44`(ci.yml 주석화 케이스만 있고 1단 닫힘 방향은 없음)
 - **근거**: `ci.yml`에서 직접 호출을 찾을 때는 `grep -vE '^[[:space:]]*#'`로 주석을 걸러낸 뒤 검색해 "주석은 실행이 아니다"를 지키지만, `backup-drill.sh`처럼 ci.yml이 직접 안 부르고 중간 스크립트가 대신 부르는 1단 닫힘을 판정하는 `called_by_ci_script()`는 `$caller` 파일 전체를 원본 그대로 `grep -qF`한다 — 같은 파일 안에서 두 판정 함수가 "주석은 실행이 아니다"를 다르게 적용하는 비대칭이 있다.
 - **영향**: 누군가 `backup-drill.sh`의 `bash scripts/restore-drill.sh "$dump"` 실행 줄을 지우거나 주석 처리하면서 설명 주석(예: "restore-drill.sh는 여기서 불렸었다")만 남기면, `called_by_ci_script("restore-drill.sh")`는 여전히 참을 반환해 이 게이트가 "다른 드릴을 통해 커버됨"으로 통과시킨다. 게이트의 존재 이유("드릴이 CI에서 실제로 실행되는가")가 정확히 무력화되는 경로인데, 직접 호출 경로의 동일한 취약점만 테스트돼 있고 1단 닫힘 경로는 시험도 방어도 없다.
 - **권고**: `called_by_ci_script()`의 검사 대상도 `grep -vE '^[[:space:]]*#' "$root/$caller" | grep -qF "$name"`로 바꾼다. 계약 테스트에 "backup-drill.sh 안에서 restore-drill.sh 호출 줄만 주석 처리 → 차단" 케이스를 추가한다.
 - **출처**: `raw/D2-infra.md` D2-03 (반박 검증 미실시, 원 심각도 유지)
 
-### X-05 — `price_history` allowlist 2곳이 Q-3의 죽은 재개 트리거("키 발급 시")를 그대로 인용 · Medium · ❌미해결
+### X-05 — `price_history` allowlist 2곳이 Q-3의 죽은 재개 트리거("키 발급 시")를 그대로 인용 · Medium · ✅수정완료(44f9231)
 - **위치**: `scripts/dead-columns-allowlist.txt`(`price_history.fetched_at Q-3 …키 발급 시 배선`) / `scripts/table-wiring-allowlist.txt`(`price_history Q-3 네이버 쇼핑 API 키 미발급 - 현재가 수집기가 없다`) / `docs/91-open-questions.md`(Q-3 본문) / `working-area/decisions-needed.md`(D-7)
 - **근거**: 두 allowlist 항목은 재개 조건을 "키 발급"으로 서술하지만, Q-3 본문(2026-07-24 갱신)은 네이버 개발자센터가 2026-07-31부로 전면 종료를 공지해 "'재개 트리거 = 키 발급'이라는 이전 잠정값이 통째로 무의미해졌다"고 명시하고, "재개 트리거를 새로 정하지 않는다 — 사람이 정할 사안으로 승격"한다고 못박는다. D-7도 "'키 발급 대기'는 더 이상 유효한 계획이 아니다"라고 재확인한다. `check-dead-columns.sh`·`check-table-wiring.sh`는 인용된 Q-ID가 `[열림]`인지만 보고 트리거 문구는 읽지 않으므로(직접 실행 확인: 둘 다 GREEN) 이 드리프트를 구조적으로 못 잡는다 — 세 게이트 모두 명시된 한계 그대로다.
 - **영향**: 다음 세션이 allowlist만 보고 "네이버 키만 받으면 이 면제가 풀리겠다"고 오판해 실제로 키를 발급받아도, 서비스가 이미 종료돼(오늘 기준 종료일 2026-07-31 지남) 아무것도 안 풀리는 헛수고를 하게 된다. 진짜 다음 행동(대체 데이터 소스 결정, D-7)이 allowlist에서는 안 보인다.
