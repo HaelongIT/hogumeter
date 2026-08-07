@@ -99,6 +99,21 @@ def test_priceless_listing_is_skipped_and_counted_not_silently_dropped(connectio
     assert result.skipped_no_price == 1
 
 
+def test_write_failure_rolls_back_so_the_shared_connection_stays_usable(connection):
+    """BE-02(코드리뷰 20260806) — 쓰기 실패 후 rollback이 없으면 커넥션이 aborted 상태로 남아,
+    같은 커넥션을 공유하는 다음 쓰기(게시판·폴링상태·별칭)까지 연쇄 실패한다."""
+    search_id = _seed_search(connection)
+    sink = UsedListingSink(connection)
+    nonexistent_search_id = search_id + 999_999  # FK 위반
+
+    with pytest.raises(Exception):
+        sink.insert_batch(nonexistent_search_id, [_deal("b1", "아이폰 17 256", 900_000)], T1)
+
+    # aborted 상태로 남았다면 정상 배치도 InFailedSqlTransaction으로 실패한다.
+    result = sink.insert_batch(search_id, [_deal("b2", "아이폰 17 256", 900_000)], T1)
+    assert result.inserted == 1
+
+
 def test_empty_batch_touches_nothing(connection):
     search_id = _seed_search(connection)
 

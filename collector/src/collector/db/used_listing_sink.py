@@ -44,16 +44,24 @@ class UsedListingSink:
         self, used_search_id: int, deals: list[ParsedDeal], observed_at: datetime
     ) -> UsedListingBatchResult:
         """한 스냅샷을 통째로 넣는다. 배치 안의 중복 `post_id`는 접지 않는다 — core의 diff가
-        스냅샷 단위로 dedupe하며(마지막 관측 승리) 여기서 접으면 그 사실이 사라진다."""
+        스냅샷 단위로 dedupe하며(마지막 관측 승리) 여기서 접으면 그 사실이 사라진다.
+
+        BE-02(코드리뷰 20260806): 예외 시 `rollback()` 없이 던지면 게시판·폴링상태·별칭 싱크와
+        공유하는 커넥션이 aborted 상태로 영구히 남는다 — `raw_deal_sink.py`와 같은 이유로 rollback.
+        """
         priced = [deal for deal in deals if deal.headline_price is not None]
         skipped = len(deals) - len(priced)
         if priced:
-            with self.connection.cursor() as cursor:
-                cursor.executemany(
-                    _INSERT,
-                    [_params(used_search_id, deal, observed_at) for deal in priced],
-                )
-            self.connection.commit()
+            try:
+                with self.connection.cursor() as cursor:
+                    cursor.executemany(
+                        _INSERT,
+                        [_params(used_search_id, deal, observed_at) for deal in priced],
+                    )
+                self.connection.commit()
+            except Exception:
+                self.connection.rollback()
+                raise
         return UsedListingBatchResult(inserted=len(priced), skipped_no_price=skipped)
 
 

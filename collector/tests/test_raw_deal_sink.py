@@ -165,6 +165,23 @@ def test_status_outside_the_contract_is_rejected_by_the_database(connection):
         sink.upsert_all([_record(status="ENDED")])
 
 
+def test_write_failure_rolls_back_so_the_shared_connection_stays_usable(connection):
+    """BE-02(코드리뷰 20260806) — rollback 없이 예외를 던지면 커넥션이 aborted 상태로 영구히
+    남아, 같은 커넥션을 공유하는 게시판·중고·폴링상태·별칭 싱크의 다음 쓰기까지 전부 연쇄
+    실패한다. 실패 직후 같은 커넥션으로 정상 쓰기가 다시 가능해야 한다."""
+    import psycopg
+
+    sink = RawDealSink(connection)
+
+    with pytest.raises(psycopg.errors.CheckViolation):
+        sink.upsert_all([_record(status="ENDED")])
+
+    written = sink.upsert_all([_record()])  # aborted 상태로 남았다면 여기서 InFailedSqlTransaction
+
+    assert written == 1
+    assert _count(connection) == 1
+
+
 def test_applied_conditions_reach_the_database(connection):
     """조건 태그가 jsonb까지 살아 있어야 "누구나 이 가격"인지 구분할 수 있다(BM-02 AC-2)."""
     fixture = Path(__file__).parent / "fixtures/ppomppu/list_normal.html"

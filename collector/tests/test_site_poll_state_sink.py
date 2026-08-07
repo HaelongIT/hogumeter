@@ -87,6 +87,23 @@ def test_persisting_nothing_writes_nothing(connection):
     assert sink.persist_states({}, T0) == 0
 
 
+def test_write_failure_rolls_back_so_the_shared_connection_stays_usable(connection):
+    """BE-02(코드리뷰 20260806) — 쓰기 실패 후 rollback이 없으면 커넥션이 aborted 상태로 남아,
+    같은 커넥션을 공유하는 다음 쓰기(게시판·중고·별칭)까지 연쇄 실패한다."""
+    sink = SitePollStateSink(connection)
+    invalid = SiteState(site="ppomppu", last_successful_poll=T0, consecutive_failures=None,
+                         next_attempt_at=None, stopped=False)  # consecutive_failures not null 위반
+
+    with pytest.raises(Exception):
+        sink.persist_states({"ppomppu": invalid}, T0)
+
+    valid = SiteState(site="ppomppu", last_successful_poll=T0, consecutive_failures=0,
+                       next_attempt_at=None, stopped=False)
+    written = sink.persist_states({"ppomppu": valid}, T0)  # aborted 상태면 여기서 InFailedSqlTransaction
+
+    assert written == 1
+
+
 def test_manual_db_edit_resumes_a_stopped_site_after_restart(connection):
     """decisions-needed D-3의 실제 계약: 재개는 운영자가 DB 행을 직접 고치고 재시작하는 것.
 

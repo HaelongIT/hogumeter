@@ -80,10 +80,16 @@ class SitePollStateSink:
             }
             for s in sorted(states.values(), key=lambda s: s.site)
         ]
-        with self.connection.cursor() as cursor:
-            cursor.executemany(_PERSIST, rows)
-            written = cursor.rowcount
-        self.connection.commit()
+        # BE-02(코드리뷰 20260806): 예외 시 rollback 없이 던지면 게시판·중고·별칭 싱크와 공유하는
+        # 커넥션이 aborted 상태로 영구히 남는다 — `raw_deal_sink.py`와 같은 이유로 rollback.
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.executemany(_PERSIST, rows)
+                written = cursor.rowcount
+            self.connection.commit()
+        except Exception:
+            self.connection.rollback()
+            raise
         return max(written, 0)
 
     def load_states(self) -> dict[str, SiteState]:

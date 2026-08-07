@@ -52,12 +52,23 @@ class RawDealSink:
     connection: psycopg.Connection
 
     def upsert_all(self, records: list[RawDealRecord]) -> int:
-        """배치 업서트. 배치 안의 (site, post_id) 중복은 `to_raw_records`가 이미 접었다."""
+        """배치 업서트. 배치 안의 (site, post_id) 중복은 `to_raw_records`가 이미 접었다.
+
+        BE-02(코드리뷰 20260806): 예외 시 `rollback()` 없이 그대로 던지면 이 커넥션은
+        PostgreSQL의 "current transaction is aborted" 상태로 영구히 남는다 — 게시판·중고·
+        폴링상태·별칭 싱크가 **같은 커넥션 하나를 공유**하므로, 한 번의 쓰기 실패가 그 뒤 모든
+        쓰기·조회를 연쇄 실패시킨다. 실패를 흡수하지 않는다(재-raise) — 호출자(`__main__`)가
+        여전히 실패를 세고 판단해야 한다.
+        """
         if not records:
             return 0
-        with self.connection.cursor() as cursor:
-            cursor.executemany(_UPSERT, [_params(record) for record in records])
-        self.connection.commit()
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.executemany(_UPSERT, [_params(record) for record in records])
+            self.connection.commit()
+        except Exception:
+            self.connection.rollback()
+            raise
         return len(records)
 
 
