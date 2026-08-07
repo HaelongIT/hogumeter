@@ -4,6 +4,7 @@ import dev.hogumeter.core.application.GetProductsUseCase;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 제품·variant 조회 REST(REG, 읽기 전용). 봉투 없는 리소스 직접 반환(Q-2 확정). */
@@ -16,9 +17,11 @@ public class ProductQueryController {
 		this.getProducts = getProducts;
 	}
 
+	/** Q-91 — 기본은 보관된 제품을 숨긴다. 보관함 화면은 {@code ?includeArchived=true}. */
 	@GetMapping("/api/v1/products")
-	public List<GetProductsUseCase.ProductSummary> products() {
-		return getProducts.listProducts();
+	public List<GetProductsUseCase.ProductSummary> products(
+			@RequestParam(defaultValue = "false") boolean includeArchived) {
+		return getProducts.listProducts(includeArchived);
 	}
 
 	/** 없는 제품이면 빈 목록 — 404가 아니다. "이 제품의 variant 집합"은 공집합일 수 있다. */

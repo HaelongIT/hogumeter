@@ -39,6 +39,8 @@ class GetPrioritizedProductsUseCaseTest {
 	VariantRepository variants;
 	@Autowired
 	PurchaseRepository purchases;
+	@Autowired
+	SetProductArchivedUseCase setArchived;
 
 	private long product(String name) {
 		return products.save(new ProductEntity(name, "test", DemandAxisMode.GROUPED)).getId();
@@ -86,6 +88,15 @@ class GetPrioritizedProductsUseCaseTest {
 
 		assertThat(ordered).extracting(PrioritizedProduct::productId)
 				.containsExactly(waitingUnranked, nonWaiting);
+	}
+
+	/** Q-91: 보관된 제품은 우선순위 목록에도 안 낸다(대기 여부와 무관하게 숨김). */
+	@Test
+	void archivedProductsAreExcludedFromTheList() {
+		long id = product("정렬E-보관됨");
+		setArchived.archive(id);
+
+		assertThat(mine(id)).isEmpty();
 	}
 
 	@Test

@@ -1,6 +1,7 @@
 package dev.hogumeter.core.adapter.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -66,6 +67,19 @@ class ProductQueryControllerTest {
 		mockMvc.perform(get("/api/v1/products/{id}/variants", 999_999L))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.length()").value(0));
+	}
+
+	/** Q-91: 보관된 제품은 기본 목록에서 숨는다 — {@code includeArchived=true}로만 다시 보인다. */
+	@Test
+	void archivedProductsAreHiddenUnlessIncludeArchivedIsRequested() throws Exception {
+		long productId = registerProduct.register(iphone17());
+		mockMvc.perform(post("/api/v1/products/{id}/archive", productId));
+
+		mockMvc.perform(get("/api/v1/products"))
+				.andExpect(jsonPath("$[?(@.productId == %d)]".formatted(productId)).isEmpty());
+
+		mockMvc.perform(get("/api/v1/products").param("includeArchived", "true"))
+				.andExpect(jsonPath("$[?(@.productId == %d)].archived".formatted(productId)).value(true));
 	}
 
 	private RegisterProductCommand iphone17() {

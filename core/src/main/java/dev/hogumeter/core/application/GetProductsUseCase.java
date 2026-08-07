@@ -33,9 +33,13 @@ public class GetProductsUseCase {
 		this.axes = axes;
 	}
 
+	/**
+	 * @param includeArchived false(기본)면 보관된 제품(Q-91)을 숨긴다. true면 보관함 화면처럼 전부 낸다.
+	 */
 	@Transactional(readOnly = true)
-	public List<ProductSummary> listProducts() {
-		return products.findAll().stream().map(this::summarize).toList();
+	public List<ProductSummary> listProducts(boolean includeArchived) {
+		List<ProductEntity> source = includeArchived ? products.findAll() : products.findByArchivedFalse();
+		return source.stream().map(this::summarize).toList();
 	}
 
 	@Transactional(readOnly = true)
@@ -45,7 +49,8 @@ public class GetProductsUseCase {
 
 	private ProductSummary summarize(ProductEntity product) {
 		return new ProductSummary(product.getId(), product.getName(), product.getCategory(),
-				product.getDemandAxisMode(), axesOf(product.getId()), variantsOf(product.getId()));
+				product.getDemandAxisMode(), axesOf(product.getId()), variantsOf(product.getId()),
+				product.isArchived());
 	}
 
 	/**
@@ -64,7 +69,7 @@ public class GetProductsUseCase {
 	}
 
 	public record ProductSummary(long productId, String name, String category, DemandAxisMode demandAxisMode,
-			List<AxisView> axes, List<VariantView> variants) {
+			List<AxisView> axes, List<VariantView> variants, boolean archived) {
 	}
 
 	/** 축 하나의 정의. 가격축은 variant를 나누고, 수요축은 나누지 않는다(확정본 §38). */

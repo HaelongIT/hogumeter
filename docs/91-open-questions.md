@@ -879,6 +879,34 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
 - **재개 트리거(무엇이 참이 되어야 하는가)**: 사람이 다음 중 하나를 정한다 — ① `reaction_score`를 실제로 노출(어느 화면에 어떤 형태로? 사이트 간 정규화 필요 — docs/90:232가 이미 미확정으로 적어 둠)하기로 결정하고 구현 착수, 또는 ② 확정본 요구를 이 범위에서 포기하기로 결정하고 `decision-log.md`+`docs/90` 델타로 기록. 되돌리기 쉬운 쪽(그대로 둠)으로 잠정 진행 중이라 사람이 정하기 전까지 코드 변경 없음.
 - **관련**: `working-area/review-20260806/30-cross-cutting.md` X-03·X-07, `docs/90-planning-final.md:58,187,232`.
 
+## [해소 2026-08-07] Q-91. "제품 노화·만료 처리"(확정본 §10) — 지금까지 구현·추적 둘 다 안 돼 있었다
+- **맥락**: `docs/90-planning-final.md` §10("상세설계 이월 — 숫자·규칙 박기")이 v1 범위로 명시한 10개
+  항목 중 하나. 이 절의 자체 정의(문서 서두): "숫자·규칙만 박으면 되는 항목은 '상세설계 이월'로,
+  의도적으로 미룬 기능은 'Phase 2 이월'로 분리 기재한다" — 즉 §11(Phase 2)과 달리 **v1 범위 확정**
+  항목이다. 사용자가 "추가로 더 할 만한 거 없는지" 요청해 §10 나머지 9개 항목과 대조하며 발견 —
+  9개 전부(±α·병합윈도우·이상치컷·콜드스타트폭·웹인증) 구현됐거나 최소 Q로 추적 중(reaction_score=
+  Q-89, 백필=Q-87)인데 **이 항목만 구현도 없고 어느 보드에도 오른 적이 없었다.**
+- **🔴 실측**: `product` 테이블(V1~V23)에 `status`·`archived`·`deleted_at` 등 생애주기 컬럼이 한 번도
+  추가된 적 없다. `ProductQueryController`엔 `GET`만 있고 삭제·보관 계열 엔드포인트가 없다. web에도
+  삭제·보관 버튼이 없다. **한 번 등록한 제품은 영원히 지울 수도 숨길 수도 없었다.**
+- **✅ 해소(2026-08-07)**: 자동 시간 기반 "만료"는 임계값이 정책 결정이라 이번엔 열지 않고, **수동
+  보관(표시 손잡이만)** 으로 시작 — 되돌리기 쉬운 쪽(가역, 매칭·폴링 로직 불변)을 그대로 선택.
+  `product.archived boolean default false`(V24/R24) + `SetProductArchivedUseCase`(archive/unarchive,
+  `SetProductManuallyCompletedUseCase`와 같은 패턴) + `ProductController`(`POST
+  /api/v1/products/{id}/{un}archive`, `ArchivePurchaseUseCase`의 액션-엔드포인트 관례를 따름) +
+  `GetProductsUseCase.listProducts(includeArchived)`(기본 제외, `?includeArchived=true`로 보관함
+  조회) + `GetPrioritizedProductsUseCase`도 보관 제품 제외. **의도적으로 안 건드린 것**:
+  `CatalogProjection.catalog()`(매칭 카탈로그)는 그대로 `findAll()` — 보관은 화면에서 숨길 뿐, 매칭·
+  수집·알림 파이프라인은 archived 여부를 전혀 참조하지 않는다(절대 원칙 4, 표시 손잡이만).
+- **검증**: `SetProductArchivedUseCaseTest`(보관·복원·미상 제품 거부 3케이스), `ProductControllerTest`
+  (HTTP 왕복 3케이스), `ProductQueryControllerTest`(기본 숨김 + includeArchived 노출 1케이스),
+  `GetPrioritizedProductsUseCaseTest`(보관 제품 우선순위 목록 제외 1케이스). `./gradlew build`(checkstyle+
+  spotbugs+전체 테스트) GREEN.
+- **재개 트리거**(자동 만료, 무엇이 참이 되어야 하는가): 사람이 "N개월 무변동이면 자동 보관" 같은
+  구체 임계값을 정할 때(`decisions-needed`행) — 그전까지 수동 보관만.
+- **관련**: `docs/90-planning-final.md` §10, `ProductEntity.java`·`SetProductArchivedUseCase.java`·
+  `ProductController.java`, `V24__product_archived.sql`.
+
 ## [해소 2026-08-07] Q-90. 정적분석 도구 — core/collector/web 셋 다 도입 완료
 - **맥락**(코드리뷰 20260806 X-06): 저장소 셋 다(core/collector/web) 정적분석 도구가 하나도 없었다.
   리뷰가 이번에 찾은 발견 44건 중 도구가 잡았을 유형은 web의 훅 취소 가드 누락(FE-02·FE-03)

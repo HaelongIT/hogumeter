@@ -33,7 +33,7 @@ public class GetPrioritizedProductsUseCase {
 
 	@Transactional(readOnly = true)
 	public List<PrioritizedProduct> list() {
-		return products.findAll().stream()
+		return products.findByArchivedFalse().stream() // Q-91: 보관된 제품은 우선순위 목록에도 안 낸다
 				.map(this::toItem)
 				.sorted(Comparator.comparing((PrioritizedProduct p) -> !p.waiting())
 						// thenComparingInt: (int, Integer) 혼합 삼항은 매번 unbox→rebox한다(SpotBugs Bx) —

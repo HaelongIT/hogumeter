@@ -41,6 +41,10 @@ public class ProductEntity {
 	@Column(name = "manually_completed", nullable = false)
 	private boolean manuallyCompleted;
 
+	/** Q-91(docs/91) — 수동 보관(취소 가능). 표시 손잡이만: 목록에서 숨기되 매칭·폴링은 안 건드린다. */
+	@Column(nullable = false)
+	private boolean archived;
+
 	protected ProductEntity() {
 	}
 
@@ -91,5 +95,13 @@ public class ProductEntity {
 
 	public void setManuallyCompleted(boolean manuallyCompleted) {
 		this.manuallyCompleted = manuallyCompleted;
+	}
+
+	public boolean isArchived() {
+		return archived;
+	}
+
+	public void setArchived(boolean archived) {
+		this.archived = archived;
 	}
 }
