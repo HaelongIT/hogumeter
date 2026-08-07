@@ -1,3 +1,30 @@
+## 2026-08-07 (9) — "무중단으로 가" 전환 → 유사 리팩터 후보 검토(table-wiring) → 의도된 설계로 판명, 전 모듈 최종 회귀 검증
+
+**맥락**: (8) 리팩터 완료 보고 후 사용자가 "무중단으로 가"(푸시 질문엔 답 안 하고 계속 진행 선택).
+CLAUDE.md 무중단 원칙대로 다음 증분을 스스로 골랐다 — `check-dead-columns.sh`와 같은 패턴의 한계가
+`check-table-wiring.sh` 헤더 주석에도 있길래("이름이 나타난다는 필요조건이지 충분조건 아니다") 같은
+생산자/소비자 분리를 적용할 수 있는지 검토.
+
+**결론(적용 안 함)**: `check-table-wiring.sh`의 한계는 주석에 **"(의도)"**라고 명시돼 있다 — 테이블
+단위는 "아무도 안 건드림"만 거칠게 잡고, 그 안의 반쪽 배선(생산만/소비만)은 **정확히 방금 고친
+`check-dead-columns.sh`가 컬럼 단위로 이미 커버**한다(두 게이트가 계층을 나눠 맡는 구조 — 표 단위
+성긴 그물 + 컬럼 단위 촘촘한 그물). reaction_score 같은 실측 피해 사례가 없는 채로 "같은 패턴처럼
+보인다"는 이유만으로 손대면 이미 옳은 설계에 불필요한 복잡도만 얹는 것 — 진행하지 않았다.
+
+**대신 한 일 — 전 모듈 최종 회귀 검증**: 이번 세션 전체(Q-90 정적분석·Q-91 제품보관·D-8~10·Q-92
+게이트 리팩터)가 서로 간섭 없이 맞물리는지 한 번에 확인.
+- core: `./gradlew build`(checkstyle+spotbugs+832+ 테스트) GREEN
+- collector: `uv run pytest`(361개, Testcontainers 포함) GREEN
+- web: `npm run lint`+`npm test`(292개)+`npm run build` 전부 GREEN
+- 셸 계약 테스트 7종(`guard.test.sh`·`pre-commit.test.sh`·`check-env-example`·`check-gitignore`·
+  `check-ci-coverage`·`check-source-vocabulary`·`check-network-optin`) 전부 GREEN
+
+**결론**: 이번 세션에서 "무중단으로 가"라며 스스로 고를 수 있는 추가 증분이 더는 없다 — 유일하게
+검토한 후보(table-wiring)는 조사 결과 손대지 않는 게 맞는 판단이었다. 없는 일감을 지어내지 않는다.
+
+TURN-END: ② 일감 소진 — table-wiring 후보를 조사·기각한 것이 이번 배치의 ⓑ 재확인이었고, 나머지
+ⓐⓒⓓ는 (7)에서 이미 재확인됨(변경 없음). 전 모듈 GREEN 확인 후 사용자에게 보고, 다음 지시 대기.
+
 ## 2026-08-07 (8) — 리팩터 요청 → check-dead-columns.sh reached() 생산자/소비자 분리 + 부수 발견 Q-92
 
 **맥락**: 사용자가 "새 기능 말고 기존 코드 리팩터 후보 없나, 문서 훑어봐"를 요청. `docs/99-lessons.md`·
