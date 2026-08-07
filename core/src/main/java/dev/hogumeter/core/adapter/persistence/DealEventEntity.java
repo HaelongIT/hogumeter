@@ -191,9 +191,16 @@ public class DealEventEntity {
 	 * 뿐이라 <b>같은 상태를 그대로</b> 되돌려 넣는다("종료 판정은 별도 유스케이스의 몫"). 그래서 같은
 	 * 상태로의 호출은 허용하되, 실제로 값이 바뀌는 호출은 {@link DealStatus#canTransitionTo}를 지켜야 한다 —
 	 * 우연히 옳았던 호출자들이 미래에 잘못된 전이를 만들면 조용히 상태가 깨지는 대신 즉시 던진다.
+	 *
+	 * <p><b>코드리뷰 BE-01(2026-08-06)</b>: {@code demandAxisValue}는 도메인
+	 * {@code DealMergePolicy.merge()}가 계산한 값을 그대로 받는다 — 서로 다른 축 값이 섞이면 도메인이
+	 * null(미상)로 되돌리므로, 이 메서드도 그 null을 그대로 반영해야 SPLIT 표본이 오염되지 않는다.
+	 * {@code ReprocessDealPricesUseCase}는 가격만 갱신하므로 기존 값({@code deal.getDemandAxisValue()})을
+	 * 그대로 되돌려 넣는다.
 	 */
 	public void applyMerge(long priceFirst, long priceMin, long priceMax, long priceLast,
-			boolean crossVerified, DealStatus status, Instant firstSeen, Instant lastSeen) {
+			boolean crossVerified, DealStatus status, Instant firstSeen, Instant lastSeen,
+			String demandAxisValue) {
 		if (status != this.status && !this.status.canTransitionTo(status)) {
 			throw new IllegalDealTransitionException(this.status, status);
 		}
@@ -205,6 +212,7 @@ public class DealEventEntity {
 		this.status = status;
 		this.firstSeen = firstSeen;
 		this.lastSeen = lastSeen;
+		this.demandAxisValue = demandAxisValue;
 	}
 
 	public void setOutlierFlag(OutlierFlag outlierFlag) {

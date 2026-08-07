@@ -46,7 +46,7 @@ class DealEventEntityTest {
 		DealEventEntity deal = deal(DealStatus.ACTIVE);
 
 		deal.applyMerge(900_000, 900_000, 900_000, 900_000, true, DealStatus.VERIFIED, deal.getFirstSeen(),
-				Instant.now());
+				Instant.now(), null);
 
 		assertThat(deal.getStatus()).isEqualTo(DealStatus.VERIFIED);
 	}
@@ -60,7 +60,7 @@ class DealEventEntityTest {
 		DealEventEntity deal = deal(DealStatus.VERIFIED);
 
 		deal.applyMerge(900_000, 850_000, 900_000, 850_000, true, DealStatus.VERIFIED, deal.getFirstSeen(),
-				Instant.now());
+				Instant.now(), null);
 
 		assertThat(deal.getStatus()).isEqualTo(DealStatus.VERIFIED);
 	}
@@ -70,7 +70,22 @@ class DealEventEntityTest {
 		DealEventEntity deal = deal(DealStatus.ENDED);
 
 		assertThatThrownBy(() -> deal.applyMerge(900_000, 900_000, 900_000, 900_000, false, DealStatus.VERIFIED,
-				deal.getFirstSeen(), Instant.now()))
+				deal.getFirstSeen(), Instant.now(), null))
 				.isInstanceOf(IllegalDealTransitionException.class);
+	}
+
+	/**
+	 * BE-01(코드리뷰 20260806) — 병합이 계산한 수요축 값을 실제로 반영한다. 이전에는 이 메서드에
+	 * {@code demandAxisValue} 파라미터 자체가 없어 값을 넘기려야 넘길 수 없었다.
+	 */
+	@Test
+	void applyMergeUpdatesTheDemandAxisValue() {
+		Instant t = Instant.parse("2026-07-01T00:00:00Z");
+		DealEventEntity deal = new DealEventEntity(1L, false, List.of(), 900_000, 900_000, 900_000, 900_000,
+				Origin.LIVE, false, OutlierFlag.NONE, false, DealStatus.ACTIVE, t, t, "블랙");
+
+		deal.applyMerge(900_000, 900_000, 900_000, 900_000, true, DealStatus.ACTIVE, t, Instant.now(), null);
+
+		assertThat(deal.getDemandAxisValue()).as("서로 다른 축 값이 섞이면 미상으로 되돌아간다").isNull();
 	}
 }

@@ -101,7 +101,8 @@ public class ReprocessDealPricesUseCase {
 				current.crossVerified(), // 소스 수에서 파생된 값. 여기서 바뀌지 않는다
 				deal.getStatus(), // 종료 판정은 ReprocessDealStatusUseCase의 몫
 				deal.getFirstSeen(),
-				refresh.lastSeen()));
+				refresh.lastSeen(),
+				deal.getDemandAxisValue())); // 가격 재처리는 수요축 값을 건드리지 않는다 — 그대로 되돌려 넣는다
 		return result.isPresent();
 	}
 

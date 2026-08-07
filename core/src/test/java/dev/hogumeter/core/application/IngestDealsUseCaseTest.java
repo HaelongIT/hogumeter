@@ -340,6 +340,24 @@ class IngestDealsUseCaseTest {
 	}
 
 	/**
+	 * BE-01(코드리뷰 20260806) — 병합이 도메인이 계산한 수요축 값을 엔티티에 반영하지 않으면, 블랙 글에
+	 * 화이트 글이 병합돼도 엔티티는 "블랙"으로 영구히 남아 SPLIT 표본이 오염된다. 도메인은 서로 다른 값이
+	 * 섞이면 <b>미상(null)</b>으로 되돌리므로(정직성), 병합 결과 엔티티도 null이어야 한다.
+	 */
+	@Test
+	void mergingDealsWithDifferentDemandAxisValuesResetsTheDealToUnknown() {
+		aliases.save(new AliasEntity(colorProductId, "갤럭시25"));
+		savePost("ppomppu", "갤럭시 25 256기가 블랙 특가", 890_000L, T);
+		savePost("ruliweb", "갤럭시 25 256기가 화이트 특가", 895_000L, T.plus(Duration.ofHours(6)));
+
+		useCase.ingestPending();
+
+		List<DealEventEntity> deals = dealEvents.findByVariantId(colorVariantId);
+		assertThat(deals).hasSize(1); // 병합
+		assertThat(deals.get(0).getDemandAxisValue()).as("서로 다른 축 값은 병합 후 미상으로 되돌아간다").isNull();
+	}
+
+	/**
 	 * Q-66 ① E(확정본 §41): 분리 제품인데 색을 판별 못 한 딜은 <b>승격 큐(DEMAND_UNKNOWN)에 뜬다</b> —
 	 * 분포에서 빠지는 것만으로는 부족하다(사람이 볼 수 없으면 유실). 값을 아는 딜은 큐에 안 뜬다.
 	 */

@@ -153,7 +153,8 @@ public class IngestDealsUseCase {
 			if (mergePolicy.canMerge(existingDomain, candidate, params)) {
 				DealEvent merged = mergePolicy.merge(existingDomain, candidate);
 				existing.applyMerge(merged.priceFirst(), merged.priceMin(), merged.priceMax(), merged.priceLast(),
-						merged.crossVerified(), merged.status(), merged.firstSeen(), merged.lastSeen());
+						merged.crossVerified(), merged.status(), merged.firstSeen(), merged.lastSeen(),
+						merged.demandAxisValue());
 				sources.save(new DealEventSourceEntity(existing.getId(), post.getId(), post.getSite()));
 				// Q-83 ①(2026-07-30): 이 딜에 ACTIVE 핀이 있으면 앵커를 방금 병합된 최신 원문으로 승계한다.
 				Optional<WatchItemEntity> activePin = watchItems.findByDealEventIdAndState(existing.getId(),
