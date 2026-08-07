@@ -128,6 +128,33 @@ describe('PurchasePanel', () => {
     rerender(<PurchasePanel variantId={12} />)
     await waitFor(() => expect(api.listPurchases).toHaveBeenCalledWith(12))
   })
+
+  /**
+   * FE-02(코드리뷰 20260806) — cleanup 가드가 없으면, 먼저 보낸 요청(옛 variant)의 응답이
+   * 나중에 도착해 최종 화면을 덮어쓴다. "이미 샀는가"를 엉뚱한 variant 기준으로 보여주게 된다.
+   */
+  it('variant를 빠르게 바꾸면 늦게 도착한 이전 variant의 응답이 최신 화면을 덮어쓰지 않는다', async () => {
+    let resolveFirst: (value: PurchaseObservation[]) => void = () => {}
+    const first = new Promise<PurchaseObservation[]>((resolve) => {
+      resolveFirst = resolve
+    })
+    const spy = vi.spyOn(api, 'listPurchases')
+    spy.mockImplementationOnce(() => first) // variantId=11 — 응답이 늦게 도착
+    spy.mockResolvedValueOnce([observing]) // variantId=12 — 먼저 도착
+
+    const { rerender } = render(<PurchasePanel variantId={11} />)
+    await waitFor(() => expect(api.listPurchases).toHaveBeenCalledWith(11))
+
+    rerender(<PurchasePanel variantId={12} />)
+    await screen.findByLabelText('관찰 문맥 7') // variantId=12 응답 반영됨
+
+    resolveFirst([]) // 이제야 variantId=11의 옛(빈) 응답이 도착
+    await new Promise((r) => setTimeout(r, 0))
+
+    // 옛 응답이 화면을 "기록 없음"으로 덮어쓰면 안 된다 — 여전히 12의 데이터를 보여줘야 한다.
+    expect(screen.getByLabelText('관찰 문맥 7')).toBeInTheDocument()
+    expect(screen.queryByText('이 variant의 구매 기록이 없습니다.')).not.toBeInTheDocument()
+  })
 })
 
 describe('PurchasePanel — WATCH [샀어요] 프리필(Q-83 ②)', () => {

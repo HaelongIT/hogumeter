@@ -71,10 +71,19 @@ export function PurchasePanel({
       .then(setPurchases)
       .catch(() => setError('구매 기록을 불러오지 못했습니다.'))
 
+  // FE-02(코드리뷰 20260806): cleanup 가드가 없으면 먼저 보낸 요청(옛 variant)의 응답이 나중에
+  // 도착해 최종 화면을 덮어쓸 수 있다 — 형제 패널(AlertPolicyPanel 등)이 쓰는 `let live` 패턴.
   useEffect(() => {
+    let live = true
     setPurchases(null)
     setError(null)
-    void reload(variantId)
+    api
+      .listPurchases(variantId)
+      .then((next) => live && setPurchases(next))
+      .catch(() => live && setError('구매 기록을 불러오지 못했습니다.'))
+    return () => {
+      live = false
+    }
   }, [variantId])
 
   const set = (key: keyof typeof EMPTY) => (event: { target: { value: string } }) =>
