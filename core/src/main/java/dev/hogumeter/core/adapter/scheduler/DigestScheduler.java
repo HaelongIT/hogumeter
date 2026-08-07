@@ -2,6 +2,7 @@ package dev.hogumeter.core.adapter.scheduler;
 
 import dev.hogumeter.core.application.SendDigestUseCase;
 import dev.hogumeter.core.application.SendDigestUseCase.DigestSendReport;
+import dev.hogumeter.core.application.port.out.AdminNotifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,15 +29,29 @@ public class DigestScheduler {
 	private static final Logger log = LoggerFactory.getLogger(DigestScheduler.class);
 
 	private final SendDigestUseCase sendDigest;
+	private final AdminNotifier adminNotifier;
 
 	@Autowired
-	public DigestScheduler(SendDigestUseCase sendDigest) {
+	public DigestScheduler(SendDigestUseCase sendDigest, AdminNotifier adminNotifier) {
 		this.sendDigest = sendDigest;
+		this.adminNotifier = adminNotifier;
 	}
 
+	/**
+	 * BE-21(코드리뷰 20260806): {@code PipelineScheduler}는 각 단계를 {@code runStep}으로 감싸 실패를
+	 * 격리·집계하는데, 이 클래스는 그 관례가 없었다 — 다이제스트 조립 중 DB 일시 장애가 나면 그 주
+	 * 다이제스트가 조용히 안 나가고 다음 주까지 아무도 모르는 경로였다. 실패해도 다음 주 스케줄을
+	 * 막지 않도록 여기서 잡고, 관리 알림(OBS-03)으로 남긴다.
+	 */
 	@Scheduled(cron = "0 0 20 * * SUN", zone = "Asia/Seoul")
 	public void tick() {
-		DigestSendReport report = sendDigest.send();
-		log.info("[DIGEST] parts={} sent={} allSucceeded={}", report.parts(), report.sent(), report.allSucceeded());
+		try {
+			DigestSendReport report = sendDigest.send();
+			log.info("[DIGEST] parts={} sent={} allSucceeded={}", report.parts(), report.sent(), report.allSucceeded());
+		}
+		catch (RuntimeException failure) {
+			log.error("[DIGEST] 발송 실패 — 다음 주 스케줄까지 재시도 없음", failure);
+			adminNotifier.notify("다이제스트 발송 실패: " + failure.getClass().getSimpleName());
+		}
 	}
 }
