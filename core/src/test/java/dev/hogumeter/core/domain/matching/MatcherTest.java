@@ -60,6 +60,23 @@ class MatcherTest {
 		assertThat(r.tier()).isEqualTo(MatchTier.REJECTED);
 	}
 
+	/**
+	 * BE-03(코드리뷰 20260806) — "아이폰17"·"아이폰17프로"처럼 서로 다른 제품을 가리키는 별칭이 같은
+	 * 제목에 substring으로 동시에 걸리면, 어느 productId가 반환될지 순회 순서에 기댈 수 없다(비결정성).
+	 * 모호하면 바로 CONFIRMED하지 않고 토큰 기반 CANDIDATE로 내려 사람이 확인하게 한다.
+	 */
+	@Test
+	void ambiguousAliasHitAcrossTwoProductsDoesNotAutoConfirm() {
+		ProductMatchSpec iphonePro = new ProductMatchSpec(2L, Set.of("아이폰", "17", "프로"),
+				List.of(new VariantSpec(20L, Set.of("256GB"))));
+		List<ProductMatchSpec> catalogWithBoth = List.of(iphone, iphonePro);
+		AliasDictionary ambiguousDict = AliasDictionary.of(Map.of("아이폰17", 1L, "아이폰17프로", 2L));
+
+		MatchResult r = matcher.match("아이폰17프로 256기가", catalogWithBoth, ambiguousDict);
+
+		assertThat(r.tier()).as("모호한 다중 히트는 바로 확정하지 않는다").isNotEqualTo(MatchTier.CONFIRMED);
+	}
+
 	// ---- AC-4 사람 확정 → 별칭 자동 축적 → 재매칭 CONFIRMED ----
 	@Test
 	void humanConfirmationAccumulatesAliasSoNextMatchIsConfirmed() {
