@@ -34,6 +34,10 @@ public class DealEventSourceEntity {
 		this.site = site;
 	}
 
+	public Long getId() {
+		return id;
+	}
+
 	public Long getDealEventId() {
 		return dealEventId;
 	}
