@@ -881,6 +881,34 @@ Q-64의 전제가 golden으로 반박됐으므로 두 항목의 "실 표본이 �
   쓸 수 있다). 확정본 문구는 `docs/90-planning-final.md:58,187`에 델타 각주로 정정.
 - **관련**: `working-area/review-20260806/30-cross-cutting.md` X-03·X-07, `docs/90-planning-final.md:58,187,232`, D-10(decision-log 2026-08-07).
 
+## [열림] Q-92. `check-dead-columns.sh`가 컬럼명을 테이블 구분 없이 매칭한다 — 교차 테이블 충돌
+- **맥락**: Q-89/X-03/X-10의 근본 원인(`reached()`가 "생산자가 안다"와 "소비자가 읽는다"를 구별
+  못함)을 고치는 리팩터(2026-08-07, `reached()`를 producer/consumer로 분리) 도중 **별개의 문제**를
+  발견했다 — `reached_in()`은 컬럼 이름(`col`)만으로 grep한다, `table.col` 형태로 테이블을 구분하지
+  않는다. 같은 짧은 컬럼명이 여러 테이블에 있으면(`raw`가 `raw_deal_post`·`used_listing_observation`
+  둘 다에 jsonb로 존재) 한쪽의 진짜 배선이 다른 쪽을 "소비됨"으로 오판시킨다.
+- **🔴 실측**: `used_listing_observation.raw`는 core 어디서도 진짜로 안 읽는다(엔티티 매핑 없음,
+  자바독 주석이 "매핑하지 않는다"고 명시). 그런데 게이트는 이 컬럼을 "소비됨"으로 판정한다 — 이유는
+  `PreserveAppliedConditionsUseCase.java`의 네이티브 SQL `post.raw -> '_derived' -> ...`가 **다른
+  테이블**(`raw_deal_post.raw`)을 정당하게 읽는 코드인데, 컬럼명이 같아서 매칭에 걸린다. 나머지
+  "우연한" 매치(`GetReviewQueueUseCase`·`GlobalExcludeKeywords`·`RuleBasedListingExtractor`·
+  `buildPolicyCommand.ts`)는 전부 `raw`라는 흔한 지역변수명과의 충돌이지 실제 컬럼 참조가 아니다.
+- **영향 방향은 안전한 쪽(과소 검출)**: 진짜 죽은 컬럼을 "살아있다"고 오판하는 쪽이라, 이번엔
+  `used_listing_observation.raw`가 원래 `INTENTIONAL`(크롤링 원본 보관 전용, 읽을 계획 없음)이라
+  **결과적으로 올바른 결론**(안 막힘)에 우연히 도달했다 — 하지만 다음 컬럼이 같은 충돌로 "죽었는데
+  살아있다고" 잘못 통과할 위험은 그대로 남는다.
+- **왜 지금 안 고치나**: 테이블 인지형 매칭은 Java/Python/TS 코드에서 "이 필드가 어느 테이블 소속인가"
+  를 정적으로 알아내야 하는데, JPA 암시적 매핑(엔티티 클래스 이름 ↔ 테이블)은 `@Table` 애노테이션이
+  없으면 관례(클래스명→스네이크)에 의존하고, 네이티브 SQL은 별칭(`post.raw`)이 실제 테이블과 다를 수
+  있다 — 이번 producer/consumer 분리보다 훨씬 큰 파싱 작업이라 별도 판으로 미룬다.
+- **잠정값**: 코드 변경 없음. `check-dead-columns.sh` 헤더 주석에 이 한계를 명시(2026-08-07).
+- **재개 트리거**(무엇이 참이 되어야 하는가): ① 짧은 컬럼명(`raw`·`id` 등)이 실제로 서로 다른
+  테이블에서 다른 배선 상태(한쪽은 죽고 한쪽은 삶)로 갈리는 사례가 실측되면(지금은 우연히 안전),
+  또는 ② 게이트를 신뢰해 죽은 컬럼 감사를 자동화에 완전히 위임하려 할 때 — 그때 테이블 인지형
+  매칭(마이그레이션 파싱 시 각 컬럼이 속한 테이블의 JPA 엔티티/DTO 클래스를 함께 추적)을 설계한다.
+- **관련**: `docs/91` Q-89(해소, 이 발견의 출발점), `scripts/check-dead-columns.sh`,
+  `PreserveAppliedConditionsUseCase.java`, `UsedListingObservationEntity.java`.
+
 ## [해소 2026-08-07] Q-91. "제품 노화·만료 처리"(확정본 §10) — 지금까지 구현·추적 둘 다 안 돼 있었다
 - **맥락**: `docs/90-planning-final.md` §10("상세설계 이월 — 숫자·규칙 박기")이 v1 범위로 명시한 10개
   항목 중 하나. 이 절의 자체 정의(문서 서두): "숫자·규칙만 박으면 되는 항목은 '상세설계 이월'로,

@@ -9,14 +9,33 @@
 # **테이블** 이름만 보므로 이 한 층 아래(테이블은 살아 있는데 컬럼이 죽은 경우)를 못 잡는다(그 게이트의 명시된 한계).
 # 사람의 기억을 장치로 바꾼다 — 다음 죽은 컬럼을 CI가 막는다.
 #
-# 판정: 마이그레이션이 정의한 컬럼 이름(snake_case)이 **프로덕션 코드**(core/src/main/java · collector/src ·
-# web/src, 테스트 제외)에 나타나는가 — snake_case(@Column(name=...)·네이티브 SQL) 또는 camelCase(암시적 JPA
-# 매핑의 필드명) 어느 형태로든. 둘 다 안 나타나면 그 컬럼은 죽어 있다.
+# 판정: 마이그레이션이 정의한 컬럼 이름(snake_case)이 **프로덕션 코드**에 나타나는가 — snake_case
+# (@Column(name=...)·네이티브 SQL) 또는 camelCase(암시적 JPA 매핑의 필드명) 어느 형태로든.
 #
-# 면제는 `scripts/dead-columns-allowlist.txt`에 선언한다. 사유는 둘 중 하나:
-#   Q-<번호>    → docs/91에 **열려 있어야** 한다(해소되면 면제 만료 → 다시 묻는다). 잠정적으로 죽은 컬럼.
-#   INTENTIONAL → 설계상 영원히 코드가 안 닿는 컬럼(base_price 역산금지, DB default now() 포렌식 타임스탬프).
-# 게이트는 ① Q 인용이면 그 Q가 열려 있는지 ② 면제된 컬럼이 그새 배선되지 않았는지(낡은 면제는 다음 결함을 숨긴다)를 본다.
+# **생산자(collector/src)와 소비자(core/src/main/java·web/src)를 구별한다**(2026-08-07 리팩터,
+# 코드리뷰 20260806 X-03/X-10 제안 반영). 예전엔 셋 중 아무 데나 나타나면 "배선됨"으로 뭉뚱그려서
+# `raw_deal_post.reaction_score`가 정확히 이 함정에 빠졌다 — collector는 매 폴링마다 쓰는데 core는
+# 한 번도 안 읽는 걸 게이트가 "OK"로 오판했다(docs/91 Q-89). 이제 셋은 두 그룹이다:
+#   소비 = core/src/main/java · web/src  (core가 DB를 읽고, web은 core API를 통해 받는다)
+#   생산 = collector/src                (DB에 쓰는 쪽)
+# 소비되면 완전히 배선된 것. **생산만 되고 소비가 없으면** "반쪽 배선"(다음 참조) — 완전히 죽은 것과는
+# 다른 카테고리다. 생산도 소비도 없으면 완전히 죽은 컬럼(기존과 동일).
+#
+# 면제는 `scripts/dead-columns-allowlist.txt`에 선언한다. 사유:
+#   Q-<번호>      → docs/91에 **열려 있어야** 한다(해소되면 면제 만료 → 다시 묻는다). 완전히 죽었거나
+#                   반쪽 배선인 컬럼 둘 다에 쓸 수 있다("아직 안 정해짐/안 만듦"이라는 뜻이라).
+#   INTENTIONAL   → 설계상 영원히 완전히 안 닿는 컬럼(base_price 역산금지, DB default now() 포렌식
+#                   타임스탬프). 완전히 죽은 컬럼 전용.
+#   PRODUCER_ONLY → 설계상 영원히 생산만 하기로 확정(예: D-10 — reaction_score는 수집만 하고 노출은
+#                   영구 포기). 반쪽 배선 전용, 만료 없음(INTENTIONAL의 반쪽 배선 버전).
+# 게이트는 ① Q 인용이면 그 Q가 열려 있는지 ② 면제된 컬럼이 그새(완전히) 배선되지 않았는지(낡은
+# 면제는 다음 결함을 숨긴다)를 본다.
+#
+# **알려진 한계(고치지 않음, 범위 밖)**: 컬럼 이름은 테이블 구분 없이 통짜로 매칭한다(`col` 하나만
+# 보고 `table.col`은 안 본다) — 같은 짧은 이름(`raw` 등)이 다른 테이블에도 있으면 한쪽의 진짜 배선이
+# 다른 쪽을 "소비됨"으로 오판시킬 수 있다(교차 테이블 충돌, 2026-08-07 실측: `used_listing_observation.raw`
+# 가 `raw_deal_post.raw`의 네이티브 SQL 읽기와 충돌해 우연히 "소비됨"으로 나온다 — 지금은 결과적으로
+# 안전한 방향의 오차단(과소 검출)이라 급하지 않지만, 테이블 인지형 매칭 없이는 못 고친다). 별도 발견.
 #
 # 컬럼 추출은 **보수적**이다 — `^<공백><식별자> <알려진 타입>`만 컬럼으로 본다. 제약(check·constraint·
 # unique·primary·foreign·references)·인덱스는 두 번째 토큰이 타입이 아니라 걸리지 않는다(오차단 회피).
@@ -52,14 +71,20 @@ mapfile -t columns < <(
 }
 
 # 프로덕션 코드만 본다. 테스트는 죽은 컬럼의 존재도 GREEN으로 잠근다.
-sources=()
-for dir in "$root/core/src/main/java" "$root/collector/src" "$root/web/src"; do
-	[ -d "$dir" ] && sources+=("$dir")
+# 소비자(core가 DB를 읽고 web은 core API로 받는다) — 이쪽이 비면 이 게이트 자체가 무의미하다.
+consumer_sources=()
+for dir in "$root/core/src/main/java" "$root/web/src"; do
+	[ -d "$dir" ] && consumer_sources+=("$dir")
 done
-[ "${#sources[@]}" -gt 0 ] || {
+[ "${#consumer_sources[@]}" -gt 0 ] || {
 	echo "FAIL: 프로덕션 소스 디렉토리를 하나도 찾지 못했다: $root" >&2
 	exit 1
 }
+
+# 생산자(DB에 쓰는 쪽) — 실 저장소엔 항상 있지만, 없어도(격리 테스트 등) 에러는 아니다. 그냥
+# "아무것도 생산 안 함"으로 취급한다.
+producer_sources=()
+[ -d "$root/collector/src" ] && producer_sources+=("$root/collector/src")
 
 # **주석은 배선이 아니다**(check-table-wiring과 같은 규율) — `confidence`가 정확히 javadoc에 걸렸다.
 # 전체 줄이 주석인 것만 걷는다. 코드 옆 주석은 건드리지 않는다.
@@ -68,15 +93,19 @@ _CODE_ONLY='^[[:space:]]*(//|#|\*|/\*)'
 # snake_case → camelCase (암시적 JPA 매핑의 필드명. price_first ↔ priceFirst).
 camel() { echo "$1" | sed -E 's/_([a-z])/\U\1/g'; }
 
-reached() { # 컬럼(snake 또는 camel)이 프로덕션 **코드**에 나타나는가
-	local col="$1" cml file
-	cml="$(camel "$col")"
+# 컬럼(snake 또는 camel)이 주어진 디렉토리들의 프로덕션 **코드**에 나타나는가.
+# 디렉토리 목록이 비어 있으면(예: 격리 테스트에 collector/src가 없음) 그냥 "안 나타남" — 에러 아님.
+reached_in() {
+	local col="$1" cml="$2"
+	shift 2
+	local dirs=("$@") file
+	[ "${#dirs[@]}" -gt 0 ] || return 1
 	while IFS= read -r file; do
 		[ -n "$file" ] || continue
 		if grep -vE "$_CODE_ONLY" "$file" | grep -qP "\b(${col}|${cml})\b"; then
 			return 0
 		fi
-	done < <(grep -rlP "\b(${col}|${cml})\b" "${sources[@]}" 2>/dev/null | grep -vE '\.test\.|/test/' || true)
+	done < <(grep -rlP "\b(${col}|${cml})\b" "${dirs[@]}" 2>/dev/null | grep -vE '\.test\.|/test/' || true)
 	return 1
 }
 
@@ -98,12 +127,27 @@ q_open() { # 인용한 Q가 docs/91에 열려 있는가(해소된 Q를 인용한
 	grep -qE "^#+ \[(열림|부분해소)[^]]*\] ${qid}\b" "$board"
 }
 
+# 면제 사유가 여전히 유효한가. permanent_reason(선택)은 INTENTIONAL 외에 만료 없이 허용할 사유
+# (반쪽 배선의 PRODUCER_ONLY) — 완전히 죽은 컬럼 판정에서는 안 준다(INTENTIONAL만 영구 허용).
+exemption_valid() {
+	local qid="$1" permanent_reason="${2:-}"
+	[ "$qid" = "INTENTIONAL" ] && return 0
+	[ -n "$permanent_reason" ] && [ "$qid" = "$permanent_reason" ] && return 0
+	q_open "$qid"
+}
+
 dead=0
 stale=0
 for key in "${columns[@]}"; do
 	col="${key#*.}"
-	if reached "$col"; then
-		# 배선돼 있다. 그런데 면제 목록에 있으면 낡은 면제다 — 지워야 한다.
+	cml="$(camel "$col")"
+	consumed=false
+	produced=false
+	reached_in "$col" "$cml" "${consumer_sources[@]}" && consumed=true
+	reached_in "$col" "$cml" "${producer_sources[@]}" && produced=true
+
+	if $consumed; then
+		# 완전히 배선돼 있다(core·web이 읽는다). 그런데 면제 목록에 있으면 낡은 면제다 — 지워야 한다.
 		if [ -n "${excuse[$key]+x}" ]; then
 			echo "FAIL: 낡은 면제: '$key'은 이제 코드가 닿는다. allowlist에서 지워라." >&2
 			echo "  낡은 면제는 다음 죽은 컬럼을 숨긴다." >&2
@@ -111,14 +155,29 @@ for key in "${columns[@]}"; do
 		fi
 		continue
 	fi
-	# 코드가 안 닿는다 = 죽은 컬럼. 면제됐는가?
+
+	if $produced; then
+		# Q-89 원형 — collector는 쓰는데 core/web은 안 읽는다("반쪽 배선"). 완전히 죽은 것과 다른 카테고리.
+		if [ -n "${excuse[$key]+x}" ]; then
+			qid="${excuse[$key]}"
+			if exemption_valid "$qid" "PRODUCER_ONLY"; then
+				continue
+			fi
+			echo "FAIL: 면제 '$key'가 인용한 $qid가 docs/91에 열려 있지 않다(해소됨?). 면제를 지우거나 Q를 다시 열어라." >&2
+			stale=$((stale + 1))
+			continue
+		fi
+		echo "FAIL: 반쪽 배선 '$key' — collector는 쓰는데 core/web 프로덕션 코드가 읽지 않는다(Q-89 원형)." >&2
+		echo "  core가 읽게 배선하거나, allowlist에 <Q-ID|PRODUCER_ONLY>로 선언하라." >&2
+		dead=$((dead + 1))
+		continue
+	fi
+
+	# 생산도 소비도 없다 = 완전히 죽은 컬럼. 면제됐는가?
 	if [ -n "${excuse[$key]+x}" ]; then
 		qid="${excuse[$key]}"
-		if [ "$qid" = "INTENTIONAL" ]; then
-			continue # 설계상 영원히 안 닿는 컬럼
-		fi
-		if q_open "$qid"; then
-			continue # 잠정적으로 죽음, 인용 Q가 열려 있음
+		if exemption_valid "$qid"; then
+			continue
 		fi
 		echo "FAIL: 면제 '$key'가 인용한 $qid가 docs/91에 열려 있지 않다(해소됨?). 면제를 지우거나 Q를 다시 열어라." >&2
 		stale=$((stale + 1))

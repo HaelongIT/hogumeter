@@ -9,6 +9,9 @@ deal_event.base_price     INTENTIONAL  BM-02 AC-2 역산 금지 — 항상 null.
 held_alert.held_at        INTENTIONAL  포렌식 타임스탬프(DB default now()). 플러시는 현재 방해금지로 재평가하지 held_at을 안 본다(Q-20 ②).
 deal_ignore.ignored_at    INTENTIONAL  포렌식 타임스탬프(DB default now()). 무시 판정은 행 존재로 하고 시각은 안 읽는다.
 
+# --- 설계상 영원히 생산만 함 (PRODUCER_ONLY — 2026-08-07 reached() 생산자/소비자 분리 리팩터로 신설) ---
+raw_deal_post.reaction_score  PRODUCER_ONLY  D-10 확정(2026-08-07) — 노출은 이 범위에서 영구 포기, collector 수집·적재는 계속(docs/91 Q-89, docs/90:58,187 델타).
+
 # --- 잠정적으로 죽음 (열린 Q 인용 — 해소되면 면제 만료) ---
 deal_event.confidence                 Q-68  매칭이 연속 신뢰도 점수를 안 냄 — 채우는 코드 0·읽는 코드 0. 이 게이트가 잡아야 할 원형.
 price_history.fetched_at              Q-3   네이버 쇼핑 API 2026-07-31 서비스 종료(대체 데이터 소스 미정) — "키 발급 시 배선"은 더 이상 유효한 재개 경로가 아니다. 재개는 D-7(대체 소스 결정) 확정 후.

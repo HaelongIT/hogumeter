@@ -15,9 +15,12 @@ trap 'rm -rf "$work"' EXIT
 fail=0
 
 # fake_root <디렉토리> — 최소 트리(마이그레이션 + 소스 + 보드 + 빈 allowlist)
+# collector/src·web/src도 미리 만들어 둔다(빈 디렉토리는 무해) — Q-89/Q-91 반쪽 배선 케이스가
+# collector 쪽에 파일을 떨어뜨릴 수 있게.
 fake_root() {
 	local r="$1"
-	mkdir -p "$r/core/src/main/resources/db/migration" "$r/core/src/main/java" "$r/scripts" "$r/docs"
+	mkdir -p "$r/core/src/main/resources/db/migration" "$r/core/src/main/java" \
+		"$r/collector/src" "$r/web/src" "$r/scripts" "$r/docs"
 	cat >"$r/docs/91-open-questions.md" <<'MD'
 ## [열림] Q-9. 아직 막혀 있는 무엇
 ## [부분해소] Q-28. 일부만 됨
@@ -80,6 +83,25 @@ ddl "$r" '    confidence numeric(3, 2)'
 printf 't.confidence Q-72 날짜 붙은 부분해소는 여전히 열린 것\n' >"$r/scripts/dead-columns-allowlist.txt"
 check 0 "날짜가 붙은 [부분해소]도 열린 Q로 읽는다(오차단 금지)" "$r"
 
+# Q-89 원형: collector는 쓰는데 core/web은 안 읽는다("반쪽 배선"). PRODUCER_ONLY·열린 Q 둘 다
+# 정당한 면제 사유다 — 완전히 죽은 컬럼과는 다른 카테고리(reached()가 생산자·소비자를 구별하도록
+# 쪼갠 리팩터, 리뷰 20260806 X-03/X-10 제안).
+r=$(new_case)
+fake_root "$r"
+ddl "$r" '    reaction_score int'
+printf 'sink.execute("insert into t (reaction_score) values (%%s)", (item["reaction_score"],))\n' \
+	>"$r/collector/src/sink.py"
+printf 't.reaction_score PRODUCER_ONLY 노출 포기 확정(D-10) — 수집만 계속\n' >"$r/scripts/dead-columns-allowlist.txt"
+check 0 "반쪽 배선(collector만 씀) + PRODUCER_ONLY 면제" "$r"
+
+r=$(new_case)
+fake_root "$r"
+ddl "$r" '    reaction_score int'
+printf 'sink.execute("insert into t (reaction_score) values (%%s)", (item["reaction_score"],))\n' \
+	>"$r/collector/src/sink.py"
+printf 't.reaction_score Q-9 아직 core가 안 읽음(열린 Q)\n' >"$r/scripts/dead-columns-allowlist.txt"
+check 0 "반쪽 배선(collector만 씀) + 열린 Q 면제" "$r"
+
 echo "── 차단되어야 함 (exit 1) ──"
 
 r=$(new_case)
@@ -113,6 +135,32 @@ ddl "$r" '    livecol text'
 printf 'class E { @Column(name = "livecol") String livecol; }\n' >"$r/core/src/main/java/E.java" # 이제 배선됨
 printf 't.livecol Q-9 낡은 면제(이미 배선됨)\n' >"$r/scripts/dead-columns-allowlist.txt"
 check 1 "낡은 면제 — 컬럼이 이제 배선됐는데 면제가 남아 있다" "$r"
+
+r=$(new_case)
+fake_root "$r"
+ddl "$r" '    reaction_score int'
+printf 'sink.execute("insert into t (reaction_score) values (%%s)", (item["reaction_score"],))\n' \
+	>"$r/collector/src/sink.py"
+check 1 "반쪽 배선(collector만 씀) — 면제 없음, 완전히 죽은 컬럼과 다른 메시지여야 한다" "$r"
+
+r=$(new_case)
+fake_root "$r"
+ddl "$r" '    reaction_score int'
+printf 'sink.execute("insert into t (reaction_score) values (%%s)", (item["reaction_score"],))\n' \
+	>"$r/collector/src/sink.py"
+printf 't.reaction_score Q-404 없는 Q\n' >"$r/scripts/dead-columns-allowlist.txt"
+check 1 "반쪽 배선 + 면제가 인용한 Q가 없다(만료된 면제와 같은 취급)" "$r"
+
+# PRODUCER_ONLY로 면제해 뒀는데 core가 나중에 그 컬럼을 실제로 읽게 되면 — 완전 배선 낡은 면제와
+# 같은 경로로 잡혀야 한다(반쪽 배선용 사유가 완전 배선 상태에도 남아 있으면 안 된다).
+r=$(new_case)
+fake_root "$r"
+ddl "$r" '    reaction_score int'
+printf 'sink.execute("insert into t (reaction_score) values (%%s)", (item["reaction_score"],))\n' \
+	>"$r/collector/src/sink.py"
+printf 'class E { @Column(name = "reaction_score") int reactionScore; }\n' >"$r/core/src/main/java/E.java"
+printf 't.reaction_score PRODUCER_ONLY 이제 낡음 — core가 배선함\n' >"$r/scripts/dead-columns-allowlist.txt"
+check 1 "PRODUCER_ONLY 면제도 컬럼이 완전 배선되면 낡은 면제로 잡힌다" "$r"
 
 echo ""
 if [ "$fail" -eq 0 ]; then
