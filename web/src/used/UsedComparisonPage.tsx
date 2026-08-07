@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ApiFailure, api } from '../api/client'
 import type { ComparisonView, ProductSummary } from '../api/types'
 
@@ -127,12 +127,25 @@ export function UsedComparisonPage() {
       .catch(() => setError('제품 목록을 불러오지 못했습니다.'))
   }, [])
 
+  // FE-03(코드리뷰 20260806): productId는 부모 prop이 아니라 이 컴포넌트 내부 <select> state라
+  // key로 재마운트시켜 레이스를 지워줄 여지가 없다. 세대 가드(ref) 없이는 먼저 보낸 요청(옛
+  // product)의 응답이 나중에 도착해 최신 화면(다른 product)을 덮어쓸 수 있다 — 가격·컨디션을
+  // 나란히 보고 사는 화면이라 오판 위험이 크다. reload()는 호출 시점의 productId로 요청을 보내고,
+  // 응답이 왔을 때 그게 여전히 "최신 요청"인지(productIdRef와 비교) 확인한 뒤에만 반영한다.
+  const productIdRef = useRef(productId)
+  productIdRef.current = productId
+
   const reload = () => {
     if (productId === null) return
+    const requestedId = productId
     api
-      .getComparison(productId)
-      .then(setComparison)
-      .catch(() => setError('비교표를 불러오지 못했습니다.'))
+      .getComparison(requestedId)
+      .then((next) => {
+        if (productIdRef.current === requestedId) setComparison(next)
+      })
+      .catch(() => {
+        if (productIdRef.current === requestedId) setError('비교표를 불러오지 못했습니다.')
+      })
   }
 
   useEffect(() => {

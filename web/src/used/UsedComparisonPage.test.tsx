@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api/client'
@@ -29,6 +29,63 @@ describe('UsedComparisonPage', () => {
     await user.selectOptions(await screen.findByRole('combobox', { name: '제품' }), '1')
 
     expect(await screen.findByText(/실제로 폴링돼야/)).toBeInTheDocument()
+  })
+
+  /** 대기 중인 프라미스 체인을 흘려보낸다(마이크로태스크 여러 홉을 안전하게 통과). */
+  const flush = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve()
+  }
+
+  /**
+   * FE-03(코드리뷰 20260806) — 취소·세대 가드가 없으면, 먼저 보낸 요청(옛 product)의 응답이
+   * 나중에 도착해 최종 화면을 덮어쓴다. 가격·컨디션을 나란히 보고 사는 화면이라 오판 위험이 크다.
+   */
+  it('제품을 빠르게 바꾸면 늦게 도착한 이전 제품의 응답이 최신 화면을 덮어쓰지 않는다', async () => {
+    const galaxy = {
+      productId: 2,
+      name: '갤럭시 25',
+      category: '스마트폰',
+      demandAxisMode: 'GROUPED' as const,
+      axes: [],
+      variants: [],
+    }
+    vi.spyOn(api, 'listProducts').mockResolvedValue([iphone, galaxy])
+
+    let resolveFirst: (value: { axes: []; rows: [] }) => void = () => {}
+    const first = new Promise<{ axes: []; rows: [] }>((resolve) => {
+      resolveFirst = resolve
+    })
+    const spy = vi.spyOn(api, 'getComparison')
+    spy.mockImplementationOnce(() => first) // productId=1 — 응답이 늦게 도착
+    spy.mockResolvedValueOnce({
+      axes: [],
+      rows: [{ listingId: 2, title: '갤럭시 25 매물', price: 700_000, url: null, axisValues: {}, notes: [] }],
+    })
+
+    render(<UsedComparisonPage />)
+
+    const select = await screen.findByRole('combobox', { name: '제품' })
+    await act(async () => {
+      fireEvent.change(select, { target: { value: '1' } })
+    })
+    expect(api.getComparison).toHaveBeenCalledWith(1)
+
+    await act(async () => {
+      fireEvent.change(select, { target: { value: '2' } })
+      await flush()
+    })
+
+    // productId=2 응답이 반영됨 — 옛(productId=1) 응답은 아직 안 왔다.
+    expect(screen.getByText(/갤럭시 25 매물/)).toBeInTheDocument()
+
+    await act(async () => {
+      resolveFirst({ axes: [], rows: [] }) // 이제야 productId=1의 옛(빈) 응답이 도착
+      await flush()
+    })
+
+    // 옛 응답이 화면을 "매물 없음"으로 덮어쓰면 안 된다 — 여전히 갤럭시 데이터를 보여줘야 한다.
+    expect(screen.getByText(/갤럭시 25 매물/)).toBeInTheDocument()
+    expect(screen.queryByText(/비교할 매물이 없습니다/)).not.toBeInTheDocument()
   })
 
   it('축은 추가 전용이라는 사실을 밝힌다', async () => {
