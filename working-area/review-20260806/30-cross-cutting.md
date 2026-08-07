@@ -17,11 +17,16 @@
 - **권고**: 세 게이트의 `open_question()`을 `check-dead-columns.sh`의 `q_open()`과 동일한 정규식으로 교체하고, 각 `.test.sh`에 "보드에 있지만 `[해소 …]`인 Q를 인용한 면제는 차단돼야 한다" 케이스를 추가한다. 네 게이트가 같은 함수를 복제해 쓰는 만큼 `scripts/lib/board.sh` 공용 함수로 뽑는 것도 검토(저장소가 이미 `lib/aws-cli.sh`로 같은 패턴을 씀).
 - **출처**: `raw/D2-infra.md` D2-01 · 반박 검증 `rebuttal/D2-01.md` → **DOWNGRADED (High→Medium)**
 
-### X-03 — `raw_deal_post.reaction_score`가 collector→DB로는 살아있지만 core 소비처 0, 게이트는 "배선됨"으로 오판 · Medium · 📄문서화(`docs/91` Q-89 + `decisions-needed.md` D-10 등록)
+### X-03 — `raw_deal_post.reaction_score`가 collector→DB로는 살아있지만 core 소비처 0, 게이트는 "배선됨"으로 오판 · Medium · ✅수정완료(2026-08-07 — 정책 D-10 확정 + 게이트 근본 수정 `0b50bac`)
 - **위치**: `collector/src/collector/db/raw_deal_sink.py:29-44`(INSERT·UPSERT에 `reaction_score` 포함) / `core/src/main/java/dev/hogumeter/core/adapter/persistence/RawDealPost.java`(엔티티에 `reactionScore` 필드 없음) / `core/src/main/resources/db/migration/V1__init.sql:52`(`reaction_score numeric`) / `docs/90-planning-final.md:58,187`(확정본이 `reaction_score` 노출을 명시) / `scripts/check-dead-columns.sh`·`scripts/dead-columns-allowlist.txt`
 - **근거**: collector는 매 폴링마다 `reaction_score`(추천수)를 업서트한다. core 쪽엔 이 컬럼을 읽는 코드가 전혀 없다(`grep -rni reaction core/src web/src`의 유일한 매치는 javadoc 주석뿐). 그런데 확정본은 "반응 신호(reaction_score: 댓글수·추천수 등)를 가능한 만큼 수집"을 요구한다. `bash scripts/check-dead-columns.sh`를 직접 실행하면 `DEAD COLUMNS OK`가 나온다 — 게이트의 `reached()`가 "컬럼 이름이 core/collector/web 셋 중 아무 프로덕션 코드에 나타나는가"만 보기 때문에, collector가 이름을 **쓰는** 코드만으로 "배선됨"으로 오판한다.
 - **영향**: collector가 추천수를 계속 수집해 DB엔 정직하게 쌓이지만, core가 한 번도 읽지 않아 사용자는 화면에서 "반응 신호"를 영원히 볼 수 없다. 데이터 유실은 아니지만 확정본이 요구한 기능이 조용히 빠진 채로 아무 게이트도, `docs/91`의 어떤 열린 항목도 이 사실을 추적하지 않는다.
 - **권고**: (a) `docs/91`에 새 Q를 열어 "reaction_score 미노출"을 명시하거나, (b) 확정본 요구를 포기하기로 결정했다면 `decision-log.md`에 기록하고 `docs/90`에 델타를 남긴다. 게이트 쪽 근본 수정(collector 쓰기 vs core 읽기를 분리해 "절반만 배선"을 구별)은 이번 리뷰 범위를 넘는 리팩터라 별도 작업으로 제안만 남긴다.
+- **✅ 둘 다 해소(2026-08-07)**: (a) Q-89 등록 → 사용자가 D-10으로 "이 범위에서 포기" 확정(decision-log
+  2026-08-07), `docs/90` 델타 각주 추가. (b) 권고했던 게이트 근본 수정을 그대로 실행 — `reached()`를
+  `producer_sources`(collector)·`consumer_sources`(core/web)로 분리, "반쪽 배선"을 완전히 죽은
+  컬럼과 다른 카테고리로 취급, 신설 `PRODUCER_ONLY` 사유로 `reaction_score`를 정확하게 선언
+  (`0b50bac`). 부수 발견(교차 테이블 충돌)은 Q-92로 별도 추적.
 - **출처**: `raw/D1-contract.md` D1-01 (반박 검증 미실시, 원 심각도 유지)
 
 ### X-04 — `check-ci-coverage.sh`의 1단 닫힘 판정이 호출자 스크립트 안의 주석을 실행으로 센다 · Medium · ✅수정완료(84851be)
@@ -66,12 +71,16 @@
 - **권고**: `auth_cid` 생성 직후 `trap '[ -n "${auth_cid:-}" ] && docker rm -f "$auth_cid" >/dev/null 2>&1; cleanup' EXIT` 형태로 기존 trap을 감싸거나, `sleep 2` 대신 `/healthz` 폴링 루프로 바꿔 실패를 `fail()`로 흡수한다.
 - **출처**: `raw/D2-infra.md` D2-04 (반박 검증 미실시, 원 심각도 유지)
 
-### X-10 — `used_listing_observation.raw`도 같은 게이트 사각지대를 통과(의도된 설계, allowlist 미선언) · Info · 📄문서화(검토 결과: 현재 게이트 로직으로는 선언 자체가 안 된다)
+### X-10 — `used_listing_observation.raw`도 같은 게이트 사각지대를 통과(의도된 설계, allowlist 미선언) · Info · 📄문서화(3차 검토 결과 X-03과 다른 원인 — 교차 테이블 충돌, `docs/91` Q-92로 추적)
 - **위치**: `collector/src/collector/db/used_listing_sink.py:69` / `core/src/main/java/dev/hogumeter/core/adapter/persistence/UsedListingObservationEntity.java:16`("raw는 core가 안 읽는다"는 설계 의도 명시) / `scripts/dead-columns-allowlist.txt`(이 컬럼 미선언)
 - **근거**: 엔티티 자체가 "raw는 core가 안 읽는다"고 설계 의도로 명시해 X-03(reaction_score)과 달리 버그가 아니라 의도된 "크롤링 원본 보관 전용" 패턴이다. 다만 `dead-columns-allowlist.txt`에 이 컬럼이 선언돼 있지 않아, `check-dead-columns.sh`가 X-03과 동일한 메커니즘(collector가 쓰는 코드 안에 이름이 나타남)으로 우연히 "배선됨" 판정을 내려 통과시킨다(직접 실행 확인: `DEAD COLUMNS OK`).
 - **영향**: 지금 당장은 문제 없다. 다만 이 컬럼이 정말 죽었는지/설계인지 판단할 근거가 코드 주석 하나뿐이라, `dead-columns-allowlist.txt`의 INTENTIONAL 패턴(`deal_event.base_price` 등)처럼 명시적으로 선언해 두지 않으면 다음 감사가 "게이트가 통과시켰으니 배선됐다"고 잘못 믿을 위험이 있다.
 - **권고**: `used_listing_observation.raw INTENTIONAL 크롤링 원본 보관 전용, core는 읽기만 하는 테이블이라 설계상 미매핑`을 `dead-columns-allowlist.txt`에 추가해 "우연히 통과"를 "선언적으로 면제"로 바꾼다. 급하지 않음.
 - **2차 검토(2026-08-07) — 실제로 시도해 봄**: 권고대로 `dead-columns-allowlist.txt`에 `INTENTIONAL` 줄을 추가하고 `check-dead-columns.sh`를 돌려 보니 오히려 `FAIL: 낡은 면제: 'used_listing_observation.raw'은 이제 코드가 닿는다`로 게이트가 깨졌다 — `reached()`가 "collector가 쓴다"만 봐서 이미 `reached=true`인 컬럼을 면제 목록에 올리면 게이트의 "낡은 면제(이제 닿는데 아직 선언돼 있다)" 검사에 정면으로 걸린다. X-03과 같은 근본 원인(생산자-쓰기와 소비자-읽기를 구별 못함)이라 게이트 로직 자체를 바꾸지 않고는 이 항목을 "선언"할 방법이 없다 — 되돌리고 코드 변경 없이 문서로만 남긴다. 급하지 않고(지금 당장 문제 없음), 필요해지면 `reached()`를 "collector 쓰기"와 "core 읽기"로 분리하는 리팩터가 선행돼야 한다(X-03/Q-89와 같은 근본 수정 범위).
+- **3차 검토(2026-08-07) — X-03과 같은 리팩터를 실제로 했는데도 여전히 안 된다, 원인이 달랐다**: `check-dead-columns.sh`의 `reached()`를 생산자(collector)/소비자(core·web)로 분리하는 리팩터를 실행(`0b50bac`, X-03의 게이트 근본 수정)한 뒤 이 컬럼에 `INTENTIONAL`을 다시 시도했는데 **같은 "낡은 면제" FAIL이 그대로 재현됐다.** 파봤더니 원인이 X-03과 다르다 — collector 쓰기 때문이 아니라, `PreserveAppliedConditionsUseCase.java:53`의 정당한 네이티브 SQL(`post.raw -> '_derived' -> 'applied_conditions'`, `raw_deal_post.raw`를 읽는 코드)이 **테이블 구분 없이 컬럼명만 보는** `reached_in()`에 걸려 `used_listing_observation.raw`까지 "소비됨"으로 오판시키는 **교차 테이블 충돌**이었다(둘 다 `raw`라는 같은 이름의 jsonb 컬럼을 가진 서로 다른 테이블). X-03의 생산자/소비자 분리로는 못 잡는, 완전히 다른 종류의 게이트 한계다.
+- **영향 방향은 안전한 쪽**: 이 컬럼이 진짜 죽었는지 여부와 무관하게 "소비됨"으로 오판(과소 검출) — 지금은 원래도 `INTENTIONAL`이 맞는 컬럼이라 결과적으로 옳은 결론에 우연히 도달했을 뿐, 다음 컬럼이 같은 충돌로 진짜 죽은 걸 놓칠 위험은 여전히 남는다.
+- **✅ 처리(2026-08-07)**: 코드 변경 없음(테이블 인지형 매칭은 이번 리팩터보다 훨씬 큰 파싱 작업).
+  `docs/91` **Q-92로 신규 등록**해 한계를 추적하고, `check-dead-columns.sh` 헤더 주석에도 명시.
 - **출처**: `raw/D1-contract.md` D1-04 (반박 검증 미실시, 원 심각도 유지)
 
 ## 검토했으나 문제없음(통합)
