@@ -1,7 +1,7 @@
 plugins {
 	java
 	checkstyle
-	id("org.springframework.boot") version "4.1.0"
+	id("org.springframework.boot") version "4.1.1"
 	id("io.spring.dependency-management") version "1.1.7"
 	id("com.github.spotbugs") version "6.0.19"
 }
